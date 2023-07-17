@@ -2,7 +2,7 @@
 
 do a little dance
 ```shell
-chmod +x ./script.sh
+chmod +x ./setup.sh
 ```
 
 make a little love
@@ -12,5 +12,5 @@ cp ./setup.sh ~/setup.sh
 
 get down tonight
 ```shell
-~/script.sh
+~/setup.sh
 ```
