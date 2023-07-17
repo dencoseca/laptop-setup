@@ -10,7 +10,7 @@ done <"./sims-loading-messages.txt"
 
 print_loading_message() {
   local NUM_LINES=${#SIMS_LOADING_MESSAGES[@]}
-  loacl RANDOM_INDEX=$((RANDOM % NUM_LINES))
+  local RANDOM_INDEX=$((RANDOM % NUM_LINES))
 
   echo "${SIMS_LOADING_MESSAGES[RANDOM_INDEX]}..."
 }
