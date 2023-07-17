@@ -5,7 +5,7 @@ while IFS= read -r LINE; do
   if [ ! -z "$LINE" ]; then
     SIMS_LOADING_MESSAGES+=("$LINE")
   fi
-done <"./sims-loading-messages.txt"
+done <'./sims-loading-messages.txt'
 
 print_loading_message() {
   local NUM_LINES=${#SIMS_LOADING_MESSAGES[@]}
