@@ -1,13 +1,12 @@
 #!/usr/bin/env zsh
 
+GIT_USERNAME='username'
 SIMS_LOADING_MESSAGES=()
-
 while IFS= read -r LINE; do
   if [ -n "$LINE" ]; then
     SIMS_LOADING_MESSAGES+=("$LINE")
   fi
 done <'./sims-loading-messages.txt'
-
 NUM_LINES=${#SIMS_LOADING_MESSAGES[@]}
 
 print_loading_message() {
@@ -16,8 +15,6 @@ print_loading_message() {
 }
 
 cd $HOME || exit 1
-
-GIT_USERNAME='username'
 
 echo 'installing homebrew...'
 NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" &>~/.output_homebrew_install.log && echo 'homebrew installed!'
