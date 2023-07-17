@@ -2,7 +2,7 @@
 
 SIMS_LOADING_MESSAGES=()
 while IFS= read -r LINE; do
-  if [ ! -z "$LINE" ]; then
+  if [ -n "$LINE" ]; then
     SIMS_LOADING_MESSAGES+=("$LINE")
   fi
 done <'./sims-loading-messages.txt'
