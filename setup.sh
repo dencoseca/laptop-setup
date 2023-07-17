@@ -1,16 +1,17 @@
 #!/usr/bin/env zsh
 
 SIMS_LOADING_MESSAGES=()
+
 while IFS= read -r LINE; do
   if [ -n "$LINE" ]; then
     SIMS_LOADING_MESSAGES+=("$LINE")
   fi
 done <'./sims-loading-messages.txt'
 
-print_loading_message() {
-  local NUM_LINES=${#SIMS_LOADING_MESSAGES[@]}
-  local RANDOM_INDEX=$((RANDOM % NUM_LINES))
+NUM_LINES=${#SIMS_LOADING_MESSAGES[@]}
 
+print_loading_message() {
+  local RANDOM_INDEX=$((RANDOM % NUM_LINES))
   echo "${SIMS_LOADING_MESSAGES[RANDOM_INDEX]}..."
 }
 
