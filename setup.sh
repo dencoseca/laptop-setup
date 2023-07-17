@@ -1,6 +1,21 @@
 #!/usr/bin/env zsh
 
-cd ~ || exit 1
+
+SIMS_LOADING_MESSAGES=()
+while IFS= read -r LINE; do
+  if [ ! -z "$LINE" ]; then
+    SIMS_LOADING_MESSAGES+=("$LINE")
+  fi
+done <"./sims-loading-messages.txt"
+
+print_loading_message() {
+  local NUM_LINES=${#SIMS_LOADING_MESSAGES[@]}
+  loacl RANDOM_INDEX=$((RANDOM % NUM_LINES))
+
+  echo "${SIMS_LOADING_MESSAGES[RANDOM_INDEX]}..."
+}
+
+cd $HOME || exit 1
 
 GIT_USERNAME='username'
 
@@ -41,17 +56,21 @@ mas "WhatsApp", id: 1147396723
 mas "NordVPN", id: 905953485
 EOM
 
+print_loading_message
+print_loading_message
+
 echo 'installing apps...'
 brew bundle install &>~/output_brew_bundle_install.txt && echo 'brew install complete!'
 
-echo 'cleaning up Brewfile...'
-rm ~/Brewfile
+print_loading_message
 
 echo 'installing ohmyzsh...'
 sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" &>~/output_ohmyzsh_install.txt
 
 echo 'setting ohmyzsh to update automatically...'
 sed -i '' 's/# zstyle \x27:omz:update\x27 mode auto/zstyle \x27:omz:update\x27 mode auto/' ~/.zshrc
+
+print_loading_message
 
 echo 'adding custom shell setup to .zshrc...'
 cat <<EOM >>~/.zshrc
@@ -104,6 +123,9 @@ alias docker-ca="docker-sc && docker-rc && docker-rv"
 neofetch
 EOM
 
+print_loading_message
+print_loading_message
+
 echo 'creating starship config...'
 mkdir -p ~/.config/
 cat <<EOM >~/.config/starship.toml
@@ -121,6 +143,14 @@ EOM
 echo 'setting up git global config...'
 git config --global user.name $GIT_USERNAME
 git config --global rerere.enabled true
+
+print_loading_message
+
+echo 'cleaning up temp files...'
+rm ~/Brewfile
+
+print_loading_message
+print_loading_message
 
 echo 'finished setup!'
 exit 0
