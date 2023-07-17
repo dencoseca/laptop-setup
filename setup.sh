@@ -3,7 +3,6 @@
 cd ~ || exit 1
 
 GIT_USERNAME='username'
-GIT_EMAIL='email'
 
 echo 'installing homebrew...'
 NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" &>~/output_homebrew_install.txt && echo 'homebrew installed!'
@@ -121,7 +120,6 @@ EOM
 
 echo 'setting up git global config...'
 git config --global user.name $GIT_USERNAME
-git config --global user.email $GIT_EMAIL
 git config --global rerere.enabled true
 
 echo 'finished setup!'
