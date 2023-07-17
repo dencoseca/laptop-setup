@@ -1,6 +1,5 @@
 #!/usr/bin/env zsh
 
-
 SIMS_LOADING_MESSAGES=()
 while IFS= read -r LINE; do
   if [ ! -z "$LINE" ]; then
