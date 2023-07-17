@@ -1,14 +1,16 @@
 # laptop-setup
-Shell script to setup a new MacBook. It can be run from anywhere, and will do it's work in the `$HOME` folder. 
 
-### Make script executable
-
+do a little dance
 ```shell
 chmod +x ./script.sh
 ```
 
-### Run script
-
+make a little love
 ```shell
-./script.sh
+cp ./setup.sh ~/setup.sh
+```
+
+get down tonight
+```shell
+~/script.sh
 ```
