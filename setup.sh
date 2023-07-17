@@ -19,7 +19,7 @@ cd $HOME || exit 1
 GIT_USERNAME='username'
 
 echo 'installing homebrew...'
-NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" &>~/output_homebrew_install.txt && echo 'homebrew installed!'
+NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" &>~/.output_homebrew_install.log && echo 'homebrew installed!'
 
 echo 'creating Brewfile...'
 cat <<EOM >~/Brewfile
@@ -59,12 +59,12 @@ print_loading_message
 print_loading_message
 
 echo 'installing apps...'
-brew bundle install &>~/output_brew_bundle_install.txt && echo 'brew install complete!'
+brew bundle install &>~/.output_brew_bundle_install.log && echo 'brew install complete!'
 
 print_loading_message
 
 echo 'installing ohmyzsh...'
-sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" &>~/output_ohmyzsh_install.txt
+sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" &>~/.output_ohmyzsh_install.log
 
 echo 'setting ohmyzsh to update automatically...'
 sed -i '' 's/# zstyle \x27:omz:update\x27 mode auto/zstyle \x27:omz:update\x27 mode auto/' ~/.zshrc
