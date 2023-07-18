@@ -16,6 +16,7 @@ NUM_LINES=${#SIMS_LOADING_MESSAGES[@]}
 print_loading_message() {
   local RANDOM_INDEX=$((RANDOM % NUM_LINES))
   echo "${SIMS_LOADING_MESSAGES[RANDOM_INDEX]}..."
+  sleep "$((RANDOM % 3))"
 }
 
 cd $HOME || exit 1
