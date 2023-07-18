@@ -19,10 +19,31 @@ print_loading_message() {
   sleep "$((RANDOM % 3))"
 }
 
+SPINNER_PID=
+
+function start_spinner {
+  set +m
+  echo -n "$1         "
+  { while :; do for X in '  •     ' '   •    ' '    •   ' '     •  ' '      • ' '     •  ' '    •   ' '   •    ' '  •     ' ' •      '; do
+    echo -en "\b\b\b\b\b\b\b\b$X"
+    sleep 0.1
+  done; done & } 2>/dev/null
+  SPINNER_PID=$!
+}
+
+function stop_spinner {
+  { kill -9 $SPINNER_PID && wait; } 2>/dev/null
+  set -m
+  echo -en "\033[2K\r"
+}
+
+trap stop_spinner EXIT
+
 cd $HOME || exit 1
 
-echo 'installing homebrew...'
+start_spinner 'installing homebrew...'
 NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" &>~/.output_homebrew_install.log && echo 'homebrew installed!'
+stop_spinner
 
 echo 'creating Brewfile...'
 cat <<EOM >~/Brewfile
@@ -61,13 +82,15 @@ EOM
 print_loading_message
 print_loading_message
 
-echo 'installing apps...'
+start_spinner 'installing apps...'
 brew bundle install &>~/.output_brew_bundle_install.log && echo 'brew install complete!'
+stop_spinner
 
 print_loading_message
 
-echo 'installing ohmyzsh...'
+start_spinner 'installing ohmyzsh...'
 sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" &>~/.output_ohmyzsh_install.log
+stop_spinner
 
 echo 'setting ohmyzsh to update automatically...'
 sed -i '' 's/# zstyle \x27:omz:update\x27 mode auto/zstyle \x27:omz:update\x27 mode auto/' ~/.zshrc
