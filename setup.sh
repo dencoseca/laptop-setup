@@ -1,5 +1,7 @@
 #!/usr/bin/env zsh
 
+set -euo pipefail
+
 GIT_USERNAME='username'
 SIMS_LOADING_MESSAGES=()
 while IFS= read -r LINE; do
