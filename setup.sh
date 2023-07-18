@@ -4,11 +4,13 @@ set -euo pipefail
 
 GIT_USERNAME='username'
 SIMS_LOADING_MESSAGES=()
+
 while IFS= read -r LINE; do
   if [ -n "$LINE" ]; then
     SIMS_LOADING_MESSAGES+=("$LINE")
   fi
 done <'./sims-loading-messages.txt'
+
 NUM_LINES=${#SIMS_LOADING_MESSAGES[@]}
 
 print_loading_message() {
