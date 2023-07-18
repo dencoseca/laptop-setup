@@ -3,25 +3,24 @@
 set -euo pipefail
 
 GIT_USERNAME='username'
-SIMS_LOADING_MESSAGES=()
+SPINNER_PID=
+LOADING_MESSAGES=()
 
 while IFS= read -r LINE; do
   if [ -n "$LINE" ]; then
-    SIMS_LOADING_MESSAGES+=("$LINE")
+    LOADING_MESSAGES+=("$LINE")
   fi
-done <'./sims-loading-messages.txt'
+done <'./loading-messages.txt'
 
-NUM_LINES=${#SIMS_LOADING_MESSAGES[@]}
+NUM_LINES=${#LOADING_MESSAGES[@]}
 
 print_loading_message() {
   local RANDOM_INDEX=$((RANDOM % NUM_LINES))
-  echo "${SIMS_LOADING_MESSAGES[RANDOM_INDEX]}..."
+  echo "${LOADING_MESSAGES[RANDOM_INDEX]}..."
   sleep "$((RANDOM % 3))"
 }
 
-SPINNER_PID=
-
-function start_spinner {
+start_spinner() {
   set +m
   echo -n "$1         "
   { while :; do for X in '  •     ' '   •    ' '    •   ' '     •  ' '      • ' '     •  ' '    •   ' '   •    ' '  •     ' ' •      '; do
@@ -31,7 +30,7 @@ function start_spinner {
   SPINNER_PID=$!
 }
 
-function stop_spinner {
+stop_spinner() {
   { kill -9 $SPINNER_PID && wait; } 2>/dev/null
   set -m
   echo -en "\033[2K\r"
@@ -39,7 +38,7 @@ function stop_spinner {
 
 trap stop_spinner EXIT
 
-cd $HOME || exit 1
+cd "$HOME" || exit 1
 
 start_spinner 'installing homebrew...'
 NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" &>~/.output_homebrew_install.log && echo 'homebrew installed!'
