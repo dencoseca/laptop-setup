@@ -4,7 +4,7 @@ do a little dance
 ```shell
 mkdir -p ~/Developer/repos/github.com/dencoseca \
 && cd ~/Developer/repos/github.com/dencoseca \
-&& gcl git@github.com:dencoSeca/laptop-setup.git \
+&& git clone git@github.com:dencoSeca/laptop-setup.git \
 && cd laptop-setup
 ```
 
