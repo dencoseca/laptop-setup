@@ -102,18 +102,11 @@ print_loading_message
 echo 'adding custom shell setup to .zshrc...'
 cat <<'EOM' >>~/.zshrc
 
-###########
-## STYLE ##
-###########
+#############
+## SOURCES ##
+#############
 
 source ~/.styles.sh
-
-print_message() {
-  local STRING="$1"
-  local STYLE="$2"
-
-  echo -e "${STYLE}${STRING}${RESET}"
-}
 
 ################
 ## TOOL SETUP ##
@@ -138,8 +131,15 @@ alias edit="webstorm -e $1"
 alias oif="open -a Finder ./"
 alias nq="networkQuality"
 alias trc="tree -d -L 3 ~/Developer/repos"
+
 cjq() {
   curl $1 | jq
+}
+
+print_message() {
+  local STRING="$1"
+  local STYLE="$2"
+  echo -e "${STYLE}${STRING}${RESET}"
 }
 
 # zsh
