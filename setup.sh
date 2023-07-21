@@ -99,6 +99,14 @@ print_loading_message
 echo 'adding custom shell setup to .zshrc...'
 cat <<EOM >>~/.zshrc
 
+############
+## COLORS ##
+############
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+RESET='\033[0m'
+
 ################
 ## TOOL SETUP ##
 ################
@@ -122,7 +130,7 @@ alias edit="webstorm -e $1"
 alias oif="open -a Finder ./"
 alias nq="networkQuality"
 alias trc="tree -d -L 3 ~/Developer/repos"
-function cjq() {
+cjq() {
     curl $1 | jq
 }
 
@@ -133,16 +141,46 @@ alias zshb="cp ~/.zshrc ~/.zshrc.backup"
 
 # java
 alias javals="/usr/libexec/java_home -V"
-function javasw() {
+javasw() {
   export JAVA_HOME=$(/usr/libexec/java_home -v "$1")
 }
 
 # docker
-alias docker-sc="echo 'stopping containers' && docker ps -a -q | xargs -r docker stop"
-alias docker-rc="echo 'removing containers' && docker ps -a -q | xargs -r docker rm"
-alias docker-rv="echo 'removing volumes' && docker volume rm \$(docker volume ls -q)"
-alias docker-cc="docker-sc && docker-rc"
-alias docker-ca="docker-sc && docker-rc && docker-rv"
+docker_sc() {
+  local CONTAINER_NAMES
+  CONTAINER_NAMES=$(docker ps -a --format "{{.Names}}")
+  if [[ -n "$CONTAINER_NAMES" ]]; then
+    echo "${GREEN}STOPPING CONTAINERS${RESET}"
+    echo "$CONTAINER_NAMES" | xargs -r docker stop
+  else
+    echo "${RED}No CONTAINERS to STOP${RESET}"
+  fi
+}
+
+docker_rc() {
+  local CONTAINER_NAMES
+  CONTAINER_NAMES=$(docker ps -a --format "{{.Names}}")
+  if [[ -n "$CONTAINER_NAMES" ]]; then
+    echo "${GREEN}REMOVING CONTAINERS${RESET}"
+    echo "$CONTAINER_NAMES" | xargs -r docker rm
+  else
+    echo "${RED}No CONTAINERS to REMOVE${RESET}"
+  fi
+}
+
+docker_rv() {
+  local VOLUME_NAMES
+  VOLUME_NAMES=$(docker volume ls -q)
+  if [[ -n "$VOLUME_NAMES" ]]; then
+    echo "${GREEN}REMOVING VOLUMES${RESET}"
+    echo "$VOLUME_NAMES" | xargs -r docker volume rm
+  else
+    echo "${RED}No VOLUMES to REMOVE${RESET}"
+  fi
+}
+
+alias docker-cc="docker_sc && docker_rc"
+alias docker-ca="docker_sc && docker_rc && docker_rv"
 
 neofetch
 EOM
