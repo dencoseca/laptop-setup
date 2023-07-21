@@ -48,7 +48,7 @@ NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Ho
 stop_spinner
 
 echo 'creating Brewfile...'
-cat <<EOM >~/Brewfile
+cat <<'EOM' >~/Brewfile
 # formulae
 brew "cmatrix"
 brew "git"
@@ -100,7 +100,7 @@ sed -i '' 's/# zstyle \x27:omz:update\x27 mode auto/zstyle \x27:omz:update\x27 m
 print_loading_message
 
 echo 'adding custom shell setup to .zshrc...'
-cat <<EOM >>~/.zshrc
+cat <<'EOM' >>~/.zshrc
 
 ###########
 ## STYLE ##
@@ -198,7 +198,7 @@ print_loading_message
 
 echo 'creating starship config...'
 mkdir -p ~/.config/
-cat <<EOM >~/.config/starship.toml
+cat <<'EOM' >~/.config/starship.toml
 [aws]
 disabled=true
 
