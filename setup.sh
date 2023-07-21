@@ -44,7 +44,7 @@ cp ./styles.sh ~/.styles.sh
 cd ~ || exit 1
 
 start_spinner 'installing homebrew...'
-NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" &>~/.output_homebrew_install.log && echo 'homebrew installed!'
+NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" &>~/.output_homebrew_install.log
 stop_spinner
 
 echo 'creating Brewfile...'
