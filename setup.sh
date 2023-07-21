@@ -85,7 +85,7 @@ print_loading_message
 print_loading_message
 
 start_spinner 'installing apps...'
-brew bundle install &>~/.output_brew_bundle_install.log && echo 'brew install complete!'
+brew bundle install &>~/.output_brew_bundle_install.log
 stop_spinner
 
 print_loading_message
