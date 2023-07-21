@@ -47,35 +47,35 @@ stop_spinner
 echo 'creating Brewfile...'
 cat <<EOM >~/Brewfile
 # formulae
+brew "cmatrix"
 brew "git"
-brew "tree"
 brew "jq"
 brew "neofetch"
-brew "tldr"
-brew "cmatrix"
 brew "nvm"
 brew "starship"
+brew "tldr"
+brew "tree"
 
 # casks
-cask "rectangle"
-cask "mos"
-cask "appcleaner"
-cask "docker"
-cask "meetingbar"
-cask "warp"
-cask "slack"
 cask "alfred"
+cask "appcleaner"
 cask "bartender"
-cask "jetbrains-toolbox"
-cask "spotify"
 cask "brave-browser"
+cask "docker"
+cask "jetbrains-toolbox"
+cask "meetingbar"
+cask "mos"
+cask "rectangle"
+cask "slack"
+cask "spotify"
+cask "warp"
 
 # mac app store
-mas "Bitwarden", id: 1352778147
 mas "Bear", id: 1091189122
+mas "Bitwarden", id: 1352778147
+mas "NordVPN", id: 905953485
 mas "Things", id: 904280696
 mas "WhatsApp", id: 1147396723
-mas "NordVPN", id: 905953485
 EOM
 
 print_loading_message
