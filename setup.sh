@@ -38,9 +38,6 @@ stop_spinner() {
 trap stop_spinner EXIT
 
 # Do all the stuffs
-echo 'creating styles source file...'
-cp ./styles.sh ~/.styles.sh
-
 cd ~ || exit 1
 
 start_spinner 'installing homebrew...'
@@ -102,12 +99,6 @@ print_loading_message
 echo 'adding custom shell setup to .zshrc...'
 cat <<'EOM' >>~/.zshrc
 
-#############
-## SOURCES ##
-#############
-
-source ~/.styles.sh
-
 ################
 ## TOOL SETUP ##
 ################
@@ -152,6 +143,10 @@ alias javals="/usr/libexec/java_home -V"
 javasw() {
   export JAVA_HOME=$(/usr/libexec/java_home -v "$1")
 }
+
+RESET='\033[0m'
+BRed='\033[1;31m'
+BGreen='\033[1;32m'
 
 # docker
 docker_sc() {
