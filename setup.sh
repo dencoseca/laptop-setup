@@ -3,22 +3,22 @@
 set -euo pipefail
 
 # Setup loading messages
-LOADING_MESSAGES=()
-while IFS= read -r LINE; do
-  if [ -n "$LINE" ]; then
-    LOADING_MESSAGES+=("$LINE")
+loading_messages=()
+while IFS= read -r line; do
+  if [ -n "$line" ]; then
+    loading_messages+=("$line")
   fi
 done <'./loading-messages.txt'
-NUM_LINES=${#LOADING_MESSAGES[@]}
+num_lines=${#loading_messages[@]}
 
 print_loading_message() {
-  local RANDOM_INDEX=$((RANDOM % NUM_LINES))
-  echo "${LOADING_MESSAGES[RANDOM_INDEX]}..."
+  local random_index=$((RANDOM % num_lines))
+  echo "${loading_messages[random_index]}..."
   sleep "$((RANDOM % 3))"
 }
 
 # Setup spinner
-SPINNER_PID=
+spinner_pid=
 start_spinner() {
   set +m
   echo -n "$1         "
@@ -26,11 +26,11 @@ start_spinner() {
     echo -en "\b\b\b\b\b\b\b\b$X"
     sleep 0.1
   done; done & } 2>/dev/null
-  SPINNER_PID=$!
+  spinner_pid=$!
 }
 
 stop_spinner() {
-  { kill -9 $SPINNER_PID && wait; } 2>/dev/null
+  { kill -9 $spinner_pid && wait; } 2>/dev/null
   set -m
   echo -en "\033[2K\r"
 }
@@ -128,9 +128,9 @@ cjq() {
 }
 
 print_message() {
-  local STRING="$1"
-  local STYLE="$2"
-  echo -e "${STYLE}${STRING}${RESET}"
+  local string="$1"
+  local zstyle="$2"
+  echo -e "${zstyle}${string}${reset}"
 }
 
 # zsh
@@ -144,41 +144,41 @@ javasw() {
   export JAVA_HOME=$(/usr/libexec/java_home -v "$1")
 }
 
-RESET='\033[0m'
-BRed='\033[1;31m'
-BGreen='\033[1;32m'
+reset='\033[0m'
+bred='\033[1;31m'
+bgreen='\033[1;32m'
 
 # docker
 docker_sc() {
-  local CONTAINER_NAMES
-  CONTAINER_NAMES=$(docker ps -a --format "{{.Names}}")
-  if [[ -n "$CONTAINER_NAMES" ]]; then
-    print_message "STOPPING CONTAINERS" "$BGreen"
-    echo "$CONTAINER_NAMES" | xargs -r docker stop
+  local container_names
+  container_names=$(docker ps -a --format "{{.Names}}")
+  if [[ -n "$container_names" ]]; then
+    print_message "STOPPING CONTAINERS" "$bgreen"
+    echo "$container_names" | xargs -r docker stop
   else
-    print_message "No CONTAINERS to STOP" "$BRed"
+    print_message "No CONTAINERS to STOP" "$bred"
   fi
 }
 
 docker_rc() {
-  local CONTAINER_NAMES
-  CONTAINER_NAMES=$(docker ps -a --format "{{.Names}}")
-  if [[ -n "$CONTAINER_NAMES" ]]; then
-    print_message "REMOVING CONTAINERS" "$BGreen"
-    echo "$CONTAINER_NAMES" | xargs -r docker rm
+  local container_names
+  container_names=$(docker ps -a --format "{{.Names}}")
+  if [[ -n "$container_names" ]]; then
+    print_message "REMOVING CONTAINERS" "$bgreen"
+    echo "$container_names" | xargs -r docker rm
   else
-    print_message "No CONTAINERS to REMOVE" "$BRed"
+    print_message "No CONTAINERS to REMOVE" "$bred"
   fi
 }
 
 docker_rv() {
-  local VOLUME_NAMES
-  VOLUME_NAMES=$(docker volume ls -q)
-  if [[ -n "$VOLUME_NAMES" ]]; then
-    print_message "REMOVING VOLUMES" "$BGreen"
-    echo "$VOLUME_NAMES" | xargs -r docker volume rm
+  local volume_names
+  volume_names=$(docker volume ls -q)
+  if [[ -n "$volume_names" ]]; then
+    print_message "REMOVING VOLUMES" "$bgreen"
+    echo "$volume_names" | xargs -r docker volume rm
   else
-    print_message "No VOLUMES to REMOVE" "$BRed"
+    print_message "No VOLUMES to REMOVE" "$bred"
   fi
 }
 
