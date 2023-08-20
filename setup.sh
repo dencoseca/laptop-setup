@@ -8,7 +8,7 @@ while IFS= read -r line; do
   if [ -n "$line" ]; then
     loading_messages+=("$line")
   fi
-done <'./loading-messages.txt'
+done < './loading-messages.txt'
 num_lines=${#loading_messages[@]}
 
 print_loading_message() {
@@ -25,12 +25,12 @@ start_spinner() {
   { while :; do for X in '  •     ' '   •    ' '    •   ' '     •  ' '      • ' '     •  ' '    •   ' '   •    ' '  •     ' ' •      '; do
     echo -en "\b\b\b\b\b\b\b\b$X"
     sleep 0.1
-  done; done & } 2>/dev/null
+  done; done & } 2> /dev/null
   spinner_pid=$!
 }
 
 stop_spinner() {
-  { kill -9 $spinner_pid && wait; } 2>/dev/null
+  { kill -9 $spinner_pid && wait; } 2> /dev/null
   set -m
   echo -en "\033[2K\r"
 }
@@ -41,11 +41,11 @@ trap stop_spinner EXIT
 cd ~ || exit 1
 
 start_spinner 'installing homebrew...'
-NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" &>~/.output_homebrew_install.log
+NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" &> ~/.output_homebrew_install.log
 stop_spinner
 
 echo 'creating Brewfile...'
-cat <<'EOM' >~/Brewfile
+cat << 'EOM' > ~/Brewfile
 # formulae
 brew "cmatrix"
 brew "git"
@@ -82,13 +82,13 @@ print_loading_message
 print_loading_message
 
 start_spinner 'installing apps...'
-brew bundle install &>~/.output_brew_bundle_install.log
+brew bundle install &> ~/.output_brew_bundle_install.log
 stop_spinner
 
 print_loading_message
 
 start_spinner 'installing ohmyzsh...'
-sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" &>~/.output_ohmyzsh_install.log
+sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" &> ~/.output_ohmyzsh_install.log
 stop_spinner
 
 echo 'setting ohmyzsh to update automatically...'
@@ -97,7 +97,7 @@ sed -i '' "s/# zstyle ':omz:update' mode auto/zstyle ':omz:update' mode auto/" ~
 print_loading_message
 
 echo 'adding custom shell setup to .zshrc...'
-cat <<'EOM' >>~/.zshrc
+cat << 'EOM' >> ~/.zshrc
 
 ################
 ## TOOL SETUP ##
@@ -193,7 +193,7 @@ print_loading_message
 
 echo 'creating starship config...'
 mkdir -p ~/.config/
-cat <<'EOM' >~/.config/starship.toml
+cat << 'EOM' > ~/.config/starship.toml
 [aws]
 disabled=true
 
