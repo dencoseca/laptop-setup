@@ -47,14 +47,15 @@ stop_spinner
 echo 'creating Brewfile...'
 cat << 'EOM' > ~/Brewfile
 # formulae
-brew "cmatrix"
 brew "git"
+brew "bash"
+brew "cmatrix"
 brew "jq"
 brew "neofetch"
-brew "nvm"
-brew "starship"
 brew "tldr"
 brew "tree"
+brew "starship"
+brew "nvm"
 
 # casks
 cask "alfred"
