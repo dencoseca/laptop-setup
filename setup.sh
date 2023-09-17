@@ -207,7 +207,7 @@ error_symbol = ''
 EOM
 
 echo 'setting up git global config...'
-git config --global user.name 'dencoSeca'
+git config --global user.name 'dencoseca'
 git config --global rerere.enabled true
 
 print_loading_message
