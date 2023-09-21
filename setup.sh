@@ -156,9 +156,19 @@ cjq() {
 }
 
 print_message() {
-  local string="$1"
-  local zstyle="$2"
-  echo -e "${zstyle}${string}${reset}"
+  reset='\033[0m'
+  bred='\033[1;31m'
+  bgreen='\033[1;32m'
+  local message="$1"
+  local msg_type="$2"
+
+  case $msg_type in
+    "danger") style=$bred ;;
+    "success") style=$bgreen ;;
+    *) style=$reset ;;
+  esac
+
+  echo -e "${style}${message}${reset}"
 }
 
 # zsh
@@ -172,19 +182,15 @@ javasw() {
   export JAVA_HOME=$(/usr/libexec/java_home -v "$1")
 }
 
-reset='\033[0m'
-bred='\033[1;31m'
-bgreen='\033[1;32m'
-
 # docker
 docker_sc() {
   local container_names
   container_names=$(docker ps -a --format "{{.Names}}")
   if [[ -n "$container_names" ]]; then
-    print_message "STOPPING CONTAINERS" "$bgreen"
+    print_message "STOPPING CONTAINERS" "success"
     echo "$container_names" | xargs -r docker stop
   else
-    print_message "No CONTAINERS to STOP" "$bred"
+    print_message "No CONTAINERS to STOP" "danger"
   fi
 }
 
@@ -192,10 +198,10 @@ docker_rc() {
   local container_names
   container_names=$(docker ps -a --format "{{.Names}}")
   if [[ -n "$container_names" ]]; then
-    print_message "REMOVING CONTAINERS" "$bgreen"
+    print_message "REMOVING CONTAINERS" "$success"
     echo "$container_names" | xargs -r docker rm
   else
-    print_message "No CONTAINERS to REMOVE" "$bred"
+    print_message "No CONTAINERS to REMOVE" "danger"
   fi
 }
 
@@ -203,10 +209,10 @@ docker_rv() {
   local volume_names
   volume_names=$(docker volume ls -q)
   if [[ -n "$volume_names" ]]; then
-    print_message "REMOVING VOLUMES" "$bgreen"
+    print_message "REMOVING VOLUMES" "success"
     echo "$volume_names" | xargs -r docker volume rm
   else
-    print_message "No VOLUMES to REMOVE" "$bred"
+    print_message "No VOLUMES to REMOVE" "danger"
   fi
 }
 
