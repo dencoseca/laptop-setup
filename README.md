@@ -12,11 +12,11 @@ mkdir -p ~/Developer/repos/github.com/dencoseca \
 make a little love
 
 ```shell
-chmod +x ./setup.sh && sudo echo "Open the pod bay doors HAL..."
+chmod +x ./setup.sh
 ```
 
 get down tonight
 
 ```shell
-./setup.sh
+sudo echo "Open the pod bay doors HAL..." && ./setup.sh
 ```
