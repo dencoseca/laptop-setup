@@ -161,6 +161,7 @@ print_message() {
   local bgreen='\033[1;32m'
   local message="$1"
   local msg_type="$2"
+  local style=
 
   case $msg_type in
     "danger") style=$bred ;;
