@@ -99,16 +99,6 @@ stop_spinner
 echo 'installing apps... done!'
 
 print_loading_message
-
-echo 'cleaning up temporary brew files...'
-if [ -f ~/Brewfile ]; then
-  rm ~/Brewfile
-fi
-if [ -f ~/Brewfile.lock.json ]; then
-  rm ~/Brewfile.lock.json
-fi
-
-print_loading_message
 print_loading_message
 
 start_spinner 'installing ohmyzsh...'
@@ -269,6 +259,15 @@ echo '.DS_Store' > ~/.gitignore_global
 git config --global core.excludesfile ~/.gitignore_global
 
 print_loading_message
+
+echo 'cleaning up temporary brew files...'
+if [ -f ~/Brewfile ]; then
+  rm ~/Brewfile
+fi
+if [ -f ~/Brewfile.lock.json ]; then
+  rm ~/Brewfile.lock.json
+fi
+
 print_loading_message
 print_loading_message
 
