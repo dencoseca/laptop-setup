@@ -1,6 +1,7 @@
 # laptop-setup
 
 do a little dance
+
 ```shell
 mkdir -p ~/Developer/repos/github.com/dencoseca \
 && cd ~/Developer/repos/github.com/dencoseca \
@@ -9,11 +10,13 @@ mkdir -p ~/Developer/repos/github.com/dencoseca \
 ```
 
 make a little love
+
 ```shell
-chmod +x ./setup.sh && sudo echo "hello"
+chmod +x ./setup.sh && sudo echo "Open the pod bay doors HAL..."
 ```
 
 get down tonight
+
 ```shell
 ./setup.sh
 ```
