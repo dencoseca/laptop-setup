@@ -221,6 +221,8 @@ EOM
 echo 'setting up git global config...'
 git config --global user.name 'dencoseca'
 git config --global rerere.enabled true
+echo '.DS_Store' > ~/.gitignore_global
+git config --global core.excludesfile ~/.gitignore_global
 
 print_loading_message
 print_loading_message
