@@ -43,6 +43,11 @@ cd ~ || exit 1
 start_spinner 'installing homebrew...'
 NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" &> ~/.output_homebrew_install.log
 stop_spinner
+echo 'installing homebrew... done!'
+
+echo 'adding brew to path...'
+(echo; echo 'eval "$(/opt/homebrew/bin/brew shellenv)"') >> ~/.zprofile
+eval "$(/opt/homebrew/bin/brew shellenv)"
 
 echo 'creating Brewfile...'
 cat << 'EOM' > ~/Brewfile
@@ -85,12 +90,14 @@ print_loading_message
 start_spinner 'installing apps...'
 brew bundle install &> ~/.output_brew_bundle_install.log
 stop_spinner
+echo 'installing apps... done!'
 
 print_loading_message
 
 start_spinner 'installing ohmyzsh...'
-sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" &> ~/.output_ohmyzsh_install.log
+sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh --unattended)" &> ~/.output_ohmyzsh_install.log
 stop_spinner
+echo 'installing ohmyzsh... done!'
 
 echo 'setting ohmyzsh to update automatically...'
 sed -i '' "s/# zstyle ':omz:update' mode auto/zstyle ':omz:update' mode auto/" ~/.zshrc
@@ -214,6 +221,7 @@ print_loading_message
 
 echo 'cleaning up temp files...'
 rm ~/Brewfile
+rm ~/Brewfile.lock.json
 
 print_loading_message
 print_loading_message
