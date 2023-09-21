@@ -116,8 +116,7 @@ sed -i '' "s/# zstyle ':omz:update' mode auto/zstyle ':omz:update' mode auto/" ~
 
 print_loading_message
 
-last_line=$(tail -n 1 $HOME/.zshrc)
-if [ "$last_line" = "neofetch" ]; then
+if grep -q 'neofetch' ~/.zshrc; then
   echo 'custom shell setup already exists...'
 else
   echo 'adding custom shell setup to .zshrc...'
