@@ -156,9 +156,9 @@ cjq() {
 }
 
 print_message() {
-  reset='\033[0m'
-  bred='\033[1;31m'
-  bgreen='\033[1;32m'
+  local reset='\033[0m'
+  local bred='\033[1;31m'
+  local bgreen='\033[1;32m'
   local message="$1"
   local msg_type="$2"
 
