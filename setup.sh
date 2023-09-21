@@ -46,7 +46,10 @@ NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Ho
 stop_spinner 'installing homebrew... done!'
 
 echo 'adding brew to path...'
-(echo; echo 'eval "$(/opt/homebrew/bin/brew shellenv)"') >> ~/.zprofile
+(
+  echo
+  echo 'eval "$(/opt/homebrew/bin/brew shellenv)"'
+) >> ~/.zprofile
 eval "$(/opt/homebrew/bin/brew shellenv)"
 
 echo 'creating Brewfile...'
@@ -94,8 +97,12 @@ stop_spinner 'installing apps... done!'
 print_loading_message
 
 echo 'cleaning up temporary brew files...'
-rm ~/Brewfile
-rm ~/Brewfile.lock.json
+if [ -f ~/Brewfile ]; then
+  rm ~/Brewfile
+fi
+if [ -f ~/Brewfile.lock.json ]; then
+  rm ~/Brewfile.lock.json
+fi
 
 print_loading_message
 print_loading_message
@@ -109,8 +116,12 @@ sed -i '' "s/# zstyle ':omz:update' mode auto/zstyle ':omz:update' mode auto/" ~
 
 print_loading_message
 
-echo 'adding custom shell setup to .zshrc...'
-cat << 'EOM' >> ~/.zshrc
+last_line=$(tail -n 1 $HOME/.zshrc)
+if [ "$last_line" = "neofetch" ]; then
+  echo 'custom shell setup already exists...'
+else
+  echo 'adding custom shell setup to .zshrc...'
+  cat << 'EOM' >> ~/.zshrc
 
 ################
 ## TOOL SETUP ##
@@ -200,6 +211,7 @@ alias docker-ca="docker_sc && docker_rc && docker_rv"
 
 neofetch
 EOM
+fi
 
 print_loading_message
 print_loading_message
