@@ -230,6 +230,17 @@ docker_ri() {
 alias docker-cc="docker_sc && docker_rc"
 alias docker-ca="docker_sc && docker_rc && docker_rv && docker_ri"
 
+kill_it_with_fire_before_it_lays_eggs() {
+  docker_sc
+  docker_rc
+  docker_rv
+  docker_ri
+  print_message "Pruning SYSTEM" "success"
+  docker system prune -f
+  print_message "Pruning BUILD CACHE" "success"
+  docker builder prune -f
+}
+
 neofetch
 EOM
 fi
