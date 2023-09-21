@@ -161,7 +161,7 @@ print_message() {
   local bgreen='\033[1;32m'
   local message="$1"
   local msg_type="$2"
-  local style=
+  local style
 
   case $msg_type in
     "danger") style=$bred ;;
@@ -217,8 +217,18 @@ docker_rv() {
   fi
 }
 
+docker_ri() {
+  local image_names=$(docker images -q)
+  if [[ -n "$image_names" ]]; then
+    print_message "REMOVING IMAGES" "success"
+    echo "$image_names" | xargs -r docker rmi
+  else
+    print_message "No IMAGES to REMOVE" "danger"
+  fi
+}
+
 alias docker-cc="docker_sc && docker_rc"
-alias docker-ca="docker_sc && docker_rc && docker_rv"
+alias docker-ca="docker_sc && docker_rc && docker_rv && docker_ri"
 
 neofetch
 EOM
