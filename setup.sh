@@ -2,6 +2,8 @@
 
 set -euo pipefail
 
+trap "echo \"I'm sorry Dave... I can't let you do that\"" ERR
+
 # Setup loading messages
 loading_messages=()
 while IFS= read -r line; do
@@ -33,7 +35,6 @@ stop_spinner() {
   { kill -9 $spinner_pid && wait; } 2> /dev/null
   set -m
   echo -en "\033[2K\r"
-  echo "$1"
 }
 
 trap stop_spinner EXIT
@@ -43,7 +44,8 @@ cd ~ || exit 1
 
 start_spinner 'installing homebrew...'
 NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" &> ~/.output_homebrew_install.log
-stop_spinner 'installing homebrew... done!'
+stop_spinner
+echo 'installing homebrew... done!'
 
 echo 'adding brew to path...'
 (
@@ -92,7 +94,8 @@ print_loading_message
 
 start_spinner 'installing apps...'
 brew bundle install &> ~/.output_brew_bundle_install.log
-stop_spinner 'installing apps... done!'
+stop_spinner
+echo 'installing apps... done!'
 
 print_loading_message
 
@@ -109,7 +112,8 @@ print_loading_message
 
 start_spinner 'installing ohmyzsh...'
 sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh --unattended)" &> ~/.output_ohmyzsh_install.log
-stop_spinner 'installing ohmyzsh... done!'
+stop_spinner
+echo 'installing ohmyzsh... done!'
 
 echo 'setting ohmyzsh to update automatically...'
 sed -i '' "s/# zstyle ':omz:update' mode auto/zstyle ':omz:update' mode auto/" ~/.zshrc
