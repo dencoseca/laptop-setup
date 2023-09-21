@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-trap "echo \"I'm sorry Dave... I can't let you do that\"" ERR
+trap "echo \"I'm sorry Dave... I'm afraid I can't do that\"" ERR
 
 # Setup loading messages
 loading_messages=()
@@ -14,6 +14,7 @@ done < './loading-messages.txt'
 num_lines=${#loading_messages[@]}
 
 print_loading_message() {
+  sleep "$((RANDOM % 3))"
   local random_index=$((RANDOM % num_lines))
   echo "${loading_messages[random_index]}..."
   sleep "$((RANDOM % 3))"
