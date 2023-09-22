@@ -1,106 +1,106 @@
-adding hidden agendas
-adjusting bell curves
-aesthesizing industrial areas
-aligning covariance matrices
-applying feng shui shaders
-applying theatre soda layer
-asserting packed exemplars
-attempting to lock back-buffer
-binding sapling root system
-breeding fauna
-building data trees
-bureacritizing bureaucracies
-calculating inverse probability matrices
-calculating llama expectoration trajectory
-calibrating blue skies
-charging ozone layer
-coalescing cloud formations
-cohorting exemplars
-collecting meteor particles
-compounding inert tessellations
-compressing fish files
-computing optimal bin packing
-concatenating sub-contractors
-containing existential buffer
-debarking ark ramp
-debunching unionized commercial services
-deciding what message to display next
-decomposing singular values
-decrementing tectonic plates
-deleting ferry routes
-depixelating inner mountain surface back faces
-depositing slush funds
-destabilizing economic indicators
-determining width of blast fronts
-deunionizing bulldozers
-dicing models
-diluting livestock nutrition variables
-downloading satellite terrain data
-exposing flash variables to streak system
-extracting resources
-factoring pay scale
-fixing election outcome matrix
-flood-filling ground water
-flushing pipe network
-gathering particle sources
-generating jobs
-gesticulating mimes
-graphing whale migration
-hiding willio webnet mask
-implementing impeachment routine
-increasing accuracy of rci simulators
-increasing magmafacation
-initializing my sim tracking mechanism
-initializing rhinoceros breeding timetable
-initializing robotic click-path ai
-inserting sublimated messages
-integrating curves
-integrating illumination form factors
-integrating population graphs
-iterating cellular automata
-lecturing errant subsystems
-mixing genetic pool
-modeling object components
-mopping occupant leaks
-normalizing power
-obfuscating quigley matrix
-overconstraining dirty industry calculations
-partitioning city grid singularities
-perturbing matrices
-pixalating nude patch
-polishing water highlights
-populating lot templates
-preparing sprites for random walks
-prioritizing landmarks
-projecting law enforcement pastry intake
-realigning alternate time frames
-reconfiguring user mental processes
-relaxing splines
-removing road network speed bumps
-removing texture gradients
-removing vehicle avoidance behavior
-resolving guid conflict
-reticulating splines
-retracting phong shader
-retrieving from back store
-reverse engineering image consultant
-routing neural network infanstructure
-scattering rhino food sources
-scrubbing terrain
-searching for llamas
-seeding architecture simulation parameters
-sequencing particles
-setting advisor moods
-setting inner deity indicators
-setting universal physical constants
-sonically enhancing occupant-free timber
-speculating stock market indices
-splatting transforms
-stratifying ground layers
-sub-sampling water data
-synthesizing gravity
-synthesizing wavelets
-time-compressing simulator clock
-unable to reveal current activity
-weathering buildings
-zeroing crime network
+Adding hidden agendas
+Adjusting bell curves
+Aesthesizing industrial areas
+Aligning covariance matrices
+Applying feng shui shaders
+Applying theatre soda layer
+Asserting packed exemplars
+Attempting to lock back buffer
+Binding sapling root system
+Breeding fauna
+Building data trees
+Bureacritizing bureaucracies
+Calculating inverse probability matrices
+Calculating llama expectoration trajectory
+Calibrating blue skies
+Charging ozone layer
+Coalescing cloud formations
+Cohorting exemplars
+Collecting meteor particles
+Compounding inert tessellations
+Compressing fish files
+Computing optimal bin packing
+Concatenating sub contractors
+Containing existential buffer
+Debarking ark ramp
+Debunching unionized commercial services
+Deciding what message to display next
+Decomposing singular values
+Decrementing tectonic plates
+Deleting ferry routes
+Depixelating inner mountain surface back faces
+Depositing slush funds
+Destabilizing economic indicators
+Determining width of blast fronts
+Deunionizing bulldozers
+Dicing models
+Diluting livestock nutrition variables
+Downloading satellite terrain data
+Exposing flash variables to streak system
+Extracting resources
+Factoring pay scale
+Fixing election outcome matrix
+Flood filling ground water
+Flushing pipe network
+Gathering particle sources
+Generating jobs
+Gesticulating mimes
+Graphing whale migration
+Hiding willio webnet mask
+Implementing impeachment routine
+Increasing accuracy of rci simulators
+Increasing magmafacation
+Initializing my sim tracking mechanism
+Initializing rhinoceros breeding timetable
+Initializing robotic click path ai
+Inserting sublimated messages
+Integrating curves
+Integrating illumination form factors
+Integrating population graphs
+Iterating cellular automata
+Lecturing errant subsystems
+Mixing genetic pool
+Modeling object components
+Mopping occupant leaks
+Normalizing power
+Obfuscating quigley matrix
+Overconstraining dirty industry calculations
+Partitioning city grid singularities
+Perturbing matrices
+Pixalating nude patch
+Polishing water highlights
+Populating lot templates
+Preparing sprites for random walks
+Prioritizing landmarks
+Projecting law enforcement pastry intake
+Realigning alternate time frames
+Reconfiguring user mental processes
+Relaxing splines
+Removing road network speed bumps
+Removing texture gradients
+Removing vehicle avoidance behavior
+Resolving guid conflict
+Reticulating splines
+Retracting phong shader
+Retrieving from back store
+Reverse engineering image consultant
+Routing neural network infanstructure
+Scattering rhino food sources
+Scrubbing terrain
+Searching for llamas
+Seeding architecture simulation parameters
+Sequencing particles
+Setting advisor moods
+Setting inner deity indicators
+Setting universal physical constants
+Sonically enhancing occupant free timber
+Speculating stock market indices
+Splatting transforms
+Stratifying ground layers
+Sub sampling water data
+Synthesizing gravity
+Synthesizing wavelets
+Time compressing simulator clock
+Unable to reveal current activity
+Weathering buildings
+Zeroing crime network

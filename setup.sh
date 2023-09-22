@@ -43,19 +43,19 @@ trap stop_spinner EXIT
 # Do all the stuffs
 cd ~ || exit 1
 
-start_spinner 'installing homebrew...'
+start_spinner 'Installing homebrew...'
 NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" &> ~/.output_homebrew_install.log
 stop_spinner
-echo 'installing homebrew... done!'
+echo 'Installing homebrew... done!'
 
-echo 'adding brew to path...'
+echo 'Adding brew to path...'
 (
   echo
   echo 'eval "$(/opt/homebrew/bin/brew shellenv)"'
 ) >> ~/.zprofile
 eval "$(/opt/homebrew/bin/brew shellenv)"
 
-echo 'creating Brewfile...'
+echo 'Creating Brewfile...'
 cat << 'EOM' > ~/Brewfile
 # formulae
 brew "git"
@@ -93,28 +93,28 @@ EOM
 print_loading_message
 print_loading_message
 
-start_spinner 'installing apps...'
+start_spinner 'Installing apps...'
 brew bundle install &> ~/.output_brew_bundle_install.log
 stop_spinner
-echo 'installing apps... done!'
+echo 'Installing apps... done!'
 
 print_loading_message
 print_loading_message
 
-start_spinner 'installing ohmyzsh...'
+start_spinner 'Installing ohmyzsh...'
 sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended &> ~/.output_ohmyzsh_install.log
 stop_spinner
-echo 'installing ohmyzsh... done!'
+echo 'Installing ohmyzsh... done!'
 
-echo 'setting ohmyzsh to update automatically...'
+echo 'Configuring ohmyzsh to update automatically...'
 sed -i '' "s/# zstyle ':omz:update' mode auto/zstyle ':omz:update' mode auto/" ~/.zshrc
 
 print_loading_message
 
 if grep -q 'neofetch' ~/.zshrc; then
-  echo 'custom shell setup already exists...'
+  echo 'Custom shell setup already exists...'
 else
-  echo 'adding custom shell setup to .zshrc...'
+  echo 'Adding custom shell setup to .zshrc...'
   cat << 'EOM' >> ~/.zshrc
 
 ################
@@ -236,7 +236,7 @@ fi
 print_loading_message
 print_loading_message
 
-echo 'creating starship config...'
+echo 'Creating starship config...'
 mkdir -p ~/.config/
 cat << 'EOM' > ~/.config/starship.toml
 [aws]
@@ -250,7 +250,7 @@ success_symbol = ''
 error_symbol = ''
 EOM
 
-echo 'setting up git global config...'
+echo 'Configuring git global config...'
 git config --global user.name 'dencoseca'
 git config --global rerere.enabled true
 echo '.DS_Store' > ~/.gitignore_global
@@ -258,7 +258,7 @@ git config --global core.excludesfile ~/.gitignore_global
 
 print_loading_message
 
-echo 'cleaning up temporary brew files...'
+echo 'Cleaning up temporary brew files...'
 if [ -f ~/Brewfile ]; then
   rm ~/Brewfile
 fi
@@ -269,5 +269,5 @@ fi
 print_loading_message
 print_loading_message
 
-echo 'finished setup!'
+echo 'Finished setup!'
 exit 0
