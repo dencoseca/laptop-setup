@@ -102,7 +102,7 @@ print_loading_message
 print_loading_message
 
 start_spinner 'installing ohmyzsh...'
-sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh --unattended)" &> ~/.output_ohmyzsh_install.log
+sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended &> ~/.output_ohmyzsh_install.log
 stop_spinner
 echo 'installing ohmyzsh... done!'
 
