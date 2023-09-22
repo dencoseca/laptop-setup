@@ -183,7 +183,7 @@ print_message() {
 # zsh
 alias src="source ~/.zshrc"
 alias zshc="edit ~/.zshrc"
-alias zshb="cp ~/.zshrc ~/.zshrc.backup"
+alias zshb="cp ~/.zshrc ~/.zshrc.bak"
 
 # java
 alias javals="/usr/libexec/java_home -V"
