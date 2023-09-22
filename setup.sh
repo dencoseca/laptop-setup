@@ -44,7 +44,10 @@ trap stop_spinner EXIT
 cd ~ || exit 1
 
 start_spinner 'Installing homebrew...'
-NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" &> ~/.output_homebrew_install.log
+{
+  echo "------------$(date)------------"
+  NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+} &>> ~/.output_homebrew_install.log
 stop_spinner
 echo 'Installing homebrew... done!'
 
@@ -94,7 +97,10 @@ print_loading_message
 print_loading_message
 
 start_spinner 'Installing apps...'
-brew bundle install &> ~/.output_brew_bundle_install.log
+{
+  echo "------------$(date)------------"
+  brew bundle install
+} &>> ~/.output_brew_bundle_install.log
 stop_spinner
 echo 'Installing apps... done!'
 
@@ -102,7 +108,10 @@ print_loading_message
 print_loading_message
 
 start_spinner 'Installing ohmyzsh...'
-sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended &> ~/.output_ohmyzsh_install.log
+{
+  echo "------------$(date)------------"
+  sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
+} &>> ~/.output_ohmyzsh_install.log
 stop_spinner
 echo 'Installing ohmyzsh... done!'
 
