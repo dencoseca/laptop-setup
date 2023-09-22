@@ -207,7 +207,7 @@ docker_rc() {
   local container_names
   container_names=$(docker ps -a --format "{{.Names}}")
   if [[ -n "$container_names" ]]; then
-    print_message "REMOVING CONTAINERS" "$success"
+    print_message "REMOVING CONTAINERS" "success"
     echo "$container_names" | xargs -r docker rm
   else
     print_message "No CONTAINERS to REMOVE" "danger"
