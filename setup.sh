@@ -4,7 +4,14 @@ set -euo pipefail
 
 trap "echo \"I'm sorry Dave... I'm afraid I can't do that\"" ERR
 
-# Setup loading messages
+print_log_header() {
+  echo
+  echo "##------------------------------------------------##"
+  echo "##--------  $(date)  --------##"
+  echo "##------------------------------------------------##"
+}
+
+# rosebud!;!;!;!;!;!;!;!;!;!;!;!;!;!;
 loading_messages=()
 while IFS= read -r line; do
   if [ -n "$line" ]; then
@@ -20,7 +27,7 @@ print_loading_message() {
   sleep "$((RANDOM % 3))"
 }
 
-# Setup spinner
+# Pong for the boring parts
 spinner_pid=
 start_spinner() {
   set +m
@@ -40,12 +47,12 @@ stop_spinner() {
 
 trap stop_spinner EXIT
 
-# Do all the stuffs
 cd ~ || exit 1
 
+# Install all the things
 start_spinner 'Installing homebrew...'
 {
-  echo "------------$(date)------------"
+  print_log_header
   NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 } &>> ~/.output_homebrew_install.log
 stop_spinner
@@ -98,7 +105,7 @@ print_loading_message
 
 start_spinner 'Installing apps...'
 {
-  echo "------------$(date)------------"
+  print_log_header
   brew bundle install
 } &>> ~/.output_brew_bundle_install.log
 stop_spinner
@@ -107,9 +114,10 @@ echo 'Installing apps... done!'
 print_loading_message
 print_loading_message
 
+# I literally only want this for like, six, maybe seven git aliases
 start_spinner 'Installing ohmyzsh...'
 {
-  echo "------------$(date)------------"
+  print_log_header
   sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
 } &>> ~/.output_ohmyzsh_install.log
 stop_spinner
@@ -120,6 +128,7 @@ sed -i '' "s/# zstyle ':omz:update' mode auto/zstyle ':omz:update' mode auto/" ~
 
 print_loading_message
 
+# Squirtle evolved into Wartortle!
 if grep -q 'neofetch' ~/.zshrc; then
   echo 'Custom shell setup already exists...'
 else
@@ -245,6 +254,7 @@ fi
 print_loading_message
 print_loading_message
 
+# I don't need coloured arrows to highlight my failure thank you very much
 echo 'Creating starship config...'
 mkdir -p ~/.config/
 cat << 'EOM' > ~/.config/starship.toml
@@ -259,6 +269,7 @@ success_symbol = ''
 error_symbol = ''
 EOM
 
+# GO AWAY DS_Store! NOBODY INVITED YOU!
 echo 'Configuring git global config...'
 git config --global user.name 'dencoseca'
 git config --global rerere.enabled true
