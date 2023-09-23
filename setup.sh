@@ -11,7 +11,6 @@ print_log_header() {
   echo "##------------------------------------------------##"
 }
 
-# rosebud!;!;!;!;!;!;!;!;!;!;!;!;!;!;
 loading_messages=()
 while IFS= read -r line; do
   if [ -n "$line" ]; then
@@ -27,7 +26,6 @@ print_loading_message() {
   sleep "$((RANDOM % 3))"
 }
 
-# Pong for the boring parts
 spinner_pid=
 start_spinner() {
   set +m
@@ -49,7 +47,6 @@ trap stop_spinner EXIT
 
 cd ~ || exit 1
 
-# Install all the things
 start_spinner 'Installing homebrew...'
 {
   print_log_header
@@ -114,7 +111,6 @@ echo 'Installing apps... done!'
 print_loading_message
 print_loading_message
 
-# I literally only want this for like, six, maybe seven git aliases
 start_spinner 'Installing ohmyzsh...'
 {
   print_log_header
@@ -128,7 +124,6 @@ sed -i '' "s/# zstyle ':omz:update' mode auto/zstyle ':omz:update' mode auto/" ~
 
 print_loading_message
 
-# Squirtle evolved into Wartortle!
 if grep -q 'neofetch' ~/.zshrc; then
   echo 'Custom shell setup already exists...'
 else
@@ -254,7 +249,6 @@ fi
 print_loading_message
 print_loading_message
 
-# I don't need coloured arrows to highlight my failure thank you very much
 echo 'Creating starship config...'
 mkdir -p ~/.config/
 cat << 'EOM' > ~/.config/starship.toml
@@ -269,7 +263,6 @@ success_symbol = ''
 error_symbol = ''
 EOM
 
-# GO AWAY DS_Store! NOBODY INVITED YOU!
 echo 'Configuring git global config...'
 git config --global user.name 'dencoseca'
 git config --global rerere.enabled true
