@@ -283,4 +283,3 @@ print_loading_message
 print_loading_message
 
 echo 'Finished setup!'
-exit 0
