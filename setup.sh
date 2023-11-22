@@ -88,7 +88,6 @@ cask "rectangle"
 cask "slack"
 cask "spotify"
 cask "warp"
-cask "send-to-kindle"
 
 # mac app store
 mas "Bear", id: 1091189122
