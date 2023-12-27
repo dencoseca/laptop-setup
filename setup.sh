@@ -149,6 +149,7 @@ export NVM_DIR="$HOME/.nvm"
 # general
 alias repos="cd ~/Developer/repos"
 alias sandbox="cd ~/Developer/sandbox"
+alias downloads="cd ~/Downloads"
 alias edit="webstorm -e $1"
 alias oif="open -a Finder ./"
 alias nq="networkQuality"
@@ -266,7 +267,12 @@ EOM
 echo 'Configuring git global config...'
 git config --global user.name 'dencoseca'
 git config --global rerere.enabled true
-echo '.DS_Store' > ~/.gitignore_global
+
+cat << 'EOM' > ~/.gitignore_global
+.DS_Store
+/.idea
+EOM
+
 git config --global core.excludesfile ~/.gitignore_global
 
 print_loading_message
