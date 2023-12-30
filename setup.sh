@@ -1,5 +1,9 @@
 #!/usr/bin/env zsh
 
+# '------------------------------------------------------------'
+# ' Script setup
+# '------------------------------------------------------------'
+
 set_strict_mode() {
   set -euo pipefail
 }
@@ -71,6 +75,10 @@ trap 'stop_spinner' EXIT
 
 cd ~ || exit 1
 
+# '------------------------------------------------------------'
+# ' Install bloatware
+# '------------------------------------------------------------'
+
 start_spinner 'Installing homebrew'
 {
   print_log_header
@@ -133,6 +141,10 @@ stop_spinner
 
 print_loading_message
 print_loading_message
+
+# '------------------------------------------------------------'
+# ' Setup shell
+# '------------------------------------------------------------'
 
 start_spinner 'Installing ohmyzsh'
 {
@@ -286,6 +298,10 @@ success_symbol = ''
 error_symbol = ''
 EOM
 
+# '------------------------------------------------------------'
+# ' Configure Git
+# '------------------------------------------------------------'
+
 print_message 'Configuring git global config'
 git config --global user.name 'dencoseca'
 git config --global rerere.enabled true
@@ -298,6 +314,10 @@ EOM
 git config --global core.excludesfile ~/.gitignore_global
 
 print_loading_message
+
+# '------------------------------------------------------------'
+# ' Tidy up
+# '------------------------------------------------------------'
 
 print_message 'Cleaning up temporary brew files'
 if [ -f ~/Brewfile ]; then
