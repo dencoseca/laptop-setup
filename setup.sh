@@ -1,8 +1,19 @@
 #!/usr/bin/env zsh
 
-set -euo pipefail
+set_strict_mode() {
+  set -euo pipefail
+}
 
-trap "echo \"I'm sorry Dave... I'm afraid I can't do that\"" ERR
+set_strict_mode
+
+print_message() {
+  echo "$1"
+  say "$1"
+}
+
+dont_open_the_pod_bay_doors() {
+  print_message "I'm sorry Dave, I'm afraid I can't do that"
+}
 
 print_log_header() {
   echo
@@ -12,57 +23,70 @@ print_log_header() {
 }
 
 loading_messages=()
+
 while IFS= read -r line; do
   if [ -n "$line" ]; then
     loading_messages+=("$line")
   fi
 done < './loading-messages.txt'
+
 num_lines=${#loading_messages[@]}
 
 print_loading_message() {
-  sleep "$((RANDOM % 3))"
   local random_index=$((RANDOM % num_lines))
-  echo "${loading_messages[random_index]}..."
+  local message="${loading_messages[random_index]}"
+
+  sleep "$((RANDOM % 3))"
+  echo "$message"
+  say "$message"
   sleep "$((RANDOM % 3))"
 }
 
 spinner_pid=
+spinner_message=""
+
 start_spinner() {
+  spinner_message="$1"
   set +m
   echo -n "$1         "
+
   { while :; do for X in '  •     ' '   •    ' '    •   ' '     •  ' '      • ' '     •  ' '    •   ' '   •    ' '  •     ' ' •      '; do
     echo -en "\b\b\b\b\b\b\b\b$X"
     sleep 0.1
   done; done & } 2> /dev/null
+
   spinner_pid=$!
+  say "$1"
 }
 
 stop_spinner() {
   { kill -9 $spinner_pid && wait; } 2> /dev/null
   set -m
   echo -en "\033[2K\r"
+  echo "${spinner_message}... done!"
 }
 
-trap stop_spinner EXIT
+trap 'dont_open_the_pod_bay_doors' ERR
+trap 'stop_spinner' EXIT
 
 cd ~ || exit 1
 
-start_spinner 'Installing homebrew...'
+start_spinner 'Installing homebrew'
 {
   print_log_header
   NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 } &>> ~/.output_homebrew_install.log
 stop_spinner
-echo 'Installing homebrew... done!'
 
-echo 'Adding brew to path...'
+print_message 'Adding brew to system PATH'
 (
+  set_strict_mode
   echo
   echo 'eval "$(/opt/homebrew/bin/brew shellenv)"'
 ) >> ~/.zprofile
 eval "$(/opt/homebrew/bin/brew shellenv)"
 
-echo 'Creating Brewfile...'
+print_message 'Creating Brewfile'
 cat << 'EOM' > ~/Brewfile
 # formulae
 brew "git"
@@ -100,34 +124,32 @@ EOM
 print_loading_message
 print_loading_message
 
-start_spinner 'Installing apps...'
+start_spinner 'Installing all the usual suspects'
 {
   print_log_header
   brew bundle install
 } &>> ~/.output_brew_bundle_install.log
 stop_spinner
-echo 'Installing apps... done!'
 
 print_loading_message
 print_loading_message
 
-start_spinner 'Installing ohmyzsh...'
+start_spinner 'Installing ohmyzsh'
 {
   print_log_header
   sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
 } &>> ~/.output_ohmyzsh_install.log
 stop_spinner
-echo 'Installing ohmyzsh... done!'
 
-echo 'Configuring ohmyzsh to update automatically...'
+print_message 'Configuring ohmyzsh to update automatically'
 sed -i '' "s/# zstyle ':omz:update' mode auto/zstyle ':omz:update' mode auto/" ~/.zshrc
 
 print_loading_message
 
 if grep -q 'neofetch' ~/.zshrc; then
-  echo 'Custom shell setup already exists...'
+  print_message 'Custom shell setup already exists'
 else
-  echo 'Adding custom shell setup to .zshrc...'
+  print_message 'Adding custom shell setup to zshrc'
   cat << 'EOM' >> ~/.zshrc
 
 ################
@@ -250,7 +272,7 @@ fi
 print_loading_message
 print_loading_message
 
-echo 'Creating starship config...'
+print_message 'Creating starship config'
 mkdir -p ~/.config/
 cat << 'EOM' > ~/.config/starship.toml
 [aws]
@@ -264,7 +286,7 @@ success_symbol = ''
 error_symbol = ''
 EOM
 
-echo 'Configuring git global config...'
+print_message 'Configuring git global config'
 git config --global user.name 'dencoseca'
 git config --global rerere.enabled true
 
@@ -277,7 +299,7 @@ git config --global core.excludesfile ~/.gitignore_global
 
 print_loading_message
 
-echo 'Cleaning up temporary brew files...'
+print_message 'Cleaning up temporary brew files'
 if [ -f ~/Brewfile ]; then
   rm ~/Brewfile
 fi
@@ -288,4 +310,5 @@ fi
 print_loading_message
 print_loading_message
 
-echo 'Finished setup!'
+print_message "Praise Poseidon, it's finally over!"
+print_message "Let's all relax and drink some lemonade!"
