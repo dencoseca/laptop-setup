@@ -149,7 +149,7 @@ start_spinner 'Installing ohmyzsh'
 stop_spinner
 
 print_message 'Configuring ohmyzsh to update automatically'
-sed -i '' "s/# zstyle ':omz:update' mode auto/zstyle ':omz:update' mode auto/" ~/.zshrc
+sed -i '.bak' "s/# zstyle ':omz:update' mode auto/zstyle ':omz:update' mode auto/" ~/.zshrc
 
 print_loading_message
 
