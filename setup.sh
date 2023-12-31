@@ -1,14 +1,10 @@
 #!/usr/bin/env zsh
 
+set -euo pipefail
+
 # '------------------------------------'
 # ' Script setup
 # '------------------------------------'
-
-set_strict_mode() {
-  set -euo pipefail
-}
-
-set_strict_mode
 
 print_message() {
   echo "$1"
@@ -87,11 +83,10 @@ start_spinner 'Installing homebrew'
 stop_spinner
 
 print_message 'Adding brew to system PATH'
-(
-  set_strict_mode
+{
   echo
   echo 'eval "$(/opt/homebrew/bin/brew shellenv)"'
-) >> ~/.zprofile
+} >> ~/.zprofile
 eval "$(/opt/homebrew/bin/brew shellenv)"
 
 print_message 'Creating Brewfile'
