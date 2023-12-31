@@ -12,7 +12,7 @@ print_message() {
 }
 
 dont_open_the_pod_bay_doors() {
-  print_message "I'm sorry Dave, I'm afraid I can't do that"
+  print_message "...I'm sorry Dave, I'm afraid I can't do that"
 }
 
 print_log_header() {
