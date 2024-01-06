@@ -76,10 +76,27 @@ cd ~ || exit 1
 # '------------------------------------'
 
 print_message 'Setting MacOS settings defaults'
+
+# keyboard
 defaults write -g InitialKeyRepeat -int 20
 defaults write -g KeyRepeat -int 1
-defaults write com.apple.dock "autohide" -bool "true" && killall Dock
-defaults write com.apple.dock "tilesize" -int "52" && killall Dock
+# dock
+defaults write com.apple.dock autohide -bool true
+defaults write com.apple.dock tilesize -int 52
+defaults write com.apple.dock show-recents -bool false
+defaults write com.apple.dock show-process-indicators -bool false
+killall Dock
+# finder
+defaults write com.apple.finder ShowPathbar -bool true
+defaults write com.apple.finder FXPreferredViewStyle -string clmv
+defaults write com.apple.finder _FXSortFoldersFirst -bool true
+defaults write com.apple.finder FXRemoveOldTrashItems -bool true
+defaults write com.apple.finder _FXSortFoldersFirstOnDesktop -bool true
+killall Finder
+# trackpad
+defaults write com.apple.AppleMultitouchTrackpad FirstClickThreshold -int 0
+# mail
+defaults write com.apple.mail DisableInlineAttachmentViewing -bool true
 
 # '------------------------------------'
 # ' Install bloatware
