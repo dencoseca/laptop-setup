@@ -156,7 +156,7 @@ EOM
 print_loading_message
 print_loading_message
 
-start_spinner 'Installing all the usual suspects'
+start_spinner 'Installing bloatware'
 {
   print_log_header
   brew bundle install
