@@ -169,6 +169,7 @@ start_spinner 'Installing bloatware'
 } &>> ~/.output_brew_bundle_install.log
 stop_spinner
 
+print_message 'Holy shit, this is taking ages!'
 print_loading_message
 print_loading_message
 
@@ -350,7 +351,7 @@ print_loading_message
 # ' Tidy up
 # '------------------------------------'
 
-print_message 'Cleaning up temporary brew files'
+print_message 'Cleaning up temporary files'
 if [ -f ~/Brewfile ]; then
   rm ~/Brewfile
 fi
