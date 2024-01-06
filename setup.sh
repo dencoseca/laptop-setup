@@ -72,7 +72,7 @@ trap 'stop_spinner' EXIT
 cd ~ || exit 1
 
 # '------------------------------------'
-# ' MacOS defaults
+# ' Set MacOS defaults
 # '------------------------------------'
 
 print_message 'Setting MacOS defaults'
