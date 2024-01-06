@@ -75,7 +75,7 @@ cd ~ || exit 1
 # ' MacOS settings defaults
 # '------------------------------------'
 
-print_message 'Setting MacOS settings defaults'
+print_message 'Setting MacOS defaults'
 
 # keyboard
 defaults write -g InitialKeyRepeat -int 20
