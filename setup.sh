@@ -99,6 +99,10 @@ killall Finder
 defaults write com.apple.AppleMultitouchTrackpad FirstClickThreshold -int 0
 # mail
 defaults write com.apple.mail DisableInlineAttachmentViewing -bool true
+# menubar
+defaults write com.apple.Siri StatusMenuVisible -bool false
+# windows
+defaults write -g AppleWindowTabbingMode -string always
 
 # '------------------------------------'
 # ' Install bloatware
