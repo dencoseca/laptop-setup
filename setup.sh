@@ -85,6 +85,8 @@ defaults write com.apple.dock autohide -bool true
 defaults write com.apple.dock tilesize -int 52
 defaults write com.apple.dock show-recents -bool false
 defaults write com.apple.dock show-process-indicators -bool false
+defaults write com.apple.dock magnification -bool true
+defaults write com.apple.dock largesize -int 60
 killall Dock
 # finder
 defaults write com.apple.finder ShowPathbar -bool true
