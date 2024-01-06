@@ -111,6 +111,7 @@ brew "tldr"
 brew "tree"
 brew "starship"
 brew "nvm"
+brew "bat"
 
 # casks
 cask "alfred"
