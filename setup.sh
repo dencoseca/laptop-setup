@@ -102,7 +102,7 @@ print_message 'Setting MacOS defaults'
   defaults write com.apple.AppleMultitouchTrackpad FirstClickThreshold -int 0
   # siri
   defaults write com.apple.Siri StatusMenuVisible -bool false
-} &>> ~/.setting_macos_defaults.log
+} &>> ~/.output_setting_macos_defaults.log
 
 # '------------------------------------'
 # ' Install bloatware
