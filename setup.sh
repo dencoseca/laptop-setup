@@ -122,6 +122,7 @@ mas "Bitwarden", id: 1352778147
 mas "NordVPN", id: 905953485
 mas "Things", id: 904280696
 mas "WhatsApp", id: 1147396723
+mas "Amphetamine", id: 937984704
 EOM
 
 print_loading_message
