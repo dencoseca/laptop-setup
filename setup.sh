@@ -102,7 +102,7 @@ print_message 'Setting MacOS defaults'
   defaults write com.apple.AppleMultitouchTrackpad FirstClickThreshold -int 0
   # siri
   defaults write com.apple.Siri StatusMenuVisible -bool false
-} &>> ~/.output_setting_macos_defaults.log
+} &>> ~/.setting_macos_defaults.log
 
 # '------------------------------------'
 # ' Install bloatware
@@ -112,7 +112,7 @@ start_spinner 'Installing homebrew'
 {
   print_log_header
   NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-} &>> ~/.output_homebrew_install.log
+} &>> ~/.homebrew_install.log
 stop_spinner
 
 print_message 'Adding brew to system PATH'
@@ -166,7 +166,7 @@ start_spinner 'Installing bloatware'
 {
   print_log_header
   brew bundle install
-} &>> ~/.output_brew_bundle_install.log
+} &>> ~/.brew_bundle_install.log
 stop_spinner
 
 print_message 'Holy shit, this is taking ages!'
@@ -181,7 +181,7 @@ start_spinner 'Installing ohmyzsh'
 {
   print_log_header
   sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
-} &>> ~/.output_ohmyzsh_install.log
+} &>> ~/.ohmyzsh_install.log
 stop_spinner
 
 print_message 'Configuring ohmyzsh to update automatically'
