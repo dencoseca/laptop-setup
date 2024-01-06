@@ -72,36 +72,37 @@ trap 'stop_spinner' EXIT
 cd ~ || exit 1
 
 # '------------------------------------'
-# ' MacOS settings defaults
+# ' MacOS defaults
 # '------------------------------------'
 
 print_message 'Setting MacOS defaults'
-
-# keyboard
-defaults write -g InitialKeyRepeat -int 20
-defaults write -g KeyRepeat -int 1
-# dock
-defaults write com.apple.dock autohide -bool true
-defaults write com.apple.dock tilesize -int 52
-defaults write com.apple.dock show-recents -bool false
-defaults write com.apple.dock show-process-indicators -bool false
-defaults write com.apple.dock magnification -bool true
-defaults write com.apple.dock largesize -int 60
-defaults write com.apple.dock windowtabbing -string always
-killall Dock
-# finder
-defaults write com.apple.finder ShowPathbar -bool true
-defaults write com.apple.finder FXPreferredViewStyle -string clmv
-defaults write com.apple.finder _FXSortFoldersFirst -bool true
-defaults write com.apple.finder FXRemoveOldTrashItems -bool true
-defaults write com.apple.finder _FXSortFoldersFirstOnDesktop -bool true
-killall Finder
-# trackpad
-defaults write com.apple.AppleMultitouchTrackpad FirstClickThreshold -int 0
-# menubar
-defaults write com.apple.Siri StatusMenuVisible -bool false
-# windows
-defaults write -g AppleWindowTabbingMode -string always
+{
+  print_log_header
+  # global
+  defaults write -g InitialKeyRepeat -int 20
+  defaults write -g KeyRepeat -int 1
+  defaults write -g AppleWindowTabbingMode -string always
+  # dock
+  defaults write com.apple.dock autohide -bool true
+  defaults write com.apple.dock tilesize -int 52
+  defaults write com.apple.dock show-recents -bool false
+  defaults write com.apple.dock show-process-indicators -bool false
+  defaults write com.apple.dock magnification -bool true
+  defaults write com.apple.dock largesize -int 60
+  defaults write com.apple.dock windowtabbing -string always
+  killall Dock
+  # finder
+  defaults write com.apple.finder ShowPathbar -bool true
+  defaults write com.apple.finder FXPreferredViewStyle -string clmv
+  defaults write com.apple.finder _FXSortFoldersFirst -bool true
+  defaults write com.apple.finder FXRemoveOldTrashItems -bool true
+  defaults write com.apple.finder _FXSortFoldersFirstOnDesktop -bool true
+  killall Finder
+  # trackpad
+  defaults write com.apple.AppleMultitouchTrackpad FirstClickThreshold -int 0
+  # siri
+  defaults write com.apple.Siri StatusMenuVisible -bool false
+} &>> ~/.setting_macos_defaults.log
 
 # '------------------------------------'
 # ' Install bloatware
