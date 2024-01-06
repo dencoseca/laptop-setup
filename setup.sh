@@ -72,6 +72,16 @@ trap 'stop_spinner' EXIT
 cd ~ || exit 1
 
 # '------------------------------------'
+# ' MacOS settings defaults
+# '------------------------------------'
+
+print_message 'Setting MacOS settings defaults'
+defaults write -g InitialKeyRepeat -int 20
+defaults write -g KeyRepeat -int 1
+defaults write com.apple.dock "autohide" -bool "true" && killall Dock
+defaults write com.apple.dock "tilesize" -int "52" && killall Dock
+
+# '------------------------------------'
 # ' Install bloatware
 # '------------------------------------'
 
