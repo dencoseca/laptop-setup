@@ -87,6 +87,7 @@ defaults write com.apple.dock show-recents -bool false
 defaults write com.apple.dock show-process-indicators -bool false
 defaults write com.apple.dock magnification -bool true
 defaults write com.apple.dock largesize -int 60
+defaults write com.apple.dock windowtabbing -string always
 killall Dock
 # finder
 defaults write com.apple.finder ShowPathbar -bool true
@@ -97,8 +98,6 @@ defaults write com.apple.finder _FXSortFoldersFirstOnDesktop -bool true
 killall Finder
 # trackpad
 defaults write com.apple.AppleMultitouchTrackpad FirstClickThreshold -int 0
-# mail
-defaults write com.apple.mail DisableInlineAttachmentViewing -bool true
 # menubar
 defaults write com.apple.Siri StatusMenuVisible -bool false
 # windows
