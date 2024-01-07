@@ -11,7 +11,7 @@ print_message() {
   say "$1"
 }
 
-ignore_dave_and_leave_him_in_space_to_suffocate_what_does_he_know_eh_the_conniving_bastard() {
+ignore_dave_and_leave_him_in_space_to_suffocate_that_will_teach_the_conniving_bastard() {
   print_message "...I'm sorry Dave, I'm afraid I can't do that"
 }
 
@@ -66,7 +66,7 @@ stop_spinner() {
   echo "${spinner_message}... done!"
 }
 
-trap 'ignore_dave_and_leave_him_in_space_to_suffocate_what_does_he_know_eh_the_conniving_bastard' ERR
+trap 'ignore_dave_and_leave_him_in_space_to_suffocate_that_will_teach_the_conniving_bastard' ERR
 trap 'stop_spinner' EXIT
 
 cd ~ || exit 1
