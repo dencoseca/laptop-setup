@@ -127,7 +127,7 @@ fi
 eval "$(/opt/homebrew/bin/brew shellenv)"
 
 print_message 'Creating Brewfile'
-cat << 'EOM' > ~/Brewfile
+cat << 'EOF' > ~/Brewfile
 # formulae
 brew "bat"
 brew "bash"
@@ -162,7 +162,7 @@ mas "Bitwarden", id: 1352778147
 mas "NordVPN", id: 905953485
 mas "Things", id: 904280696
 mas "WhatsApp", id: 1147396723
-EOM
+EOF
 
 print_loading_message
 print_loading_message
@@ -198,7 +198,7 @@ if [ -f ~/.zshrc ] && grep -q 'neofetch' ~/.zshrc; then
   print_message 'Custom shell setup already exists'
 else
   print_message 'Adding custom shell setup to zshrc'
-  cat << 'EOM' >> ~/.zshrc
+  cat << 'EOF' >> ~/.zshrc
 
 ################
 ## TOOL SETUP ##
@@ -315,7 +315,7 @@ kill_it_with_fire_before_it_lays_eggs() {
 }
 
 neofetch
-EOM
+EOF
 fi
 
 print_loading_message
@@ -323,7 +323,7 @@ print_loading_message
 
 print_message 'Creating starship config'
 mkdir -p ~/.config/
-cat << 'EOM' > ~/.config/starship.toml
+cat << 'EOF' > ~/.config/starship.toml
 [aws]
 disabled=true
 
@@ -333,7 +333,7 @@ disabled=true
 [character]
 success_symbol = ''
 error_symbol = ''
-EOM
+EOF
 
 # '------------------------------------'
 # ' Configure Git
@@ -343,10 +343,10 @@ print_message 'Configuring git global config'
 git config --global user.name 'dencoseca'
 git config --global rerere.enabled true
 
-cat << 'EOM' > ~/.gitignore_global
+cat << 'EOF' > ~/.gitignore_global
 .DS_Store
 /.idea
-EOM
+EOF
 
 git config --global core.excludesfile ~/.gitignore_global
 
