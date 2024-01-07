@@ -181,14 +181,14 @@ print_loading_message
 # ' Setup shell
 # '------------------------------------'
 
-start_spinner 'Installing ohmyzsh'
+start_spinner 'Installing oh my zsh'
 {
   print_log_header
   sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
-} &>> ~/.ohmyzsh_install.log
+} &>> ~/.oh_my_zsh_install.log
 stop_spinner
 
-print_message 'Configuring ohmyzsh to update automatically'
+print_message 'Configuring oh my zsh to update automatically'
 sed -i '.bak' "s/# zstyle ':omz:update' mode auto/zstyle ':omz:update' mode auto/" ~/.zshrc
 
 print_loading_message
