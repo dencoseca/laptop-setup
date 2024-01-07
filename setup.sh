@@ -173,7 +173,7 @@ start_spinner 'Installing bloatware'
 } &>> ~/.brew_bundle_install.log
 stop_spinner
 
-print_message 'Holy shit, this is taking ages!'
+print_message 'Holy shit, that took ages!'
 print_loading_message
 print_loading_message
 
