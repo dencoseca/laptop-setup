@@ -115,11 +115,15 @@ start_spinner 'Installing homebrew'
 } &>> ~/.homebrew_install.log
 stop_spinner
 
-print_message 'Adding brew to system PATH'
-{
-  echo
-  echo 'eval "$(/opt/homebrew/bin/brew shellenv)"'
-} >> ~/.zprofile
+if grep -q '/opt/homebrew/bin/brew shellenv' ~/.zprofile; then
+  print_message 'Brew already exists in system PATH'
+else
+  print_message 'Adding brew to system PATH'
+  {
+    echo
+    echo 'eval "$(/opt/homebrew/bin/brew shellenv)"'
+  } >> ~/.zprofile
+fi
 eval "$(/opt/homebrew/bin/brew shellenv)"
 
 print_message 'Creating Brewfile'
