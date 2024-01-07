@@ -129,16 +129,16 @@ eval "$(/opt/homebrew/bin/brew shellenv)"
 print_message 'Creating Brewfile'
 cat << 'EOM' > ~/Brewfile
 # formulae
-brew "git"
+brew "bat"
 brew "bash"
 brew "cmatrix"
+brew "git"
 brew "jq"
 brew "neofetch"
+brew "nvm"
+brew "starship"
 brew "tldr"
 brew "tree"
-brew "starship"
-brew "nvm"
-brew "bat"
 
 # casks
 cask "alfred"
@@ -147,6 +147,7 @@ cask "bartender"
 cask "brave-browser"
 cask "docker"
 cask "jetbrains-toolbox"
+cask "logi-options-plus"
 cask "meetingbar"
 cask "mos"
 cask "rectangle"
@@ -155,12 +156,12 @@ cask "spotify"
 cask "warp"
 
 # mac app store
+mas "Amphetamine", id: 937984704
 mas "Bear", id: 1091189122
 mas "Bitwarden", id: 1352778147
 mas "NordVPN", id: 905953485
 mas "Things", id: 904280696
 mas "WhatsApp", id: 1147396723
-mas "Amphetamine", id: 937984704
 EOM
 
 print_loading_message
