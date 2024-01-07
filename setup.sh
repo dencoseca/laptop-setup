@@ -11,7 +11,7 @@ print_message() {
   say "$1"
 }
 
-dont_open_the_pod_bay_doors() {
+leave_dave_in_space_to_suffocate() {
   print_message "...I'm sorry Dave, I'm afraid I can't do that"
 }
 
@@ -66,7 +66,7 @@ stop_spinner() {
   echo "${spinner_message}... done!"
 }
 
-trap 'dont_open_the_pod_bay_doors' ERR
+trap 'leave_dave_in_space_to_suffocate' ERR
 trap 'stop_spinner' EXIT
 
 cd ~ || exit 1
