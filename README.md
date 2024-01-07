@@ -1,6 +1,6 @@
 # laptop-setup
 
-sacrifice a goat to Poseidon for a safe journey
+sacrifice a goat to Poseidon for safe passage
 
 ```shell
 xcode-select --install
