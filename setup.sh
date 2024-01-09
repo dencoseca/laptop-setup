@@ -219,12 +219,11 @@ export NVM_DIR="$HOME/.nvm"
 # general
 alias repos="cd ~/Developer/repos"
 alias sandbox="cd ~/Developer/sandbox"
-alias downloads="cd ~/Downloads"
+alias down="cd ~/Downloads"
 alias edit="webstorm -e $1"
 alias oif="open -a Finder ./"
 alias nq="networkQuality"
 alias trc="tree -d -L 3 ~/Developer/repos"
-alias update="brew update && brew upgrade && npm update -g"
 
 cjq() {
   curl $1 | jq
@@ -245,6 +244,14 @@ print_message() {
   esac
 
   echo -e "${style}${message}${reset}"
+}
+
+update() {
+  print_message "Updating brew packages" "success"
+  brew update && brew upgrade
+  
+  print_message "Updating global npm packages" "success"
+  npm update -g
 }
 
 # zsh
