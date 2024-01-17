@@ -226,7 +226,7 @@ alias nq="networkQuality"
 alias trc="tree -d -L 3 ~/Developer/repos"
 
 cjq() {
-  curl $1 | jq
+  curl "$@" | jq
 }
 
 print_message() {
