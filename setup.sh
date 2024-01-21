@@ -230,9 +230,10 @@ cjq() {
 }
 
 print_message() {
-  local reset='\033[0m'
-  local bred='\033[1;31m'
-  local bgreen='\033[1;32m'
+  local reset='\x1B[0m'
+  local bred='\x1B[1;31m'
+  local bgreen='\x1B[1;32m'
+  local byellow='\x1B[1;33m'
   local message="$1"
   local msg_type="$2"
   local style
@@ -240,6 +241,7 @@ print_message() {
   case $msg_type in
     "danger") style=$bred ;;
     "success") style=$bgreen ;;
+    "warning") style=$byellow ;;
     *) style=$reset ;;
   esac
 
@@ -247,11 +249,13 @@ print_message() {
 }
 
 update() {
-  print_message "Updating brew packages" "success"
+  print_message "Updating brew packages..." "warning"
   brew update && brew upgrade
-  
-  print_message "Updating global npm packages" "success"
+  print_message "done" "success"
+
+  print_message "Updating global npm packages..." "warning"
   npm update -g
+  print_message "done" "success"
 }
 
 # zsh
