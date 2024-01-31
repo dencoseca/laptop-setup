@@ -162,6 +162,7 @@ mas "Bitwarden", id: 1352778147
 mas "NordVPN", id: 905953485
 mas "Things", id: 904280696
 mas "WhatsApp", id: 1147396723
+
 EOF
 
 print_loading_message
@@ -343,6 +344,7 @@ disabled=true
 [character]
 success_symbol = ''
 error_symbol = ''
+
 EOF
 
 # '------------------------------------'
@@ -356,6 +358,7 @@ git config --global rerere.enabled true
 cat << 'EOF' > ~/.gitignore_global
 .DS_Store
 /.idea
+
 EOF
 
 git config --global core.excludesfile ~/.gitignore_global
