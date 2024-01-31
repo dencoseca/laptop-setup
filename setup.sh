@@ -79,12 +79,14 @@ print_message "Checking Command Line Tools for Xcode"
 # Only run if the tools are not installed yet
 # To check that try to print the SDK path
 if ! xcode-select -p &> /dev/null; then
-  print_message "Command Line Tools for Xcode not found. Installing from softwareupdate"
   # This temporary file prompts the 'softwareupdate' utility to list the Command Line Tools
-  touch /tmp/.com.apple.dt.CommandLineTools.installondemand.in-progress
-  version=$(softwareupdate -l | grep "\*.*Command Line" | tail -n 1 | sed 's/^[^C]* //')
-  softwareupdate -i "$version" --verbose
-  print_message "Command Line Tools for Xcode have been installed."
+  start_spinner "Command Line Tools for Xcode not found. Installing from software update utility"
+  {
+    touch /tmp/.com.apple.dt.CommandLineTools.installondemand.in-progress
+    version=$(softwareupdate -l | grep "\*.*Command Line" | tail -n 1 | sed 's/^[^C]* //')
+    softwareupdate -i "$version" --verbose
+  } &>> ~/.xcode-select-install.log
+  stop_spinner
 else
   print_message "Command Line Tools for Xcode are already installed."
 fi
