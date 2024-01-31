@@ -1,11 +1,5 @@
 # laptop-setup
 
-sacrifice a goat to Poseidon for safe passage
-
-```shell
-xcode-select --install
-```
-
 do a little dance
 
 ```shell
