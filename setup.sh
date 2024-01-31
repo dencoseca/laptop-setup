@@ -194,7 +194,7 @@ sed -i '.bak' "s/# zstyle ':omz:update' mode auto/zstyle ':omz:update' mode auto
 
 print_loading_message
 
-if [ -f ~/.zshrc ] && grep -q 'neofetch' ~/.zshrc; then
+if [ -f ~/.zshrc ] && grep -q 'kill_it_with_fire_before_it_lays_eggs' ~/.zshrc; then
   print_message 'Custom shell setup already exists'
 else
   print_message 'Adding custom shell setup to zshrc'
@@ -325,7 +325,6 @@ kill_it_with_fire_before_it_lays_eggs() {
   docker system prune -f
 }
 
-neofetch
 EOF
 fi
 
