@@ -372,15 +372,13 @@ EOF
 # '------------------------------------'
 
 print_message 'Configuring git global config'
-git config --global user.name 'dencoseca'
-git config --global rerere.enabled true
-
 cat << 'EOF' > ~/.gitignore_global
 .DS_Store
 /.idea
 
 EOF
-
+git config --global user.name 'dencoseca'
+git config --global rerere.enabled true
 git config --global core.excludesfile ~/.gitignore_global
 
 print_loading_message
