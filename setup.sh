@@ -245,6 +245,7 @@ alias edit="webstorm -e $1"
 alias oif="open -a Finder ./"
 alias nq="networkQuality"
 alias trc="tree -d -L 3 ~/Developer/repos"
+alias cc="rm .idea/httpRequests/http-client.cookies"
 
 cjq() {
   curl "$@" | jq
