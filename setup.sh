@@ -245,7 +245,6 @@ alias edit="webstorm -e $1"
 alias oif="open -a Finder ./"
 alias nq="networkQuality"
 alias trc="tree -d -L 3 ~/Developer/repos"
-alias cc="rm .idea/httpRequests/http-client.cookies"
 
 cjq() {
   curl "$@" | jq
@@ -278,6 +277,42 @@ update() {
   print_message "Updating global npm packages..." "warning"
   npm update -g
   print_message "done" "success"
+}
+
+# jetbrains http client
+alias http-cls="bat .idea/httpRequests/http-client.cookies"
+alias http-cc="rm .idea/httpRequests/http-client.cookies"
+
+http_dc() {
+    local column=$1
+    local value=$2
+    local filepath=.idea/httpRequests/http-client.cookies
+
+    if [ -z "$column" ]; then
+      echo "Please provide a column"
+      return
+    fi
+
+    if [ -z "$value" ]; then
+      echo "Please provide a value"
+      return
+    fi
+
+    if [ "$column" = "domain" ]; then
+        action=$(awk -v val="$value" 'BEGIN{OFS=FS="\t"} $1!=val' $filepath)
+    elif [ "$column" = "name" ]; then
+        action=$(awk -v val="$value" 'BEGIN{OFS=FS="\t"} $3!=val' $filepath)
+    else
+        echo "Invalid column. Please specify either 'domain' or 'name'"
+        return
+    fi
+
+    if [ -z "$action" ]; then
+        echo "No matching lines were found."
+    else
+        echo "$action" > $filepath
+        echo "The matching cookie(s) have been removed."
+    fi
 }
 
 # zsh
