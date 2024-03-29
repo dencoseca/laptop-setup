@@ -282,8 +282,9 @@ update() {
   brew update && brew upgrade
   print_message "done" "success"
 
-  print_message "Updating global npm packages..." "warning"
-  npm update -g
+  print_message "Updating to latest node..." "warning"
+  nvm install --lts --latest-npm
+  nvm use --lts
   print_message "done" "success"
 }
 
