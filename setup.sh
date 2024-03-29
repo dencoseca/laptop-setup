@@ -246,8 +246,6 @@ alias oif="open -a Finder ./"
 alias nq="networkQuality"
 alias trc="tree -d -L 3 ~/Developer/repos"
 alias k="kubectl"
-alias npmls="npm list -g --depth=0"
-alias nodels="ls -1 ~/.nvm/versions/node"
 
 cjq() {
   curl "$@" | jq
@@ -321,6 +319,10 @@ http_dc() {
         echo "The matching cookie(s) have been removed."
     fi
 }
+
+# node
+alias npmls="npm list -g --depth=0"
+alias nodels="ls -1 ~/.nvm/versions/node"
 
 # zsh
 alias src="source ~/.zshrc"
