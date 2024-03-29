@@ -238,14 +238,21 @@ export NVM_DIR="$HOME/.nvm"
 ################################
 
 # general
+alias src="source ~/.zshrc"
+alias zshc="edit ~/.zshrc"
+alias zshb="cp ~/.zshrc ~/.zshrc.bak"
+alias github="cd ~/Developer/repos/github.com/dencoseca"
 alias repos="cd ~/Developer/repos"
 alias sandbox="cd ~/Developer/sandbox"
-alias down="cd ~/Downloads"
+alias udemy="cd ~/Developer/udemy"
+alias dl="cd ~/Downloads"
+alias dt="cd ~/Desktop"
 alias edit="webstorm -e $1"
 alias oif="open -a Finder ./"
 alias nq="networkQuality"
 alias trc="tree -d -L 3 ~/Developer/repos"
 alias k="kubectl"
+alias npmls="npm list -g --depth=0"
 
 cjq() {
   curl "$@" | jq
@@ -320,17 +327,9 @@ http_dc() {
     fi
 }
 
-# node
-alias npmls="npm list -g --depth=0"
-alias nodels="ls -1 ~/.nvm/versions/node"
-
-# zsh
-alias src="source ~/.zshrc"
-alias zshc="edit ~/.zshrc"
-alias zshb="cp ~/.zshrc ~/.zshrc.bak"
-
 # java
 alias javals="/usr/libexec/java_home -V"
+
 javasw() {
   export JAVA_HOME=$(/usr/libexec/java_home -v "$1")
 }
