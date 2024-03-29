@@ -288,6 +288,10 @@ http_dc() {
     local value=$2
     local filepath=.idea/httpRequests/http-client.cookies
 
+    if [ ! -f $filepath ]; then
+      echo "There is no http-client.cookies file in this project"
+    fi
+
     if [ -z "$column" ]; then
       echo "Please provide a column"
       return
