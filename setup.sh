@@ -246,6 +246,7 @@ alias oif="open -a Finder ./"
 alias nq="networkQuality"
 alias trc="tree -d -L 3 ~/Developer/repos"
 alias k="kubectl"
+alias npmls="npm list -g --depth=0"
 
 cjq() {
   curl "$@" | jq
