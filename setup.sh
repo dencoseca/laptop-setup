@@ -247,6 +247,7 @@ alias nq="networkQuality"
 alias trc="tree -d -L 3 ~/Developer/repos"
 alias k="kubectl"
 alias npmls="npm list -g --depth=0"
+alias nodels="ls -1 ~/.nvm/versions/node"
 
 cjq() {
   curl "$@" | jq
