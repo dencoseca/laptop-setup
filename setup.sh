@@ -292,7 +292,7 @@ update() {
 alias http-cls="bat .idea/httpRequests/http-client.cookies"
 alias http-cc="rm .idea/httpRequests/http-client.cookies"
 
-http_dc() {
+http_rmc() {
     local column=$1
     local value=$2
     local filepath=.idea/httpRequests/http-client.cookies
