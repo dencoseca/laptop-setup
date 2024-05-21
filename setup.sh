@@ -296,7 +296,7 @@ update() {
 }
 
 # jetbrains http client
-alias http-cls="cat .idea/httpRequests/http-client.cookies"
+alias http-cls="bat .idea/httpRequests/http-client.cookies"
 alias http-cc="rm .idea/httpRequests/http-client.cookies"
 
 http_rmc() {
