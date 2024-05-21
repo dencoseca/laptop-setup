@@ -149,7 +149,6 @@ eval "$(/opt/homebrew/bin/brew shellenv)"
 print_message 'Creating Brewfile'
 cat << 'EOF' > ~/Brewfile
 # formulae
-brew "bat"
 brew "bash"
 brew "cmatrix"
 brew "git"
@@ -293,7 +292,7 @@ update() {
 }
 
 # jetbrains http client
-alias http-cls="bat .idea/httpRequests/http-client.cookies"
+alias http-cls="cat .idea/httpRequests/http-client.cookies"
 alias http-cc="rm .idea/httpRequests/http-client.cookies"
 
 http_rmc() {
