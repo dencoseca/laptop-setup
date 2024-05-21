@@ -301,39 +301,39 @@ alias http-cls="bat .idea/httpRequests/http-client.cookies"
 alias http-cc="rm .idea/httpRequests/http-client.cookies"
 
 http_rmc() {
-    local column=$1
-    local value=$2
-    local filepath=.idea/httpRequests/http-client.cookies
+  local column=$1
+  local value=$2
+  local filepath=.idea/httpRequests/http-client.cookies
 
-    if [ ! -f $filepath ]; then
-      echo "There is no http-client.cookies file in this project"
-    fi
+  if [ ! -f $filepath ]; then
+    echo "There is no http-client.cookies file in this project"
+  fi
 
-    if [ -z "$column" ]; then
-      echo "Please provide a column"
-      return
-    fi
+  if [ -z "$column" ]; then
+    echo "Please provide a column"
+    return
+  fi
 
-    if [ -z "$value" ]; then
-      echo "Please provide a value"
-      return
-    fi
+  if [ -z "$value" ]; then
+    echo "Please provide a value"
+    return
+  fi
 
-    if [ "$column" = "domain" ]; then
-        action=$(awk -v val="$value" 'BEGIN{OFS=FS="\t"} $1!=val' $filepath)
-    elif [ "$column" = "name" ]; then
-        action=$(awk -v val="$value" 'BEGIN{OFS=FS="\t"} $3!=val' $filepath)
-    else
-        echo "Invalid column. Please specify either 'domain' or 'name'"
-        return
-    fi
+  if [ "$column" = "domain" ]; then
+    action=$(awk -v val="$value" 'BEGIN{OFS=FS="\t"} $1!=val' $filepath)
+  elif [ "$column" = "name" ]; then
+    action=$(awk -v val="$value" 'BEGIN{OFS=FS="\t"} $3!=val' $filepath)
+  else
+    echo "Invalid column. Please specify either 'domain' or 'name'"
+    return
+  fi
 
-    if [ -z "$action" ]; then
-        echo "No matching lines were found."
-    else
-        echo "$action" > $filepath
-        echo "The matching cookie(s) have been removed."
-    fi
+  if [ -z "$action" ]; then
+    echo "No matching lines were found."
+  else
+    echo "$action" > $filepath
+    echo "The matching cookie(s) have been removed."
+  fi
 }
 
 # java
