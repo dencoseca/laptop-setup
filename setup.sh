@@ -92,10 +92,10 @@ else
 fi
 
 # '------------------------------------'
-# ' Set MacOS defaults
+# ' Set Mac OS defaults
 # '------------------------------------'
 
-print_message 'Setting MacOS defaults'
+print_message 'Setting Mac OS defaults'
 {
   print_log_header
   # global
