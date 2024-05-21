@@ -149,6 +149,7 @@ eval "$(/opt/homebrew/bin/brew shellenv)"
 print_message 'Creating Brewfile'
 cat << 'EOF' > $HOME/Brewfile
 # formulae
+brew "bat"
 brew "bash"
 brew "cmatrix"
 brew "git"
@@ -234,6 +235,9 @@ export NVM_DIR="$HOME/.nvm"
 
 # warp themes
 WARP_THEMES_DIR="$HOME/.warp/themes"
+
+# bat theme
+export BAT_THEME='zenburn'
 
 ################################
 ## CUSTOM ALIASES / FUNCTIONS ##
