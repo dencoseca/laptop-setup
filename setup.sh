@@ -424,7 +424,7 @@ cat << 'EOF' > $HOME/.warp/themes/ayu_dark.yaml
 accent: '#53BDFA'
 background: '#0A0E14'
 details: darker
-foreground: '#B3B1AD'
+foreground: '#E7E6E4'
 terminal_colors:
   bright:
     black: '#686868'
