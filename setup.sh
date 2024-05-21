@@ -459,6 +459,7 @@ cat << 'EOF' > $HOME/.gitignore_global
 /.idea
 
 EOF
+
 git config --global user.name 'dencoseca'
 git config --global rerere.enabled true
 git config --global core.excludesfile $HOME/.gitignore_global
