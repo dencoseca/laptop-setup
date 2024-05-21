@@ -420,30 +420,30 @@ EOF
 
 print_message 'Creating warp theme'
 mkdir -p $HOME/.warp/themes
-cat << 'EOF' > $HOME/.warp/themes/ayu_dark.yaml
+cat << 'EOF' > $HOME/.warp/themes/dencoseca.yaml
 accent: '#53BDFA'
-background: '#0A0E14'
+background: '#1E1F22'
 details: darker
-foreground: '#E7E6E4'
+foreground: '#DFE1E5'
 terminal_colors:
   bright:
-    black: '#686868'
-    blue: '#59C2FF'
-    cyan: '#95E6CB'
-    green: '#C2D94C'
-    magenta: '#FFEE99'
-    red: '#F07178'
+    black: '#4F5156'
+    blue: '#52ACF8'
+    cyan: '#6DE2CF'
+    green: '#79E257'
+    magenta: '#A85EF6'
+    red: '#EB565F'
     white: '#FFFFFF'
-    yellow: '#FFB454'
+    yellow: '#F5C256'
   normal:
-    black: '#01060E'
-    blue: '#53BDFA'
-    cyan: '#90E1C6'
-    green: '#91B362'
-    magenta: '#FAE994'
-    red: '#EA6C73'
-    white: '#C7C7C7'
-    yellow: '#F9AF4F'
+    black: '#4F5156'
+    blue: '#52ACF8'
+    cyan: '#6DE2CF'
+    green: '#79E257'
+    magenta: '#A85EF6'
+    red: '#EB565F'
+    white: '#FFFFFF'
+    yellow: '#F5C256'
 
 EOF
 
