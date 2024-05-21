@@ -221,11 +221,11 @@ else
   print_message 'Adding custom shell setup to zshrc'
   cat << 'EOF' >> $HOME/.zshrc
 
-################
-## TOOL SETUP ##
-################
+#################
+## TOOL CONFIG ##
+#################
 
-# starship prompt
+# starship
 eval "$(starship init zsh)"
 
 # nvm
@@ -233,7 +233,7 @@ export NVM_DIR="$HOME/.nvm"
   [ -s "/opt/homebrew/opt/nvm/nvm.sh" ] && \. "/opt/homebrew/opt/nvm/nvm.sh"  # This loads nvm
   [ -s "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm" ] && \. "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm"  # This loads nvm bash_completion
 
-# bat theme
+# bat
 export BAT_THEME='zenburn'
 
 ################################
