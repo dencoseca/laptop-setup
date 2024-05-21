@@ -150,15 +150,18 @@ print_message 'Creating Brewfile'
 cat << 'EOF' > $HOME/Brewfile
 # formulae
 brew "bat"
-brew "bash"
 brew "cmatrix"
-brew "git"
+brew "htop"
 brew "jq"
 brew "neofetch"
-brew "nvm"
 brew "starship"
 brew "tldr"
 brew "tree"
+brew "git"
+brew "nvm"
+brew "go"
+brew "helm"
+brew "skaffold"
 
 # casks
 cask "alfred"
