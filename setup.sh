@@ -427,7 +427,7 @@ print_message 'Creating warp theme'
 mkdir -p $HOME/.warp/themes
 cat << 'EOF' > $HOME/.warp/themes/dencoseca.yaml
 accent: '#53BDFA'
-background: '#1E1F22'
+background: '#000000'
 details: darker
 foreground: '#DFE1E5'
 terminal_colors:
