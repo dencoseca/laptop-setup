@@ -423,35 +423,6 @@ error_symbol = ''
 
 EOF
 
-print_message 'Creating warp theme'
-mkdir -p $HOME/.warp/themes
-cat << 'EOF' > $HOME/.warp/themes/dencoseca.yaml
-accent: '#53BDFA'
-background: '#000000'
-details: darker
-foreground: '#DFE1E5'
-terminal_colors:
-  bright:
-    black: '#4F5156'
-    blue: '#52ACF8'
-    cyan: '#6DE2CF'
-    green: '#79E257'
-    magenta: '#A85EF6'
-    red: '#EB565F'
-    white: '#FFFFFF'
-    yellow: '#F5C256'
-  normal:
-    black: '#4F5156'
-    blue: '#52ACF8'
-    cyan: '#6DE2CF'
-    green: '#79E257'
-    magenta: '#A85EF6'
-    red: '#EB565F'
-    white: '#FFFFFF'
-    yellow: '#F5C256'
-
-EOF
-
 # '------------------------------------'
 # ' Configure Git
 # '------------------------------------'
