@@ -18,5 +18,5 @@ chmod +x ./setup.sh
 get down tonight
 
 ```shell
-sudo echo 'Open the pod bay doors HAL...' && ./setup.sh
+sudo echo 'Open the pod bay doors HAL...' && sudo ./setup.sh
 ```
