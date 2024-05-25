@@ -125,8 +125,7 @@ print_message 'Setting Mac OS defaults'
 } &>> "$HOME/.setting_macos_defaults.log"
 
 print_message 'Enabling Touch ID for sudo'
-cp /etc/pam.d/sudo "$HOME/.sudo.bak"
-sed -i '' '2i\
+sed -i '.bak' '2i\
 auth sufficient pam_tid.so
 ' /etc/pam.d/sudo
 
