@@ -69,7 +69,7 @@ stop_spinner() {
 trap 'ignore_dave_and_leave_him_in_space_to_suffocate' ERR
 trap 'stop_spinner' EXIT
 
-cd $HOME || exit 1
+cd "$HOME" || exit 1
 
 # '------------------------------------'
 # ' Install Xcode Command Line Tools
@@ -85,7 +85,7 @@ if ! xcode-select -p &> /dev/null; then
     touch /tmp/.com.apple.dt.CommandLineTools.installondemand.in-progress
     version=$(softwareupdate -l | grep "\*.*Command Line" | tail -n 1 | sed 's/^[^C]* //')
     softwareupdate -i "$version" --verbose
-  } &>> $HOME/.xcode-select-install.log
+  } &>> "$HOME/.xcode-select-install.log"
   stop_spinner
 else
   print_message "Command Line Tools for Xcode are already installed."
@@ -122,7 +122,13 @@ print_message 'Setting Mac OS defaults'
   defaults write com.apple.AppleMultitouchTrackpad FirstClickThreshold -int 0
   # siri
   defaults write com.apple.Siri StatusMenuVisible -bool false
-} &>> $HOME/.setting_macos_defaults.log
+} &>> "$HOME/.setting_macos_defaults.log"
+
+print_message 'Enabling Touch ID for sudo'
+cp /etc/pam.d/sudo "$HOME/.sudo.bak"
+sed -i '' '2i\
+auth sufficient pam_tid.so
+' /etc/pam.d/sudo
 
 # '------------------------------------'
 # ' Install bloatware
@@ -132,22 +138,22 @@ start_spinner 'Installing homebrew'
 {
   print_log_header
   NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-} &>> $HOME/.homebrew_install.log
+} &>> "$HOME/.homebrew_install.log"
 stop_spinner
 
-if [ -f $HOME/.zprofile ] && grep -q '/opt/homebrew/bin/brew shellenv' $HOME/.zprofile; then
+if [ -f "$HOME/.zprofile" ] && grep -q '/opt/homebrew/bin/brew shellenv' "$HOME/.zprofile"; then
   print_message 'Brew already exists in system PATH'
 else
   print_message 'Adding brew to system PATH'
   {
     echo
     echo 'eval "$(/opt/homebrew/bin/brew shellenv)"'
-  } >> $HOME/.zprofile
+  } >> "$HOME/.zprofile"
 fi
 eval "$(/opt/homebrew/bin/brew shellenv)"
 
 print_message 'Creating Brewfile'
-cat << 'EOF' > $HOME/Brewfile
+cat << 'EOF' > "$HOME/Brewfile"
 # formulae
 brew "bat"
 brew "cmatrix"
@@ -195,7 +201,7 @@ start_spinner 'Installing bloatware'
 {
   print_log_header
   brew bundle install
-} &>> $HOME/.brew_bundle_install.log
+} &>> "$HOME/.brew_bundle_install.log"
 stop_spinner
 
 print_message 'Holy shit, that took ages!'
@@ -210,19 +216,19 @@ start_spinner 'Installing oh my zsh'
 {
   print_log_header
   sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
-} &>> $HOME/.oh_my_zsh_install.log
+} &>> "$HOME/.oh_my_zsh_install.log"
 stop_spinner
 
 print_message 'Configuring oh my zsh to update automatically'
-sed -i '.bak' "s/# zstyle ':omz:update' mode auto/zstyle ':omz:update' mode auto/" $HOME/.zshrc
+sed -i '.bak' "s/# zstyle ':omz:update' mode auto/zstyle ':omz:update' mode auto/" "$HOME/.zshrc"
 
 print_loading_message
 
-if [ -f $HOME/.zshrc ] && grep -q 'kill_it_with_fire_before_it_lays_eggs' $HOME/.zshrc; then
+if [ -f "$HOME/.zshrc" ] && grep -q 'kill_it_with_fire_before_it_lays_eggs' "$HOME/.zshrc"; then
   print_message 'Custom shell setup already exists'
 else
   print_message 'Adding custom shell setup to zshrc'
-  cat << 'EOF' >> $HOME/.zshrc
+  cat << 'EOF' >> "$HOME/.zshrc"
 
 #################
 ## TOOL CONFIG ##
@@ -409,8 +415,8 @@ print_loading_message
 print_loading_message
 
 print_message 'Creating starship config'
-mkdir -p $HOME/.config/
-cat << 'EOF' > $HOME/.config/starship.toml
+mkdir -p "$HOME/.config/"
+cat << 'EOF' > "$HOME/.config/starship.toml"
 [aws]
 disabled=true
 
@@ -428,7 +434,7 @@ EOF
 # '------------------------------------'
 
 print_message 'Configuring git global config'
-cat << 'EOF' > $HOME/.gitignore_global
+cat << 'EOF' > "$HOME/.gitignore_global"
 .DS_Store
 /.idea
 
@@ -436,7 +442,7 @@ EOF
 
 git config --global user.name 'dencoseca'
 git config --global rerere.enabled true
-git config --global core.excludesfile $HOME/.gitignore_global
+git config --global core.excludesfile "$HOME/.gitignore_global"
 
 print_loading_message
 
@@ -445,11 +451,11 @@ print_loading_message
 # '------------------------------------'
 
 print_message 'Cleaning up temporary files'
-if [ -f $HOME/Brewfile ]; then
-  rm $HOME/Brewfile
+if [ -f "$HOME/Brewfile" ]; then
+  rm "$HOME/Brewfile"
 fi
-if [ -f $HOME/Brewfile.lock.json ]; then
-  rm $HOME/Brewfile.lock.json
+if [ -f "$HOME/Brewfile.lock.json" ]; then
+  rm "$HOME/Brewfile.lock.json"
 fi
 
 print_loading_message
