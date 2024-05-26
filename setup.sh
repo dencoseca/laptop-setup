@@ -269,10 +269,6 @@ alias d="docker"
 alias k="kubectl"
 alias npmls="npm list -g --depth=0"
 
-cjq() {
-  curl "$@" | jq
-}
-
 print_message() {
   local reset='\x1B[0m'
   local bred='\x1B[1;31m'
