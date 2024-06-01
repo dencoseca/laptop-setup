@@ -397,7 +397,7 @@ docker-ri() {
 alias docker-cc="docker-sc && docker-rc"
 alias docker-ca="docker-sc && docker-rc && docker-rv"
 
-kill_it_with_fire_before_it_lays_eggs() {
+kill-it-with-fire-before-it-lays-eggs() {
   docker-sc
   docker-rc
   docker-rv
