@@ -307,7 +307,7 @@ update() {
 alias http-cls="cat .idea/httpRequests/http-client.cookies"
 alias http-cc="rm .idea/httpRequests/http-client.cookies"
 
-http_rmc() {
+http-rmc() {
   local column=$1
   local value=$2
   local filepath=.idea/httpRequests/http-client.cookies
@@ -351,7 +351,7 @@ javasw() {
 }
 
 # docker
-docker_sc() {
+docker-sc() {
   local container_names
   container_names=$(docker ps -a --format "{{.Names}}")
   if [[ -n "$container_names" ]]; then
@@ -362,7 +362,7 @@ docker_sc() {
   fi
 }
 
-docker_rc() {
+docker-rc() {
   local container_names
   container_names=$(docker ps -a --format "{{.Names}}")
   if [[ -n "$container_names" ]]; then
@@ -373,7 +373,7 @@ docker_rc() {
   fi
 }
 
-docker_rv() {
+docker-rv() {
   local volume_names
   volume_names=$(docker volume ls -q)
   if [[ -n "$volume_names" ]]; then
@@ -384,7 +384,7 @@ docker_rv() {
   fi
 }
 
-docker_ri() {
+docker-ri() {
   local image_names=$(docker images -q)
   if [[ -n "$image_names" ]]; then
     print_message "REMOVING IMAGES" "success"
@@ -394,14 +394,14 @@ docker_ri() {
   fi
 }
 
-alias docker-cc="docker_sc && docker_rc"
-alias docker-ca="docker_sc && docker_rc && docker_rv"
+alias docker-cc="docker-sc && docker-rc"
+alias docker-ca="docker-sc && docker-rc && docker-rv"
 
 kill_it_with_fire_before_it_lays_eggs() {
-  docker_sc
-  docker_rc
-  docker_rv
-  docker_ri
+  docker-sc
+  docker-rc
+  docker-rv
+  docker-ri
   print_message "Pruning SYSTEM" "success"
   docker system prune -f
 }
