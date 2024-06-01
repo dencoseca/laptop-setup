@@ -291,16 +291,16 @@ print_message() {
 update() {
   print_message "Updating brew packages..." "warning"
   brew update && brew upgrade
-  print_message "done" "success"
+  print_message "Brew packages updated!" "success"
 
-  print_message "Updating to latest node..." "warning"
+  print_message "Updating to latest Node..." "warning"
   nvm install --lts --latest-npm
   nvm use --lts
-  print_message "done" "success"
-  
+  print_message "Using latest Node version!" "success"
+
   print_message "Updating global npm packages..." "warning"
   npm update -g
-  print_message "done" "success"
+  print_message "Global npm packages all up to date!" "success"
 }
 
 # jetbrains http client
