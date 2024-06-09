@@ -226,6 +226,7 @@ sed -i '.bak' "s/# zstyle ':omz:update' mode auto/zstyle ':omz:update' mode auto
 
 print_loading_message
 
+print_message 'Checking for custom shell setup'
 if [ -f "$HOME/.zshrc" ] && grep -q 'kill_it_with_fire_before_it_lays_eggs' "$HOME/.zshrc"; then
   print_message 'Custom shell setup already exists'
 else
