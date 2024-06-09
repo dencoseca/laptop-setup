@@ -143,10 +143,11 @@ start_spinner 'Installing homebrew'
 } &>> "$HOME/.homebrew_install.log"
 stop_spinner
 
+print_message 'Checking for brew shellenv init'
 if [ -f "$HOME/.zprofile" ] && grep -q '/opt/homebrew/bin/brew shellenv' "$HOME/.zprofile"; then
-  print_message 'Brew already exists in system PATH'
+  print_message "Brew shellenv init already exists in $HOME/.zprofile"
 else
-  print_message 'Adding brew to system PATH'
+  print_message "Adding brew shellenv init to $HOME/.zprofile"
   {
     echo
     echo 'eval "$(/opt/homebrew/bin/brew shellenv)"'
