@@ -404,6 +404,8 @@ kill-it-with-fire-before-it-lays-eggs() {
   docker system prune -f
 }
 
+PROMPT="${PROMPT}"$'\n'
+
 EOF
 fi
 
