@@ -404,6 +404,7 @@ kill-it-with-fire-before-it-lays-eggs() {
   docker system prune -f
 }
 
+# add new line for warp
 PROMPT="${PROMPT}"$'\n'
 
 EOF
