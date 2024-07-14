@@ -32,6 +32,7 @@ alias trc="tree -d -L 3 $HOME/Developer/repos"
 alias d="docker"
 alias k="kubectl"
 alias npmls="npm list -g --depth=0"
+alias l="ls -lh"
 
 print_message() {
   local reset='\x1B[0m'
