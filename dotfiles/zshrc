@@ -1,0 +1,174 @@
+
+#################
+## TOOL CONFIG ##
+#################
+
+# starship
+eval "$(starship init zsh)"
+
+# nvm
+export NVM_DIR="$HOME/.nvm"
+  [ -s "/opt/homebrew/opt/nvm/nvm.sh" ] && \. "/opt/homebrew/opt/nvm/nvm.sh"  # This loads nvm
+  [ -s "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm" ] && \. "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm"  # This loads nvm bash_completion
+
+################################
+## CUSTOM ALIASES / FUNCTIONS ##
+################################
+
+# general
+alias src="source $HOME/.zshrc"
+alias zshc="edit $HOME/.zshrc"
+alias zshb="cp $HOME/.zshrc $HOME/.zshrc.bak"
+alias github="cd $HOME/Developer/repos/github.com/dencoseca"
+alias repos="cd $HOME/Developer/repos"
+alias sandbox="cd $HOME/Developer/sandbox"
+alias udemy="cd $HOME/Developer/udemy"
+alias dl="cd $HOME/Downloads"
+alias dt="cd $HOME/Desktop"
+alias edit="webstorm -e $1"
+alias oif="open -a Finder ./"
+alias nq="networkQuality"
+alias trc="tree -d -L 3 $HOME/Developer/repos"
+alias d="docker"
+alias k="kubectl"
+alias npmls="npm list -g --depth=0"
+
+print_message() {
+  local reset='\x1B[0m'
+  local bred='\x1B[1;31m'
+  local bgreen='\x1B[1;32m'
+  local byellow='\x1B[1;33m'
+  local message="$1"
+  local msg_type="$2"
+  local style
+
+  case $msg_type in
+    "danger") style=$bred ;;
+    "success") style=$bgreen ;;
+    "warning") style=$byellow ;;
+    *) style=$reset ;;
+  esac
+
+  echo -e "${style}${message}${reset}"
+}
+
+update() {
+  print_message "Updating brew packages..." "warning"
+  brew update && brew upgrade
+  print_message "Brew packages updated!" "success"
+
+  print_message "Updating to latest Node..." "warning"
+  nvm install --lts --latest-npm
+  nvm use --lts
+  print_message "Using latest Node version!" "success"
+
+  print_message "Updating global npm packages..." "warning"
+  npm update -g
+  print_message "Global npm packages all up to date!" "success"
+}
+
+# jetbrains http client
+alias http-cls="cat .idea/httpRequests/http-client.cookies"
+alias http-cc="rm .idea/httpRequests/http-client.cookies"
+
+http-rmc() {
+  local column=$1
+  local value=$2
+  local filepath=.idea/httpRequests/http-client.cookies
+
+  if [ ! -f $filepath ]; then
+    echo "There is no http-client.cookies file in this project"
+  fi
+
+  if [ -z "$column" ]; then
+    echo "Please provide a column"
+    return
+  fi
+
+  if [ -z "$value" ]; then
+    echo "Please provide a value"
+    return
+  fi
+
+  if [ "$column" = "domain" ]; then
+    action=$(awk -v val="$value" 'BEGIN{OFS=FS="\t"} $1!=val' $filepath)
+  elif [ "$column" = "name" ]; then
+    action=$(awk -v val="$value" 'BEGIN{OFS=FS="\t"} $3!=val' $filepath)
+  else
+    echo "Invalid column. Please specify either 'domain' or 'name'"
+    return
+  fi
+
+  if [ -z "$action" ]; then
+    echo "No matching lines were found."
+  else
+    echo "$action" > $filepath
+    echo "The matching cookie(s) have been removed."
+  fi
+}
+
+# java
+alias javals="/usr/libexec/java_home -V"
+
+javasw() {
+  export JAVA_HOME=$(/usr/libexec/java_home -v "$1")
+}
+
+# docker
+docker-sc() {
+  local container_names
+  container_names=$(docker ps -a --format "{{.Names}}")
+  if [[ -n "$container_names" ]]; then
+    print_message "STOPPING CONTAINERS" "success"
+    echo "$container_names" | xargs -r docker stop
+  else
+    print_message "No CONTAINERS to STOP" "danger"
+  fi
+}
+
+docker-rc() {
+  local container_names
+  container_names=$(docker ps -a --format "{{.Names}}")
+  if [[ -n "$container_names" ]]; then
+    print_message "REMOVING CONTAINERS" "success"
+    echo "$container_names" | xargs -r docker rm
+  else
+    print_message "No CONTAINERS to REMOVE" "danger"
+  fi
+}
+
+docker-rv() {
+  local volume_names
+  volume_names=$(docker volume ls -q)
+  if [[ -n "$volume_names" ]]; then
+    print_message "REMOVING VOLUMES" "success"
+    echo "$volume_names" | xargs -r docker volume rm
+  else
+    print_message "No VOLUMES to REMOVE" "danger"
+  fi
+}
+
+docker-ri() {
+  local image_names=$(docker images -q)
+  if [[ -n "$image_names" ]]; then
+    print_message "REMOVING IMAGES" "success"
+    echo "$image_names" | xargs -r docker rmi
+  else
+    print_message "No IMAGES to REMOVE" "danger"
+  fi
+}
+
+alias docker-cc="docker-sc && docker-rc"
+alias docker-ca="docker-sc && docker-rc && docker-rv"
+
+kill-it-with-fire-before-it-lays-eggs() {
+  docker-sc
+  docker-rc
+  docker-rv
+  docker-ri
+  print_message "Pruning SYSTEM" "success"
+  docker system prune -f
+}
+
+# add new line for warp
+PROMPT="${PROMPT}"$'\n'
