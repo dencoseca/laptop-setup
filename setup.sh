@@ -253,17 +253,15 @@ print_loading_message
 print_loading_message
 
 # '------------------------------------'
-# ' Setup Docker and Colima for work
+# ' Setup Docker and Colima
 # '------------------------------------'
 
-if [ "$ENV_FLAG" == 'work' ]; then
-  print_message "Configuring Docker"
-  mkdir -p "$HOME/.docker/"
-  cat "$DOCKER_CONFIG_FILE" > "$HOME/.docker/config.json"
+print_message "Configuring Docker"
+mkdir -p "$HOME/.docker/"
+cat "$DOCKER_CONFIG_FILE" > "$HOME/.docker/config.json"
 
-  print_message "Adding Colima to startup services"
-  brew services start colima
-fi
+print_message "Adding Colima to startup services"
+brew services start colima
 
 # '------------------------------------'
 # ' Setup shell
