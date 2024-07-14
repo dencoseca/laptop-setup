@@ -17,12 +17,12 @@ cask "alfred"
 cask "appcleaner"
 cask "bartender"
 cask "brave-browser"
-cask "docker"
 cask "jetbrains-toolbox"
 cask "logi-options-plus"
 cask "meetingbar"
 cask "mos"
 cask "rectangle"
+cask "slack"
 cask "spotify"
 cask "warp"
 
@@ -30,6 +30,3 @@ cask "warp"
 mas "Amphetamine", id: 937984704
 mas "Bear", id: 1091189122
 mas "Bitwarden", id: 1352778147
-mas "NordVPN", id: 905953485
-mas "Things", id: 904280696
-mas "WhatsApp", id: 1147396723

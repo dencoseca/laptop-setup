@@ -1,0 +1,9 @@
+[aws]
+disabled = true
+
+[gcloud]
+disabled = true
+
+[character]
+success_symbol = ''
+error_symbol = ''

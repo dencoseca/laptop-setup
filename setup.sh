@@ -203,47 +203,18 @@ print_loading_message
 
 print_message 'Creating starship config'
 mkdir -p "$HOME/.config/"
-cat << 'EOF' > "$HOME/.config/starship.toml"
-[aws]
-disabled=true
-
-[gcloud]
-disabled=true
-
-[character]
-success_symbol = ''
-error_symbol = ''
-
-EOF
+cat "$DOTFILES_DIR/starship.toml" > "$HOME/.config/starship.toml"
 
 # '------------------------------------'
 # ' Configure Git
 # '------------------------------------'
 
 print_message 'Configuring git global config'
-cat << 'EOF' > "$HOME/.gitignore_global"
-.DS_Store
-/.idea
-
-EOF
+cat "$DOTFILES_DIR/gitignore_global" > "$HOME/.gitignore_global"
 
 git config --global user.name 'dencoseca'
 git config --global rerere.enabled true
 git config --global core.excludesfile "$HOME/.gitignore_global"
-
-print_loading_message
-
-# '------------------------------------'
-# ' Tidy up
-# '------------------------------------'
-
-print_message 'Cleaning up temporary files'
-if [ -f "$HOME/Brewfile" ]; then
-  rm "$HOME/Brewfile"
-fi
-if [ -f "$HOME/Brewfile.lock.json" ]; then
-  rm "$HOME/Brewfile.lock.json"
-fi
 
 print_loading_message
 print_loading_message
