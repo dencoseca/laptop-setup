@@ -310,5 +310,9 @@ git config --global core.excludesfile "$HOME/.gitignore_global"
 print_loading_message
 print_loading_message
 
+# '------------------------------------'
+# ' Drink lemonade
+# '------------------------------------'
+
 print_message "Praise Poseidon, it's finally over!"
 print_message "Let's all relax and drink some lemonade!"
