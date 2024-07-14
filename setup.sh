@@ -4,6 +4,7 @@ set -euo pipefail
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${0}")" &> /dev/null && pwd)
 DOTFILES_DIR="$SCRIPT_DIR/dotfiles"
+NONSENSE_DIR="$SCRIPT_DIR/nonsense"
 
 print_usage() {
   cat <<- EOF
@@ -54,7 +55,7 @@ while IFS= read -r line; do
   if [ -n "$line" ]; then
     loading_messages+=("$line")
   fi
-done < "$SCRIPT_DIR/nonsense/loading-messages.txt"
+done < "$NONSENSE_DIR/loading-messages.txt"
 
 num_lines=${#loading_messages[@]}
 
