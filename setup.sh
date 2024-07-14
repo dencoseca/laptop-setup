@@ -2,6 +2,11 @@
 
 set -euo pipefail
 
+#!/usr/bin/env zsh
+
+SCRIPT_DIR=$(cd -- "$(dirname -- "${0}")" &> /dev/null && pwd)
+DOTFILES_DIR=$SCRIPT_DIR/dotfiles
+
 # '------------------------------------'
 # ' Script setup
 # '------------------------------------'
@@ -155,54 +160,13 @@ else
 fi
 eval "$(/opt/homebrew/bin/brew shellenv)"
 
-print_message 'Creating Brewfile'
-cat << 'EOF' > "$HOME/Brewfile"
-# formulae
-brew "htop"
-brew "jq"
-brew "watch"
-brew "neofetch"
-brew "tldr"
-brew "tree"
-brew "starship"
-brew "git"
-brew "nvm"
-brew "go"
-brew "helm"
-brew "skaffold"
-
-# casks
-cask "alfred"
-cask "appcleaner"
-cask "bartender"
-cask "brave-browser"
-cask "docker"
-cask "jetbrains-toolbox"
-cask "logi-options-plus"
-cask "meetingbar"
-cask "mos"
-cask "rectangle"
-cask "slack"
-cask "spotify"
-cask "warp"
-
-# mac app store
-mas "Amphetamine", id: 937984704
-mas "Bear", id: 1091189122
-mas "Bitwarden", id: 1352778147
-mas "NordVPN", id: 905953485
-mas "Things", id: 904280696
-mas "WhatsApp", id: 1147396723
-
-EOF
-
 print_loading_message
 print_loading_message
 
 start_spinner 'Installing bloatware'
 {
   print_log_header
-  brew bundle install
+  brew bundle install --file "$DOTFILES_DIR/Brewfile"
 } &>> "$HOME/.brew_bundle_install.log"
 stop_spinner
 
