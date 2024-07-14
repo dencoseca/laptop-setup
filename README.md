@@ -1,5 +1,9 @@
 # laptop-setup
 
+| Flags | Valid Values |
+|-------|--------------|
+| -e    | home, work   |
+
 do a little dance
 
 ```shell
@@ -18,5 +22,5 @@ chmod +x ./setup.sh
 get down tonight
 
 ```shell
-sudo echo 'Open the pod bay doors HAL...' && sudo ./setup.sh
+sudo echo 'Open the pod bay doors HAL...' && sudo ./setup.sh -e work
 ```

@@ -2,14 +2,35 @@
 
 set -euo pipefail
 
-#!/usr/bin/env zsh
-
 SCRIPT_DIR=$(cd -- "$(dirname -- "${0}")" &> /dev/null && pwd)
-DOTFILES_DIR=$SCRIPT_DIR/dotfiles
+DOTFILES_DIR="$SCRIPT_DIR/dotfiles"
+
+print_usage() {
+  cat <<- EOF
+Usage: sudo ./setup.sh -e <home|work>
+
+Provides the perfect environment to ignore time, hunger, friends and family,
+most of life's responsibilities, stop blinking entirely, and eventually be able
+to afford a second home, somewhere in the mediterranean, where you can talk
+to your neighbours about how annoying taxes are.
+
+Available options:
+
+-e   Required. Specify the environment ('home' or 'work')
+
+EOF
+}
 
 # '------------------------------------'
-# ' Script setup
+# ' Setup utils
 # '------------------------------------'
+
+exit_with_message() {
+  echo "$1"
+  echo
+  print_usage
+  exit 1
+}
 
 print_message() {
   echo "$1"
@@ -33,7 +54,7 @@ while IFS= read -r line; do
   if [ -n "$line" ]; then
     loading_messages+=("$line")
   fi
-done < './loading-messages.txt'
+done < "$SCRIPT_DIR/nonsense/loading-messages.txt"
 
 num_lines=${#loading_messages[@]}
 
@@ -47,8 +68,8 @@ print_loading_message() {
   sleep "$((RANDOM % 3))"
 }
 
-spinner_pid=
-spinner_message=""
+spinner_pid=''
+spinner_message=''
 
 start_spinner() {
   spinner_message="$1"
@@ -74,7 +95,27 @@ stop_spinner() {
 trap 'ignore_dave_and_leave_him_in_space_to_suffocate' ERR
 trap 'stop_spinner' EXIT
 
-cd "$HOME" || exit 1
+# '------------------------------------'
+# ' Validate run
+# '------------------------------------'
+
+ENV_FLAG=''
+while getopts ":e:" option; do
+  case "${option}" in
+  e) ENV_FLAG=${OPTARG} ;;
+  *)
+    exit_with_message "Congratulations, you managed to screw up copying and pasting a command!"
+    ;;
+  esac
+done
+
+if [ -z "$ENV_FLAG" ]; then
+  exit_with_message "Nope, don't delete that bit, that bit's important!"
+elif [ "$ENV_FLAG" != "home" ] && [ "$ENV_FLAG" != "work" ]; then
+  exit_with_message "It literally tells you what the options are!"
+else
+  print_message "Using $ENV_FLAG config for setup"
+fi
 
 # '------------------------------------'
 # ' Install Xcode Command Line Tools
@@ -166,13 +207,26 @@ print_loading_message
 start_spinner 'Installing bloatware'
 {
   print_log_header
-  brew bundle install --file "$DOTFILES_DIR/Brewfile"
+  brew bundle install --file "$DOTFILES_DIR/Brewfile.$ENV_FLAG"
 } &>> "$HOME/.brew_bundle_install.log"
 stop_spinner
 
 print_message 'Holy shit, that took ages!'
 print_loading_message
 print_loading_message
+
+# '------------------------------------'
+# ' Setup Docker and Colima for work
+# '------------------------------------'
+
+if [ "$ENV_FLAG" == 'work' ]; then
+  print_message "Configuring Docker"
+  mkdir -p "$HOME/.docker/"
+  cat "$DOTFILES_DIR/docker-config.json" > "$HOME/.docker/config.json"
+
+  print_message "Adding Colima to startup services"
+  brew services start colima
+fi
 
 # '------------------------------------'
 # ' Setup shell
@@ -194,7 +248,7 @@ print_message 'Checking for custom shell setup'
 if [ -f "$HOME/.zshrc" ] && grep -q 'kill_it_with_fire_before_it_lays_eggs' "$HOME/.zshrc"; then
   print_message 'Custom shell setup already exists'
 else
-  print_message 'Adding custom shell setup to zshrc'
+  print_message 'No custom shell setup found, configuring zshrc'
   cat "$DOTFILES_DIR/zshrc" >> "$HOME/.zshrc"
 fi
 
