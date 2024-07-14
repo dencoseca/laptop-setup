@@ -2,10 +2,6 @@
 
 set -euo pipefail
 
-SCRIPT_DIR=$(cd -- "$(dirname -- "${0}")" &> /dev/null && pwd)
-DOTFILES_DIR="$SCRIPT_DIR/dotfiles"
-NONSENSE_DIR="$SCRIPT_DIR/nonsense"
-
 print_usage() {
   cat <<- EOF
 Usage: sudo ./setup.sh -e <home|work>
@@ -15,15 +11,24 @@ most of life's responsibilities, stop blinking entirely, and eventually be able
 to afford a second home, somewhere in the mediterranean, where you can talk
 to your neighbours about how annoying taxes are.
 
-Available options:
+Flags:
 
 -e   Required. Specify the environment ('home' or 'work')
+
+Required dotfiles:
+
+- Brewfile.home
+- Brewfile.work
+- docker-config.json
+- gitignore_global
+- starship.toml
+- zshrc
 
 EOF
 }
 
 # '------------------------------------'
-# ' Setup utils
+# ' Validate run
 # '------------------------------------'
 
 exit_with_message() {
@@ -33,76 +38,10 @@ exit_with_message() {
   exit 1
 }
 
-print_message() {
-  echo "$1"
-  say "$1"
-}
-
-ignore_dave_and_leave_him_in_space_to_suffocate() {
-  print_message "...I'm sorry Dave, I'm afraid I can't do that"
-}
-
-print_log_header() {
-  echo
-  echo "##------------------------------------------------##"
-  echo "##--------  $(date)  --------##"
-  echo "##------------------------------------------------##"
-}
-
-loading_messages=()
-
-while IFS= read -r line; do
-  if [ -n "$line" ]; then
-    loading_messages+=("$line")
-  fi
-done < "$NONSENSE_DIR/loading-messages.txt"
-
-num_lines=${#loading_messages[@]}
-
-print_loading_message() {
-  local random_index=$((RANDOM % num_lines))
-  local message="${loading_messages[random_index]}"
-
-  sleep "$((RANDOM % 3))"
-  echo "$message"
-  say "$message"
-  sleep "$((RANDOM % 3))"
-}
-
-spinner_pid=''
-spinner_message=''
-
-start_spinner() {
-  spinner_message="$1"
-  set +m
-  echo -n "$1         "
-
-  { while :; do for X in '  •     ' '   •    ' '    •   ' '     •  ' '      • ' '     •  ' '    •   ' '   •    ' '  •     ' ' •      '; do
-    echo -en "\b\b\b\b\b\b\b\b$X"
-    sleep 0.1
-  done; done & } 2> /dev/null
-
-  spinner_pid=$!
-  say "$1"
-}
-
-stop_spinner() {
-  { kill -9 $spinner_pid && wait; } 2> /dev/null
-  set -m
-  echo -en "\033[2K\r"
-  echo "${spinner_message}... done!"
-}
-
-trap 'ignore_dave_and_leave_him_in_space_to_suffocate' ERR
-trap 'stop_spinner' EXIT
-
-# '------------------------------------'
-# ' Validate run
-# '------------------------------------'
-
+# validate flags
 ENV_FLAG=''
-while getopts ":e:" option; do
-  case "${option}" in
+while getopts ":e:" OPTION; do
+  case "${OPTION}" in
   e) ENV_FLAG=${OPTARG} ;;
   *)
     exit_with_message "Congratulations, you managed to screw up copying and pasting a command!"
@@ -117,6 +56,97 @@ elif [ "$ENV_FLAG" != "home" ] && [ "$ENV_FLAG" != "work" ]; then
 else
   print_message "Using $ENV_FLAG config for setup"
 fi
+
+# setup paths
+SCRIPT_DIR=$(cd -- "$(dirname -- "${0}")" &> /dev/null && pwd)
+DOTFILES_DIR="$SCRIPT_DIR/dotfiles"
+NONSENSE_DIR="$SCRIPT_DIR/nonsense"
+
+HOME_BREWFILE="$DOTFILES_DIR/Brewfile.home"
+WORK_BREWFILE="$DOTFILES_DIR/Brewfile.work"
+DOCKER_CONFIG_FILE="$DOTFILES_DIR/docker-config.json"
+GITIGNORE_CONFIG_FILE="$DOTFILES_DIR/gitignore_global"
+STARSHIP_CONFIG_FILE="$DOTFILES_DIR/starship.toml"
+ZSHRC_CONFIG_FILE="$DOTFILES_DIR/zshrc"
+LOADING_MESSAGES_FILE="$NONSENSE_DIR/loading-messages.txt"
+
+# check for required files
+SOURCE_FILES=("$HOME_BREWFILE"
+  "$WORK_BREWFILE"
+  "$DOCKER_CONFIG_FILE"
+  "$GITIGNORE_CONFIG_FILE"
+  "$STARSHIP_CONFIG_FILE"
+  "$ZSHRC_CONFIG_FILE"
+  "$LOADING_MESSAGES_FILE")
+
+for SOURCE_FILE in "${SOURCE_FILES[@]}"; do
+  if [[ ! -e "$SOURCE_FILE" ]]; then
+    FILENAME=$(basename "$SOURCE_FILE")
+    exit_with_message "$FILENAME does not exist in dotfiles directory"
+  fi
+done
+
+# '------------------------------------'
+# ' Setup script
+# '------------------------------------'
+
+ignore_dave_and_leave_him_in_space_to_suffocate() {
+  print_message "...I'm sorry Dave, I'm afraid I can't do that"
+}
+
+print_log_header() {
+  echo
+  echo "##------------------------------------------------##"
+  echo "##--------  $(date)  --------##"
+  echo "##------------------------------------------------##"
+}
+
+LOADING_MESSAGES=()
+
+while IFS= read -r LINE; do
+  if [ -n "$LINE" ]; then
+    LOADING_MESSAGES+=("$LINE")
+  fi
+done < "$LOADING_MESSAGES_FILE"
+
+NUM_LINES=${#LOADING_MESSAGES[@]}
+
+print_loading_message() {
+  local RANDOM_INDEX=$((RANDOM % NUM_LINES))
+  local MESSAGE="${LOADING_MESSAGES[RANDOM_INDEX]}"
+
+  sleep "$((RANDOM % 3))"
+  echo "$MESSAGE"
+  say "$MESSAGE"
+  sleep "$((RANDOM % 3))"
+}
+
+SPINNER_PID=''
+SPINNER_MESSAGE=''
+
+start_spinner() {
+  SPINNER_MESSAGE="$1"
+  set +m
+  echo -n "$1         "
+
+  { while :; do for X in '  •     ' '   •    ' '    •   ' '     •  ' '      • ' '     •  ' '    •   ' '   •    ' '  •     ' ' •      '; do
+    echo -en "\b\b\b\b\b\b\b\b$X"
+    sleep 0.1
+  done; done & } 2> /dev/null
+
+  SPINNER_PID=$!
+  say "$1"
+}
+
+stop_spinner() {
+  { kill -9 $SPINNER_PID && wait; } 2> /dev/null
+  set -m
+  echo -en "\033[2K\r"
+  echo "${SPINNER_MESSAGE}... done!"
+}
+
+trap 'ignore_dave_and_leave_him_in_space_to_suffocate' ERR
+trap 'stop_spinner' EXIT
 
 # '------------------------------------'
 # ' Install Xcode Command Line Tools
@@ -205,10 +235,16 @@ eval "$(/opt/homebrew/bin/brew shellenv)"
 print_loading_message
 print_loading_message
 
+BREWFILE=''
+if [ $ENV_FLAG == 'home' ]; then
+  BREWFILE=$HOME_BREWFILE
+else
+  BREWFILE=$WORK_BREWFILE
+fi
 start_spinner 'Installing bloatware'
 {
   print_log_header
-  brew bundle install --file "$DOTFILES_DIR/Brewfile.$ENV_FLAG"
+  brew bundle install --file "$BREWFILE"
 } &>> "$HOME/.brew_bundle_install.log"
 stop_spinner
 
@@ -223,7 +259,7 @@ print_loading_message
 if [ "$ENV_FLAG" == 'work' ]; then
   print_message "Configuring Docker"
   mkdir -p "$HOME/.docker/"
-  cat "$DOTFILES_DIR/docker-config.json" > "$HOME/.docker/config.json"
+  cat "$DOCKER_CONFIG_FILE" > "$HOME/.docker/config.json"
 
   print_message "Adding Colima to startup services"
   brew services start colima
@@ -250,7 +286,7 @@ if [ -f "$HOME/.zshrc" ] && grep -q 'kill_it_with_fire_before_it_lays_eggs' "$HO
   print_message 'Custom shell setup already exists'
 else
   print_message 'No custom shell setup found, configuring zshrc'
-  cat "$DOTFILES_DIR/zshrc" >> "$HOME/.zshrc"
+  cat "$ZSHRC_CONFIG_FILE" >> "$HOME/.zshrc"
 fi
 
 print_loading_message
@@ -258,14 +294,14 @@ print_loading_message
 
 print_message 'Creating starship config'
 mkdir -p "$HOME/.config/"
-cat "$DOTFILES_DIR/starship.toml" > "$HOME/.config/starship.toml"
+cat "$STARSHIP_CONFIG_FILE" > "$HOME/.config/starship.toml"
 
 # '------------------------------------'
 # ' Configure Git
 # '------------------------------------'
 
 print_message 'Configuring git global config'
-cat "$DOTFILES_DIR/gitignore_global" > "$HOME/.gitignore_global"
+cat "$GITIGNORE_CONFIG_FILE" > "$HOME/.gitignore_global"
 
 git config --global user.name 'dencoseca'
 git config --global rerere.enabled true
