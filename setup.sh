@@ -87,7 +87,7 @@ for SOURCE_FILE in "${SOURCE_FILES[@]}"; do
 done
 
 # '------------------------------------'
-# ' Setup script
+# ' Setup script utils
 # '------------------------------------'
 
 ignore_dave_and_leave_him_in_space_to_suffocate() {
