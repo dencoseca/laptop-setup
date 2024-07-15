@@ -4,25 +4,24 @@ set -euo pipefail
 
 print_usage() {
   cat <<- EOF
-Usage: sudo ./setup.sh -e <home|work>
-
 Provides the perfect environment to ignore time, hunger, friends and family,
 most of life's responsibilities, stop blinking entirely, and eventually be able
 to afford a second home, somewhere in the mediterranean, where you can talk
 to your neighbours about how annoying taxes are.
 
+Usage:
+  sudo ./setup.sh -e <home|work>
+
 Flags:
+  -e   Required. Specify the environment ('home' or 'work')
 
--e   Required. Specify the environment ('home' or 'work')
-
-Required dotfiles:
-
-- Brewfile.home
-- Brewfile.work
-- docker-config.json
-- gitignore_global
-- starship.toml
-- zshrc
+Dependencies in dotfiles directory:
+  - Brewfile.home
+  - Brewfile.work
+  - docker-config.json
+  - gitignore_global
+  - starship.toml
+  - zshrc
 
 EOF
 }
