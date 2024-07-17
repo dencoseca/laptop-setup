@@ -259,8 +259,10 @@ print_message "Configuring Docker"
 mkdir -p "$HOME/.docker/"
 cat "$DOCKER_CONFIG_FILE" > "$HOME/.docker/config.json"
 
-print_message "Adding Colima to startup services"
-brew services start colima
+if [ $ENV_FLAG == 'work' ]; then
+  print_message "Adding Colima to startup services"
+  brew services start colima
+fi
 
 # '------------------------------------'
 # ' Setup shell
