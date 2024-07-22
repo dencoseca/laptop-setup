@@ -34,7 +34,7 @@ alias dc="docker compose"
 alias k="kubectl"
 alias npmls="npm list -g --depth=0"
 alias l="ls -lh"
-alias ag="alias | grep $1"
+alias ag="alias | grep -i $1"
 
 print_message() {
   local reset='\x1B[0m'
