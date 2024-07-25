@@ -81,7 +81,7 @@ SOURCE_FILES=("$HOME_BREWFILE"
 for SOURCE_FILE in "${SOURCE_FILES[@]}"; do
   if [[ ! -e "$SOURCE_FILE" ]]; then
     FILENAME=$(basename "$SOURCE_FILE")
-    exit_with_message "$FILENAME does not exist in dotfiles directory"
+    exit_with_message "$FILENAME is required"
   fi
 done
 
