@@ -275,9 +275,6 @@ start_spinner 'Installing oh my zsh'
 } &>> "$HOME/.oh_my_zsh_install.log"
 stop_spinner
 
-print_message 'Configuring oh my zsh to update automatically'
-sed -i '.bak' "s/# zstyle ':omz:update' mode auto/zstyle ':omz:update' mode auto/" "$HOME/.zshrc"
-
 print_loading_message
 
 print_message 'Checking for custom shell setup'
