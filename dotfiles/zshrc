@@ -11,6 +11,9 @@ export NVM_DIR="$HOME/.nvm"
   [ -s "/opt/homebrew/opt/nvm/nvm.sh" ] && \. "/opt/homebrew/opt/nvm/nvm.sh"  # This loads nvm
   [ -s "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm" ] && \. "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm"  # This loads nvm bash_completion
 
+# add new line for warp
+PROMPT="${PROMPT}"$'\n'
+
 ################################
 ## CUSTOM ALIASES / FUNCTIONS ##
 ################################
@@ -35,6 +38,8 @@ alias k="kubectl"
 alias npmls="npm list -g --depth=0"
 alias l="ls -lh"
 alias ag="alias | grep -i $1"
+alias upbrew="brew update && brew upgrade"
+alias upnode="nvm install --lts --latest-npm && nvm use --lts"
 
 print_message() {
   local reset='\x1B[0m'
@@ -53,21 +58,6 @@ print_message() {
   esac
 
   echo -e "${style}${message}${reset}"
-}
-
-update() {
-  print_message "Updating brew packages..." "warning"
-  brew update && brew upgrade
-  print_message "Brew packages updated!" "success"
-
-  print_message "Updating to latest Node..." "warning"
-  nvm install --lts --latest-npm
-  nvm use --lts
-  print_message "Using latest Node version!" "success"
-
-  print_message "Updating global npm packages..." "warning"
-  npm update -g
-  print_message "Global npm packages all up to date!" "success"
 }
 
 # jetbrains http client
@@ -172,6 +162,3 @@ kill-it-with-fire-before-it-lays-eggs() {
   print_message "Pruning SYSTEM" "success"
   docker system prune -f
 }
-
-# add new line for warp
-PROMPT="${PROMPT}"$'\n'
