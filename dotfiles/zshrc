@@ -22,7 +22,6 @@ PROMPT="${PROMPT}"$'\n'
 #  CUSTOM ALIASES / FUNCTIONS
 #------------------------------#
 
-# general
 alias src="source $HOME/.zshrc"
 alias zshc="edit $HOME/.zshrc"
 alias zshb="cp $HOME/.zshrc $HOME/.zshrc.bak"
@@ -64,7 +63,6 @@ print_message() {
   echo -e "${style}${message}${reset}"
 }
 
-# docker
 docker-sc() {
   local container_names
   container_names=$(docker ps -a --format "{{.Names}}")
