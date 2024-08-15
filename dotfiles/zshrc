@@ -1,6 +1,6 @@
-#------------------#
-#  SETUP OH MY ZSH
-#------------------#
+#-------------#
+#  OH MY ZSH
+#-------------#
 
 export ZSH="$HOME/.oh-my-zsh"
 zstyle ':omz:update' mode auto
