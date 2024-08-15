@@ -252,6 +252,14 @@ print_loading_message
 print_loading_message
 
 # '------------------------------------'
+# ' Install custom cli tools
+# '------------------------------------'
+
+print_message 'Installing biskit and boxi'
+go install github.com/dencoseca/biskit
+go install github.com/dencoseca/boxi
+
+# '------------------------------------'
 # ' Setup Docker and Colima
 # '------------------------------------'
 
