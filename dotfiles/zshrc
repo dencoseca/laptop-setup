@@ -8,9 +8,9 @@ zstyle ':omz:plugins:nvm' lazy yes
 plugins=(git nvm)
 source $ZSH/oh-my-zsh.sh
 
-#---------------#
-#  TOOL CONFIG
-#---------------#
+#----------#
+#  PROMPT
+#----------#
 
 # starship
 eval "$(starship init zsh)"
