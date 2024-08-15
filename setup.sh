@@ -275,18 +275,13 @@ start_spinner 'Installing oh my zsh'
 } &>> "$HOME/.oh_my_zsh_install.log"
 stop_spinner
 
-print_message 'Configuring oh my zsh to update automatically'
-sed -i '.bak' "s/# zstyle ':omz:update' mode auto/zstyle ':omz:update' mode auto/" "$HOME/.zshrc"
+print_message 'Backing up zshrc'
+cp "$HOME/.zshrc" "$HOME/.zshrc.bak"
 
 print_loading_message
 
-print_message 'Checking for custom shell setup'
-if [ -f "$HOME/.zshrc" ] && grep -q 'kill_it_with_fire_before_it_lays_eggs' "$HOME/.zshrc"; then
-  print_message 'Custom shell setup already exists'
-else
-  print_message 'No custom shell setup found, configuring zshrc'
-  cat "$ZSHRC_CONFIG_FILE" >> "$HOME/.zshrc"
-fi
+print_message 'Customising shell'
+cat "$ZSHRC_CONFIG_FILE" > "$HOME/.zshrc"
 
 print_loading_message
 print_loading_message

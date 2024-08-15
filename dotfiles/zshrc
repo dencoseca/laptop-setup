@@ -1,22 +1,26 @@
+#------------------#
+#  SETUP OH MY ZSH
+#------------------#
 
-#################
-## TOOL CONFIG ##
-#################
+export ZSH="$HOME/.oh-my-zsh"
+zstyle ':omz:update' mode auto
+zstyle ':omz:plugins:nvm' lazy yes
+plugins=(git nvm)
+source $ZSH/oh-my-zsh.sh
+
+#---------------#
+#  TOOL CONFIG
+#---------------#
 
 # starship
 eval "$(starship init zsh)"
 
-# nvm
-export NVM_DIR="$HOME/.nvm"
-  [ -s "/opt/homebrew/opt/nvm/nvm.sh" ] && \. "/opt/homebrew/opt/nvm/nvm.sh"  # This loads nvm
-  [ -s "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm" ] && \. "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm"  # This loads nvm bash_completion
-
 # add new line for warp
 PROMPT="${PROMPT}"$'\n'
 
-################################
-## CUSTOM ALIASES / FUNCTIONS ##
-################################
+#------------------------------#
+#  CUSTOM ALIASES / FUNCTIONS
+#------------------------------#
 
 # general
 alias src="source $HOME/.zshrc"
