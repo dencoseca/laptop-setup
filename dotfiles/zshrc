@@ -8,15 +8,18 @@ zstyle ':omz:plugins:nvm' lazy yes
 plugins=(git nvm)
 source $ZSH/oh-my-zsh.sh
 
-#----------#
-#  PROMPT
-#----------#
+#---------#
+#  TOOLS
+#---------#
 
 # starship
 eval "$(starship init zsh)"
 
 # add new line for warp
 PROMPT="${PROMPT}"$'\n'
+
+# go path
+export PATH="$PATH:$(go env GOPATH)/bin"
 
 #------------------------------#
 #  CUSTOM ALIASES / FUNCTIONS
