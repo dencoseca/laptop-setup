@@ -25,15 +25,19 @@ export PATH="$PATH:$(go env GOPATH)/bin"
 #  CUSTOM ALIASES / FUNCTIONS
 #------------------------------#
 
+cd_and_ls() {
+  builtin cd $@ && ls -lh
+}
+
 alias src="source $HOME/.zshrc"
 alias zshc="edit $HOME/.zshrc"
 alias zshb="cp $HOME/.zshrc $HOME/.zshrc.bak"
-alias github="cd $HOME/Developer/repos/github.com/dencoseca"
-alias repos="cd $HOME/Developer/repos"
-alias sandbox="cd $HOME/Developer/sandbox"
-alias udemy="cd $HOME/Developer/udemy"
-alias dl="cd $HOME/Downloads"
-alias dt="cd $HOME/Desktop"
+alias github="cd_and_ls $HOME/Developer/repos/github.com/dencoseca"
+alias repos="cd_and_ls $HOME/Developer/repos"
+alias sandbox="cd_and_ls $HOME/Developer/sandbox"
+alias udemy="cd_and_ls $HOME/Developer/udemy"
+alias dl="cd_and_ls $HOME/Downloads"
+alias dt="cd_and_ls $HOME/Desktop"
 alias edit="webstorm -e $1"
 alias oif="open -a Finder ./"
 alias nq="networkQuality"
@@ -46,3 +50,4 @@ alias l="ls -lh"
 alias ag="alias | grep -i $1"
 alias upbrew="brew update && brew upgrade"
 alias upnode="nvm install --lts --latest-npm && nvm use --lts"
+alias cd='cd_and_ls'
