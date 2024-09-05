@@ -18,7 +18,7 @@ eval "$(starship init zsh)"
 # add new line for warp
 PROMPT="${PROMPT}"$'\n'
 
-# go path
+# add go executables to path
 export PATH="$PATH:$(go env GOPATH)/bin"
 
 #------------------------------#

@@ -203,11 +203,6 @@ print_message 'Setting Mac OS defaults'
 print_loading_message
 print_loading_message
 
-print_message 'Enabling Touch ID for sudo'
-sed -i '.bak' '2i\
-auth sufficient pam_tid.so
-' /etc/pam.d/sudo
-
 # '------------------------------------'
 # ' Install bloatware
 # '------------------------------------'
