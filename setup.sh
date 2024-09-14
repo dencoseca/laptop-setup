@@ -230,7 +230,7 @@ print_loading_message
 print_loading_message
 
 BREWFILE=''
-if [ $ENV_FLAG == 'home' ]; then
+if [ "$ENV_FLAG" == 'home' ]; then
   BREWFILE=$HOME_BREWFILE
 else
   BREWFILE=$WORK_BREWFILE
