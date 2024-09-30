@@ -1,5 +1,6 @@
 # formulae
 brew "htop"
+brew "bmon"
 brew "jq"
 brew "watch"
 brew "neofetch"
