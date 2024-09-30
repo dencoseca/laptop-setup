@@ -64,7 +64,8 @@ NONSENSE_DIR="$SCRIPT_DIR/nonsense"
 HOME_BREWFILE="$DOTFILES_DIR/Brewfile.home"
 WORK_BREWFILE="$DOTFILES_DIR/Brewfile.work"
 DOCKER_CONFIG_FILE="$DOTFILES_DIR/docker-config.json"
-GITIGNORE_CONFIG_FILE="$DOTFILES_DIR/gitignore_global"
+GITIGNORE_FILE="$DOTFILES_DIR/gitignore"
+GITCONFIG_FILE="$DOTFILES_DIR/gitconfig"
 STARSHIP_CONFIG_FILE="$DOTFILES_DIR/starship.toml"
 ZSHRC_CONFIG_FILE="$DOTFILES_DIR/zshrc"
 LOADING_MESSAGES_FILE="$NONSENSE_DIR/loading-messages.txt"
@@ -73,7 +74,8 @@ LOADING_MESSAGES_FILE="$NONSENSE_DIR/loading-messages.txt"
 SOURCE_FILES=("$HOME_BREWFILE"
   "$WORK_BREWFILE"
   "$DOCKER_CONFIG_FILE"
-  "$GITIGNORE_CONFIG_FILE"
+  "$GITIGNORE_FILE"
+  "$GITCONFIG_FILE"
   "$STARSHIP_CONFIG_FILE"
   "$ZSHRC_CONFIG_FILE"
   "$LOADING_MESSAGES_FILE")
@@ -297,12 +299,8 @@ cat "$STARSHIP_CONFIG_FILE" > "$HOME/.config/starship.toml"
 # '------------------------------------'
 
 print_message 'Configuring git global config'
-cat "$GITIGNORE_CONFIG_FILE" > "$HOME/.gitignore_global"
-
-git config --global user.name 'dencoseca'
-git config --global rerere.enabled true
-git config --global init.defaultBranch 'main'
-git config --global core.excludesfile "$HOME/.gitignore_global"
+cat "$GITIGNORE_FILE" > "$HOME/.gitignore"
+cat "$GITCONFIG_FILE" > "$HOME/.gitconfig"
 
 print_loading_message
 print_loading_message

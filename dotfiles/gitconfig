@@ -1,0 +1,9 @@
+[init]
+  defaultBranch = main
+[user]
+  name = dencoseca
+[core]
+  excludesfile = ~/.gitignore
+  autocrlf = input
+[rerere]
+  enabled = true
