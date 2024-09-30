@@ -301,6 +301,7 @@ cat "$GITIGNORE_CONFIG_FILE" > "$HOME/.gitignore_global"
 
 git config --global user.name 'dencoseca'
 git config --global rerere.enabled true
+git config --global init.defaultBranch 'main'
 git config --global core.excludesfile "$HOME/.gitignore_global"
 
 print_loading_message
