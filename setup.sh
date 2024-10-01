@@ -19,7 +19,8 @@ Dependencies in dotfiles directory:
   - Brewfile.home
   - Brewfile.work
   - docker-config.json
-  - gitignore_global
+  - gitignore
+  - gitconfig
   - starship.toml
   - zshrc
 
