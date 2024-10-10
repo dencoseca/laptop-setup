@@ -18,6 +18,7 @@ brew "colima"
 brew "kubectl"
 brew "helm"
 brew "skaffold"
+brew "dive"
 
 # casks
 cask "alfred"
