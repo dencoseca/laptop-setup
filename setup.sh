@@ -266,7 +266,6 @@ go install github.com/dencoseca/boxi@latest
 print_message "Configuring Docker"
 mkdir -p "$HOME/.docker/"
 cat "$DOCKER_CONFIG_FILE" > "$HOME/.docker/config.json"
-ln -s "$HOME/.colima/default/docker.sock" /var/run/docker.sock
 brew services start colima
 
 # '------------------------------------'
