@@ -21,6 +21,9 @@ PROMPT="${PROMPT}"$'\n'
 # add go executables to path
 export PATH="$PATH:$(go env GOPATH)/bin"
 
+# docker with colima
+export DOCKER_HOST="unix://$HOME/.colima/default/docker.sock"
+
 #------------------------------#
 #  CUSTOM ALIASES / FUNCTIONS
 #------------------------------#
