@@ -54,3 +54,30 @@ alias ag="alias | grep -i $1"
 alias upbrew="brew update && brew upgrade"
 alias upnode="nvm install --lts --latest-npm && nvm use --lts"
 alias cd='cd_and_ls'
+
+function sockson {
+  port=${1:-1080}
+  export HTTP_PROXY="socks5://localhost:${port}"
+  export HTTPS_PROXY="socks5://localhost:${port}"
+  export ALL_PROXY="socks5://localhost:${port}"
+  local bypass=(
+    'registry.terraform.io'
+    'management.azure.com'
+    'releases.hashicorp.com'
+    'api.github.com'
+    'graph.microsoft.com'
+    '*.queue.core.windows.net'
+    '*.table.core.windows.net'
+    '*.blob.core.windows.net'
+    '*.googleapis.com'
+  )
+  bypass=$(printf ",%s" "${bypass[@]}")
+  export NO_PROXY=${bypass:1}
+}
+
+function socksoff {
+  unset HTTP_PROXY
+  unset HTTPS_PROXY
+  unset ALL_PROXY
+  unset NO_PROXY
+}
