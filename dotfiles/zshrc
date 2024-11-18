@@ -3,6 +3,7 @@
 #-------------#
 
 export ZSH="$HOME/.oh-my-zsh"
+zstyle ':omz:update' mode disabled
 zstyle ':omz:plugins:nvm' lazy yes
 plugins=(git nvm)
 source $ZSH/oh-my-zsh.sh
