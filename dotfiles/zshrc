@@ -54,7 +54,8 @@ alias ag="alias | grep -i $1"
 alias upbrew="brew update && brew upgrade"
 alias upnode="nvm install --lts --latest-npm && nvm use --lts"
 alias upomz="omz update"
-alias cd='cd_and_ls'
+alias cd="cd_and_ls"
+alias tf="terraform"
 
 function sockson {
   port=${1:-1080}
