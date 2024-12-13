@@ -19,6 +19,7 @@ brew "kubectl"
 brew "helm"
 brew "skaffold"
 brew "dive"
+brew "gh"
 
 # casks
 cask "alfred"
