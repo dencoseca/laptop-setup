@@ -57,7 +57,7 @@ alias upomz="omz update"
 alias cd="cd_and_ls"
 alias tf="terraform"
 
-function sockson {
+sockson() {
   port=${1:-1080}
   export HTTP_PROXY="socks5://localhost:${port}"
   export HTTPS_PROXY="socks5://localhost:${port}"
@@ -77,9 +77,20 @@ function sockson {
   export NO_PROXY=${bypass:1}
 }
 
-function socksoff {
+socksoff() {
   unset HTTP_PROXY
   unset HTTPS_PROXY
   unset ALL_PROXY
   unset NO_PROXY
+}
+
+sockswhat() {
+  echo "HTTP_PROXY: $HTTP_PROXY"
+  echo "HTTPS_PROXY: $HTTPS_PROXY"
+  echo "ALL_PROXY: $ALL_PROXY"
+  echo "NO_PROXY: $NO_PROXY"
+}
+
+dhc() {
+  docker inspect --format='{{json .State.Health}}' $1 | jq
 }
