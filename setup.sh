@@ -258,6 +258,7 @@ GOPATH="$(go env GOPATH)"
 export GOPATH
 go install github.com/dencoseca/biskit@latest
 go install github.com/dencoseca/boxi@latest
+go install github.com/dencoseca/jangle@latest
 
 # '------------------------------------'
 # ' Setup Docker and Colima
