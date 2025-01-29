@@ -34,6 +34,7 @@ cask "rectangle"
 cask "slack"
 cask "spotify"
 cask "warp"
+cask "gpg-suite"
 
 # mac app store
 mas "Amphetamine", id: 937984704
