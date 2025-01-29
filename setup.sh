@@ -27,10 +27,6 @@ Dependencies in dotfiles directory:
 EOF
 }
 
-# '------------------------------------'
-# ' Validate run
-# '------------------------------------'
-
 exit_with_message() {
   echo "$1"
   echo
@@ -38,7 +34,11 @@ exit_with_message() {
   exit 1
 }
 
-# validate flags
+#    _   __     ___    __     __        ___
+#   | | / /__ _/ (_)__/ /__ _/ /____   / _ \__ _____
+#   | |/ / _ `/ / / _  / _ `/ __/ -_) / , _/ // / _ \
+#   |___/\_,_/_/_/\_,_/\_,_/\__/\__/ /_/|_|\_,_/_//_/
+
 ENV_FLAG=''
 while getopts ":e:" OPTION; do
   case "${OPTION}" in
@@ -57,40 +57,49 @@ else
   print_message "Using $ENV_FLAG config for setup"
 fi
 
-# setup paths
 SCRIPT_DIR=$(cd -- "$(dirname -- "${0}")" &> /dev/null && pwd)
-DOTFILES_DIR="$SCRIPT_DIR/dotfiles"
-NONSENSE_DIR="$SCRIPT_DIR/nonsense"
 
-HOME_BREWFILE="$DOTFILES_DIR/Brewfile.home"
-WORK_BREWFILE="$DOTFILES_DIR/Brewfile.work"
-DOCKER_CONFIG_FILE="$DOTFILES_DIR/docker-config.json"
-GITIGNORE_FILE="$DOTFILES_DIR/gitignore"
-GITCONFIG_FILE="$DOTFILES_DIR/gitconfig"
-STARSHIP_CONFIG_FILE="$DOTFILES_DIR/starship.toml"
-ZSHRC_CONFIG_FILE="$DOTFILES_DIR/zshrc"
-LOADING_MESSAGES_FILE="$NONSENSE_DIR/loading-messages.txt"
+HOME_BREWFILE="$SCRIPT_DIR/templates/Brewfile.home"
+WORK_BREWFILE="$SCRIPT_DIR/templates/Brewfile.work"
+DOCKER_CONFIG_FILE="$SCRIPT_DIR/templates/docker-config.json"
+GITIGNORE_FILE="$SCRIPT_DIR/templates/gitignore"
+GITCONFIG_FILE="$SCRIPT_DIR/templates/gitconfig"
+STARSHIP_CONFIG_FILE="$SCRIPT_DIR/templates/starship.toml"
+ZSHRC_CONFIG_FILE="$SCRIPT_DIR/templates/zshrc"
+LOADING_MESSAGES_FILE="$SCRIPT_DIR/templates/loading-messages.txt"
 
-# check for required files
-SOURCE_FILES=("$HOME_BREWFILE"
+REQUIRED_FILES=(
+  "$HOME_BREWFILE"
   "$WORK_BREWFILE"
   "$DOCKER_CONFIG_FILE"
   "$GITIGNORE_FILE"
   "$GITCONFIG_FILE"
   "$STARSHIP_CONFIG_FILE"
   "$ZSHRC_CONFIG_FILE"
-  "$LOADING_MESSAGES_FILE")
+  "$LOADING_MESSAGES_FILE"
+)
 
-for SOURCE_FILE in "${SOURCE_FILES[@]}"; do
-  if [[ ! -e "$SOURCE_FILE" ]]; then
-    FILENAME=$(basename "$SOURCE_FILE")
-    exit_with_message "$FILENAME is required"
+MISSING_FILES=()
+
+for FILE in "${REQUIRED_FILES[@]}"; do
+  if [ ! -f "$FILE" ]; then
+    MISSING_FILES+=("$(basename "$FILE")")
   fi
 done
 
-# '------------------------------------'
-# ' Setup script utils
-# '------------------------------------'
+if [ "${#MISSING_FILES[@]}" -ne 0 ]; then
+  say "Where the good stuff at?:"
+  for MISSING_FILE in "${MISSING_FILES[@]}"; do
+    say "  Ain't no $MISSING_FILE"
+  done
+  exit_with_message "Get your shit together first"
+fi
+
+#      ____    __              ____        _      __    __  ____  _ __
+#     / __/__ / /___ _____    / __/_______(_)__  / /_  / / / / /_(_) /__
+#    _\ \/ -_) __/ // / _ \  _\ \/ __/ __/ / _ \/ __/ / /_/ / __/ / (_-<
+#   /___/\__/\__/\_,_/ .__/ /___/\__/_/ /_/ .__/\__/  \____/\__/_/_/___/
+#                   /_/                  /_/
 
 ignore_dave_and_leave_him_in_space_to_suffocate() {
   print_message "...I'm sorry Dave, I'm afraid I can't do that"
@@ -150,9 +159,11 @@ stop_spinner() {
 trap 'ignore_dave_and_leave_him_in_space_to_suffocate' ERR
 trap 'stop_spinner' EXIT
 
-# '------------------------------------'
-# ' Install Xcode Command Line Tools
-# '------------------------------------'
+
+#      ____         __       ____  _  __            __      _____                              __  __   _            ______          __
+#     /  _/__  ___ / /____ _/ / / | |/_/______  ___/ /__   / ___/__  __ _  __ _  ___ ____  ___/ / / /  (_)__  ___   /_  __/__  ___  / /__
+#    _/ // _ \(_-</ __/ _ `/ / / _>  </ __/ _ \/ _  / -_) / /__/ _ \/  ' \/  ' \/ _ `/ _ \/ _  / / /__/ / _ \/ -_)   / / / _ \/ _ \/ (_-<
+#   /___/_//_/___/\__/\_,_/_/_/ /_/|_|\__/\___/\_,_/\__/  \___/\___/_/_/_/_/_/_/\_,_/_//_/\_,_/ /____/_/_//_/\__/   /_/  \___/\___/_/___/
 
 print_message "Checking Command Line Tools for Xcode"
 # Only run if the tools are not installed yet
@@ -170,9 +181,10 @@ else
   print_message "Command Line Tools for Xcode are already installed."
 fi
 
-# '------------------------------------'
-# ' Set Mac OS defaults
-# '------------------------------------'
+#      ____    __    __  ___           ____  ____  ___      ___          ____
+#     / __/__ / /_  /  |/  /__ _____  / __ \/ __/ / _ \___ / _/__ ___ __/ / /____
+#    _\ \/ -_) __/ / /|_/ / _ `/ __/ / /_/ /\ \  / // / -_) _/ _ `/ // / / __(_-<
+#   /___/\__/\__/ /_/  /_/\_,_/\__/  \____/___/ /____/\__/_/ \_,_/\_,_/_/\__/___/
 
 print_message 'Setting Mac OS defaults'
 {
@@ -206,9 +218,10 @@ print_message 'Setting Mac OS defaults'
 print_loading_message
 print_loading_message
 
-# '------------------------------------'
-# ' Install bloatware
-# '------------------------------------'
+#      ____         __       ____  ___  __          __
+#     /  _/__  ___ / /____ _/ / / / _ )/ /__  ___ _/ /__    _____ ________
+#    _/ // _ \(_-</ __/ _ `/ / / / _  / / _ \/ _ `/ __/ |/|/ / _ `/ __/ -_)
+#   /___/_//_/___/\__/\_,_/_/_/ /____/_/\___/\_,_/\__/|__,__/\_,_/_/  \__/
 
 start_spinner 'Installing homebrew'
 {
@@ -249,9 +262,10 @@ print_message 'Holy shit, that took ages!'
 print_loading_message
 print_loading_message
 
-# '------------------------------------'
-# ' Install custom cli tools
-# '------------------------------------'
+#      ____         __       ____  _____         __               ________   ______          __
+#     /  _/__  ___ / /____ _/ / / / ___/_ _____ / /____  __ _    / ___/ (_) /_  __/__  ___  / /__
+#    _/ // _ \(_-</ __/ _ `/ / / / /__/ // (_-</ __/ _ \/  ' \  / /__/ / /   / / / _ \/ _ \/ (_-<
+#   /___/_//_/___/\__/\_,_/_/_/  \___/\_,_/___/\__/\___/_/_/_/  \___/_/_/   /_/  \___/\___/_/___/
 
 print_message 'Installing custom cli tools'
 GOPATH="$(go env GOPATH)"
@@ -260,18 +274,22 @@ go install github.com/dencoseca/biskit@latest
 go install github.com/dencoseca/boxi@latest
 go install github.com/dencoseca/jangle@latest
 
-# '------------------------------------'
-# ' Setup Docker and Colima
-# '------------------------------------'
+#      ____    __              ___           __                          __  _____     ___
+#     / __/__ / /___ _____    / _ \___  ____/ /_____ ____  ___ ____  ___/ / / ___/__  / (_)_ _  ___ _
+#    _\ \/ -_) __/ // / _ \  / // / _ \/ __/  '_/ -_) __/ / _ `/ _ \/ _  / / /__/ _ \/ / /  ' \/ _ `/
+#   /___/\__/\__/\_,_/ .__/ /____/\___/\__/_/\_\\__/_/    \_,_/_//_/\_,_/  \___/\___/_/_/_/_/_/\_,_/
+#                   /_/
 
 print_message "Configuring Docker"
 mkdir -p "$HOME/.docker/"
 cat "$DOCKER_CONFIG_FILE" > "$HOME/.docker/config.json"
 brew services start colima
 
-# '------------------------------------'
-# ' Setup shell
-# '------------------------------------'
+#      ____    __              ______       ____
+#     / __/__ / /___ _____    / __/ /  ___ / / /
+#    _\ \/ -_) __/ // / _ \  _\ \/ _ \/ -_) / /
+#   /___/\__/\__/\_,_/ .__/ /___/_//_/\__/_/_/
+#                   /_/
 
 start_spinner 'Installing oh my zsh'
 {
@@ -295,9 +313,11 @@ print_message 'Creating starship config'
 mkdir -p "$HOME/.config/"
 cat "$STARSHIP_CONFIG_FILE" > "$HOME/.config/starship.toml"
 
-# '------------------------------------'
-# ' Configure Git
-# '------------------------------------'
+#     _____          ____                     ______ __
+#    / ___/__  ___  / _(_)__ ___ _________   / ___(_) /_
+#   / /__/ _ \/ _ \/ _/ / _ `/ // / __/ -_) / (_ / / __/
+#   \___/\___/_//_/_//_/\_, /\_,_/_/  \__/  \___/_/\__/
+#                      /___/
 
 print_message 'Configuring git global config'
 cat "$GITIGNORE_FILE" > "$HOME/.gitignore"
@@ -311,9 +331,10 @@ mkdir -p "$HOME/Developer/udemy"
 print_loading_message
 print_loading_message
 
-# '------------------------------------'
-# ' Drink lemonade
-# '------------------------------------'
+#      ___      _      __     __                               __
+#     / _ \____(_)__  / /__  / /  ___ __ _  ___  ___  ___ ____/ /__
+#    / // / __/ / _ \/  '_/ / /__/ -_)  ' \/ _ \/ _ \/ _ `/ _  / -_)
+#   /____/_/ /_/_//_/_/\_\ /____/\__/_/_/_/\___/_//_/\_,_/\_,_/\__/
 
 print_message "Praise Poseidon, it's finally over!"
 print_message "Let's all relax and drink some lemonade!"
