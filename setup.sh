@@ -7,6 +7,8 @@
 #    ██║   ██║  ██║██║  ██╗███████╗    ██║  ██║    ██████╔╝███████╗███████╗██║         ██████╔╝██║  ██║███████╗██║  ██║   ██║   ██║  ██║
 #    ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝    ╚═╝  ╚═╝    ╚═════╝ ╚══════╝╚══════╝╚═╝         ╚═════╝ ╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝   ╚═╝   ╚═╝  ╚═╝
 
+TAKE A DEEP BREATH
+
 set -euo pipefail
 
 print_usage() {
@@ -346,7 +348,6 @@ cat "$GITCONFIG_FILE" > "$HOME/.gitconfig"
 print_message 'Setting up Developer folders'
 mkdir -p "$HOME/Developer/repos"
 mkdir -p "$HOME/Developer/sandbox"
-mkdir -p "$HOME/Developer/udemy"
 
 print_loading_message
 print_loading_message
