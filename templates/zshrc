@@ -94,3 +94,9 @@ sockswhat() {
 dhc() {
   docker inspect --format='{{json .State.Health}}' $1 | jq
 }
+
+if [ ! -f "$HOME/.janglerc" ]; then
+  touch "$HOME/.janglerc"
+else
+  source "$HOME/.janglerc"
+f
