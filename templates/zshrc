@@ -24,6 +24,13 @@ export PATH="$PATH:$(go env GOPATH)/bin"
 # docker with colima
 export DOCKER_HOST="unix://$HOME/.colima/default/docker.sock"
 
+# jangle
+if [ ! -f "$HOME/.janglerc" ]; then
+  touch "$HOME/.janglerc"
+else
+  source "$HOME/.janglerc"
+f
+
 #------------------------------#
 #  CUSTOM ALIASES / FUNCTIONS
 #------------------------------#
@@ -94,9 +101,3 @@ sockswhat() {
 dhc() {
   docker inspect --format='{{json .State.Health}}' $1 | jq
 }
-
-if [ ! -f "$HOME/.janglerc" ]; then
-  touch "$HOME/.janglerc"
-else
-  source "$HOME/.janglerc"
-f
