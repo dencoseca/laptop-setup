@@ -25,11 +25,7 @@ export PATH="$PATH:$(go env GOPATH)/bin"
 export DOCKER_HOST="unix://$HOME/.colima/default/docker.sock"
 
 # jangle
-if [ ! -f "$HOME/.jangle_exports" ]; then
-  touch "$HOME/.jangle_exports"
-else
-  source "$HOME/.jangle_exports"
-f
+[ -f "$HOME/.jangle_exports" ] && source "$HOME/.jangle_exports"
 
 #------------------------------#
 #  CUSTOM ALIASES / FUNCTIONS
