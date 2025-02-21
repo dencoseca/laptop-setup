@@ -100,16 +100,16 @@ dhc() {
 
 sweet_sweet_details() {
   local USER_INFO="$USER@$(hostname)"
-  local OS_INFO=$(sw_vers | awk '{print $2}' | tr '\n' ' ' | sed 's/ $//')
-  local UPTIME_INFO="$(uptime | awk -F'up ' '{print $2}' | awk '{gsub(/^[ \t]+/, ""); if ($2 == "day," || $2 == "days,") print $1, $2, $3; else print $1}' | sed 's/, [0-9]* user.*$//' | sed 's/,$//')"
-  local SHELL_INFO=$(zsh --version | awk '{print $1 " " $2}')
-  local MEMORY_INFO=$(memory_pressure | grep "System-wide memory free percentage:" | awk '{used=16-16*$5/100; printf "%.1fGB / 16GB\n", used}')
+  local OS_INFO="$(sw_vers | awk '{print $2}' | tr '\n' ' ' | sed 's/ $//')"
+  local UPTIME_INFO="$(uptime | awk -F'up ' '{print $2}' | awk '{gsub(/^[ \t]+/, ""); if ($2 == "day," || $2 == "days,") print $1, $2, $3; else print $1}' | sed 's/, [0-9]* user.*$//' | sed 's/,$//' | sed -E 's/([0-9]+):([0-9]+)/\1 hours, \2 mins/' | sed 's/0\([0-9] mins\)/\1/')"
+  local MEMORY_INFO="$(memory_pressure | grep "System-wide memory free percentage:" | awk '{used=16-16*$5/100; printf "%.1fGB / 16GB\n", used}')"
+  local CPU_INFO="$(sysctl -n machdep.cpu.brand_string)"
 
-echo -e "\033[32m██████╗ ███████╗███╗   ██╗ ██████╗ ██████╗ ███████╗███████╗ ██████╗ █████╗\033[0m     \033[31mUser\033[0m:    $USER_INFO
-\033[33m██╔══██╗██╔════╝████╗  ██║██╔════╝██╔═══██╗██╔════╝██╔════╝██╔════╝██╔══██╗\033[0m    \033[31mOS\033[0m:      $OS_INFO
-\033[31m██║  ██║█████╗  ██╔██╗ ██║██║     ██║   ██║███████╗█████╗  ██║     ███████║\033[0m    \033[31mUptime\033[0m:  $UPTIME_INFO
-\033[35m██║  ██║██╔══╝  ██║╚██╗██║██║     ██║   ██║╚════██║██╔══╝  ██║     ██╔══██║\033[0m    \033[31mShell\033[0m:   $SHELL_INFO
-\033[34m██████╔╝███████╗██║ ╚████║╚██████╗╚██████╔╝███████║███████╗╚██████╗██║  ██║\033[0m    \033[31mMemory\033[0m:  $MEMORY_INFO
+  echo -e "\033[32m██████╗ ███████╗███╗   ██╗ ██████╗ ██████╗ ███████╗███████╗ ██████╗ █████╗\033[0m    \033[31mUser\033[0m:    $USER_INFO
+\033[33m██╔══██╗██╔════╝████╗  ██║██╔════╝██╔═══██╗██╔════╝██╔════╝██╔════╝██╔══██╗\033[0m   \033[31mUptime\033[0m:  $UPTIME_INFO
+\033[31m██║  ██║█████╗  ██╔██╗ ██║██║     ██║   ██║███████╗█████╗  ██║     ███████║\033[0m   \033[31mOS\033[0m:      $OS_INFO
+\033[35m██║  ██║██╔══╝  ██║╚██╗██║██║     ██║   ██║╚════██║██╔══╝  ██║     ██╔══██║\033[0m   \033[31mCPU\033[0m:     $CPU_INFO
+\033[34m██████╔╝███████╗██║ ╚████║╚██████╗╚██████╔╝███████║███████╗╚██████╗██║  ██║\033[0m   \033[31mMemory\033[0m:  $MEMORY_INFO
 \033[36m╚═════╝ ╚══════╝╚═╝  ╚═══╝ ╚═════╝ ╚═════╝ ╚══════╝╚══════╝ ╚═════╝╚═╝  ╚═╝\033[0m"
 }
 
