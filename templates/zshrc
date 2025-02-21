@@ -101,7 +101,7 @@ dhc() {
 sweet_sweet_details() {
   local USER_INFO="$USER@$(hostname)"
   local OS_INFO=$(sw_vers | awk '{print $2}' | tr '\n' ' ' | sed 's/ $//')
-  local UPTIME_INFO=$(uptime | awk -F'up ' '{print $2}' | awk -F',' '{print $1 "," $2}' | sed 's/,.*user//')
+  local UPTIME_INFO="$(uptime | awk -F'up ' '{print $2}' | awk '{gsub(/^[ \t]+/, ""); if ($2 == "day," || $2 == "days,") print $1, $2, $3; else print $1}' | sed 's/, [0-9]* user.*$//' | sed 's/,$//')"
   local SHELL_INFO=$(zsh --version | awk '{print $1 " " $2}')
   local MEMORY_INFO=$(memory_pressure | grep "System-wide memory free percentage:" | awk '{used=16-16*$5/100; printf "%.1fGB / 16GB\n", used}')
 
