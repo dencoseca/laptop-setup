@@ -103,7 +103,7 @@ sweet_sweet_details() {
   local OS_INFO="$(sw_vers | awk '{print $2}' | tr '\n' ' ' | sed 's/ $//')"
   local UPTIME_INFO="$(uptime | awk -F'up ' '{print $2}' | awk '{gsub(/^[ \t]+/, ""); if ($2 == "day," || $2 == "days,") print $1, $2, $3; else print $1}' | sed 's/, [0-9]* user.*$//' | sed 's/,$//' | sed -E 's/([0-9]+):([0-9]+)/\1 hours, \2 mins/' | sed 's/0\([0-9] mins\)/\1/')"
   local MEMORY_INFO="$(memory_pressure | grep "System-wide memory free percentage:" | awk '{used=16-16*$5/100; printf "%.1fGB / 16GB\n", used}')"
-  local CPU_INFO="$(sysctl -n machdep.cpu.brand_string)"
+  local CPU_INFO="$(top -l 1 -n 0 | grep -E "CPU" | while read -r line; do printf "%s\n" "${line#*: }"; done)"
 
   echo -e "\033[32m██████╗ ███████╗███╗   ██╗ ██████╗ ██████╗ ███████╗███████╗ ██████╗ █████╗\033[0m    \033[31mUser\033[0m:    $USER_INFO
 \033[33m██╔══██╗██╔════╝████╗  ██║██╔════╝██╔═══██╗██╔════╝██╔════╝██╔════╝██╔══██╗\033[0m   \033[31mUptime\033[0m:  $UPTIME_INFO
