@@ -102,7 +102,17 @@ sweet_sweet_details() {
   local USER_INFO="$USER@$(hostname | cut -d. -f1)"
   local OS_INFO="$(sw_vers | awk '{print $2}' | tr '\n' ' ' | sed 's/ $//')"
   local UPTIME_INFO="$(uptime | awk -F'up ' '{print $2}' | awk '{gsub(/^[ \t]+/, ""); if ($2 == "day," || $2 == "days,") print $1, $2, $3; else print $1}' | sed 's/, [0-9]* user.*$//' | sed 's/,$//' | sed -E 's/([0-9]+):([0-9]+)/\1 hours, \2 mins/' | sed 's/0\([0-9] mins\)/\1/')"
-  local MEMORY_INFO="$(memory_pressure | grep "System-wide memory free percentage:" | awk '{used=16-16*$5/100; printf "%.1fGB / 16GB\n", used}')"
+  local MEMORY_INFO="$(memory_pressure | awk '
+                         BEGIN {
+                             pagesToGB = 16.0 / (1024 * 1024)
+                         }
+                         /Pages active:/ { active = $3 * pagesToGB }
+                         /Pages inactive:/ { inactive = $3 * pagesToGB }
+                         /Pages wired down:/ { wired = $4 * pagesToGB }
+                         END {
+                             printf "%.1fGB A, %.1fGB I, %.1fGB W, %.1fGB T\n",
+                             active, inactive, wired, active + inactive + wired
+                         }')"
   local CPU_INFO="$(top -l 1 -n 0 | grep -E "CPU" | cut -d: -f2- | sed 's/^[[:space:]]*//')"
 
   echo -e "\033[32m██████╗ ███████╗███╗   ██╗ ██████╗ ██████╗ ███████╗███████╗ ██████╗ █████╗\033[0m    \033[31mUser\033[0m:    $USER_INFO
