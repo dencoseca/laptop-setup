@@ -107,11 +107,10 @@ sweet_sweet_details() {
                              pagesToGB = 16.0 / (1024 * 1024)
                          }
                          /Pages active:/ { active = $3 * pagesToGB }
-                         /Pages inactive:/ { inactive = $3 * pagesToGB }
                          /Pages wired down:/ { wired = $4 * pagesToGB }
                          END {
-                             printf "%.1fGB A, %.1fGB I, %.1fGB W, %.1fGB T\n",
-                             active, inactive, wired, active + inactive + wired
+                             printf "%.1fGB / 16.0GB\n",
+                             active + wired
                          }')"
   local CPU_INFO="$(top -l 1 -n 0 | grep -E "CPU" | cut -d: -f2- | sed 's/^[[:space:]]*//')"
 
