@@ -102,15 +102,15 @@ sweet_sweet_details() {
   local USER_INFO="$USER@$(hostname | cut -d. -f1)"
   local OS_INFO="$(sw_vers | awk '{print $2}' | tr '\n' ' ' | sed 's/ $//')"
   local UPTIME_INFO="$(uptime | awk -F'up ' '{print $2}' | awk '{gsub(/^[ \t]+/, ""); if ($2 == "day," || $2 == "days,") print $1, $2, $3; else print $1}' | sed 's/, [0-9]* user.*$//' | sed 's/,$//' | sed -E 's/([0-9]+):([0-9]+)/\1 hours, \2 mins/' | sed 's/0\([0-9] mins\)/\1/')"
-  local MEMORY_INFO="$(memory_pressure | awk '
+  local MEMORY_INFO="$(memory_pressure | awk -v totalRAM="$(sysctl hw.memsize | awk '{ print $2/1024/1024/1024 }')" '
                          BEGIN {
                              pagesToGB = 16.0 / (1024 * 1024)
                          }
                          /Pages active:/ { active = $3 * pagesToGB }
                          /Pages wired down:/ { wired = $4 * pagesToGB }
                          END {
-                             printf "%.1fGB / 16.0GB\n",
-                             active + wired
+                             printf "%.1fGB / %.1fGB\n",
+                             active + wired, totalRAM
                          }')"
   local CPU_INFO="$(top -l 1 -n 0 | grep -E "CPU" | cut -d: -f2- | sed 's/^[[:space:]]*//')"
 
