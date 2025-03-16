@@ -361,9 +361,6 @@ print_message 'Configuring git global config'
 cat "$GITIGNORE_FILE" > "$HOME/.gitignore"
 cat "$GITCONFIG_FILE" > "$HOME/.gitconfig"
 
-print_message 'Setting up Developer folders'
-mkdir -p "$HOME/Developer/repos"
-
 print_loading_message
 print_loading_message
 
