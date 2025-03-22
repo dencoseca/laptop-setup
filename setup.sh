@@ -334,6 +334,10 @@ print_message 'Creating starship config'
 mkdir -p "$HOME/.config/"
 cat "$STARSHIP_CONFIG_FILE" > "$HOME/.config/starship.toml"
 
+print_message 'Installing Warp themes'
+mkdir -p "$HOME/.warp"
+git clone https://github.com/warpdotdev/themes.git "$HOME/.warp/"
+
 
 
 #  ██████╗ ██╗████████╗
@@ -363,7 +367,7 @@ print_message 'Configuring asdf'
 cat "$ASDF_CONFIG_FILE" > "$HOME/.asdfrc"
 
 print_message 'Install asdf completions'
-git clone https://github.com/asdf-vm/asdf.git ~/.asdf
+git clone https://github.com/asdf-vm/asdf.git "$HOME/.asdf"
 
 print_message 'Installing latest version of go'
 asdf plugin add golang https://github.com/asdf-community/asdf-golang.git
