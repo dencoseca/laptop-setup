@@ -115,7 +115,7 @@ sweet_sweet_details() {
       if(m>0) result = (length(result)>0 ? result ", " : result) m " mins";
       if($1<60 || s>0 && length(result)==0) result = (length(result)>0 ? result ", " : result) s " secs";
       print result
-  }'
+    }'
   }
 
   get_formatted_memory_pressure() {
