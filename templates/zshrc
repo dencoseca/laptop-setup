@@ -113,10 +113,10 @@ sweet_sweet_details() {
       m=int(($1%3600)/60);
       s=$1%60;
       result="";
-      if(d>0) result = result d " days";
-      if(h>0) result = (length(result)>0 ? result ", " : result) h " hrs";
-      if(m>0) result = (length(result)>0 ? result ", " : result) m " mins";
-      if($1<60 || s>0 && length(result)==0) result = (length(result)>0 ? result ", " : result) s " secs";
+      if(d>0) result = result d (d==1 ? " day" : " days");
+      if(h>0) result = (length(result)>0 ? result ", " : result) h (h==1 ? " hr" : " hrs");
+      if(m>0) result = (length(result)>0 ? result ", " : result) m (m==1 ? " min" : " mins");
+      if($1<60 || s>0 && length(result)==0) result = (length(result)>0 ? result ", " : result) s (s==1 ? " sec" : " secs");
       print result
     }'
   }
