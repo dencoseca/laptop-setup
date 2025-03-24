@@ -31,9 +31,9 @@ go_install() {
   GOBIN="$MY_BIN" GOPROXY="direct" go install "github.com/dencoseca/$PACKAGE@$VERSION"
 
   if [ $? -eq 0 ]; then
-    echo "✅ Successfully installed $PACKAGE@$VERSION"
+    echo "🥳 Successfully installed $PACKAGE@$VERSION"
   else
-    echo "❌ Failed to install $PACKAGE@$VERSION"
+    echo "😭 Failed to install $PACKAGE@$VERSION"
     return 1
   fi
 }
@@ -68,7 +68,7 @@ edit() {
 alias src="source $HOME/.zshrc"
 alias zshc="edit $HOME/.zshrc"
 alias zshb="cp $HOME/.zshrc $HOME/.zshrc.bak"
-alias github="cd_and_ls $HOME/Developer/repos/github.com/dencoseca"
+alias dencoseca="cd_and_ls $HOME/Developer/repos/github.com/dencoseca"
 alias repos="cd_and_ls $HOME/Developer/repos"
 alias dl="cd_and_ls $HOME/Downloads"
 alias dt="cd_and_ls $HOME/Desktop"
