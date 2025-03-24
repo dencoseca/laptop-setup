@@ -375,7 +375,7 @@ print_message 'Install asdf completions'
 git clone https://github.com/asdf-vm/asdf.git "$HOME/.asdf"
 
 print_message 'Installing latest version of go'
-asdf plugin add golang https://github.com/asdf-community/asdf-golang.git
+asdf plugin add golang
 asdf install golang latest
 asdf set golang latest
 
@@ -390,9 +390,9 @@ asdf set golang latest
 
 print_message 'Installing custom cli tools'
 mkdir -p "$HOME/.local/bin"
-GOBIN="$HOME/.local/bin" GOPROXY="direct" go install github.com/dencoseca/biskit@latest
-GOBIN="$HOME/.local/bin" GOPROXY="direct" go install github.com/dencoseca/boxi@latest
-GOBIN="$HOME/.local/bin" GOPROXY="direct" go install github.com/dencoseca/jangle@latest
+GOBIN="$HOME/.local/bin" GOPROXY="direct" "$(asdf where golang)/go/bin/go" install github.com/dencoseca/biskit@latest
+GOBIN="$HOME/.local/bin" GOPROXY="direct" "$(asdf where golang)/go/bin/go" install github.com/dencoseca/boxi@latest
+GOBIN="$HOME/.local/bin" GOPROXY="direct" "$(asdf where golang)/go/bin/go" install github.com/dencoseca/jangle@latest
 
 
 
