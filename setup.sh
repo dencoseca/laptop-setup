@@ -23,11 +23,13 @@ Flags:
   -e   Required. Specify the environment ('home' or 'work')
 
 Dependencies in dotfiles directory:
+  - asdfrc
   - Brewfile.home
   - Brewfile.work
   - docker-config.json
-  - gitignore
   - gitconfig
+  - gitignore
+  - loading-messages.txt
   - starship.toml
   - zshrc
 
