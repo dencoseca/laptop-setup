@@ -17,8 +17,26 @@ eval "$(starship init zsh)"
 # add new line for warp
 PROMPT="${PROMPT}"$'\n'
 
-# go binaries
-export PATH="$PATH:$HOME/go/bin"
+# custom go binaries
+MY_BIN="$HOME/.local/bin"
+export PATH="$PATH:$MY_BIN"
+
+go_install() {
+  local PACKAGE="$1"
+  local VERSION="${2:-latest}"
+
+  mkdir -p "$MY_BIN"
+
+  echo "Installing $PACKAGE@$VERSION to $MY_BIN..."
+  GOBIN="$MY_BIN" GOPROXY="direct" go install "github.com/dencoseca/$PACKAGE@$VERSION"
+
+  if [ $? -eq 0 ]; then
+    echo "✅ Successfully installed $PACKAGE@$VERSION"
+  else
+    echo "❌ Failed to install $PACKAGE@$VERSION"
+    return 1
+  fi
+}
 
 # docker with colima
 export DOCKER_HOST="unix://$HOME/.colima/default/docker.sock"
