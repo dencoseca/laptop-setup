@@ -29,6 +29,7 @@ cask "mos"
 cask "rectangle"
 cask "spotify"
 cask "warp"
+cask "signal"
 
 # mac app store
 mas "Amphetamine", id: 937984704
@@ -36,4 +37,3 @@ mas "Bear", id: 1091189122
 mas "Bitwarden", id: 1352778147
 mas "NordVPN", id: 905953485
 mas "Things", id: 904280696
-mas "WhatsApp", id: 1147396723
