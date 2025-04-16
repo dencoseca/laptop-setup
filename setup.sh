@@ -343,7 +343,7 @@ cat "$STARSHIP_CONFIG_FILE" > "$HOME/.config/starship.toml"
 
 print_message 'Installing Warp themes'
 mkdir -p "$HOME/.warp"
-git clone https://github.com/warpdotdev/themes.git "$HOME/.warp/"
+git clone https://github.com/warpdotdev/themes.git "$HOME/.warp/themes"
 
 
 
@@ -376,10 +376,13 @@ cat "$ASDF_CONFIG_FILE" > "$HOME/.asdfrc"
 print_message 'Install asdf completions'
 git clone https://github.com/asdf-vm/asdf.git "$HOME/.asdf"
 
+print_message 'Sourcing asdf'
+source "$HOME/.asdf/asdf.sh"
+
 print_message 'Installing latest version of go'
 asdf plugin add golang
 asdf install golang latest
-asdf set golang latest
+asdf global golang latest
 
 
 
