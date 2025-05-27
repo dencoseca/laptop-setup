@@ -23,7 +23,6 @@ Flags:
   -e   Required. Specify the environment ('home' or 'work')
 
 Dependencies in dotfiles directory:
-  - asdfrc
   - Brewfile.home
   - Brewfile.work
   - docker-config.json
@@ -84,7 +83,6 @@ GITIGNORE_FILE="$SCRIPT_DIR/templates/gitignore"
 GITCONFIG_FILE="$SCRIPT_DIR/templates/gitconfig"
 STARSHIP_CONFIG_FILE="$SCRIPT_DIR/templates/starship.toml"
 ZSHRC_CONFIG_FILE="$SCRIPT_DIR/templates/zshrc"
-ASDF_CONFIG_FILE="$SCRIPT_DIR/templates/asdfrc"
 LOADING_MESSAGES_FILE="$SCRIPT_DIR/templates/loading-messages.txt"
 
 REQUIRED_FILES=(
@@ -95,7 +93,6 @@ REQUIRED_FILES=(
   "$GITCONFIG_FILE"
   "$STARSHIP_CONFIG_FILE"
   "$ZSHRC_CONFIG_FILE"
-  "$ASDF_CONFIG_FILE"
   "$LOADING_MESSAGES_FILE"
 )
 
@@ -298,6 +295,22 @@ print_loading_message
 
 
 
+#  ██████╗██╗  ██╗███████╗███████╗███████╗    ██╗  ██╗██╗███████╗███████╗
+# ██╔════╝██║  ██║██╔════╝██╔════╝██╔════╝    ██║ ██╔╝██║██╔════╝██╔════╝
+# ██║     ███████║█████╗  █████╗  ███████╗    █████╔╝ ██║███████╗███████╗
+# ██║     ██╔══██║██╔══╝  ██╔══╝  ╚════██║    ██╔═██╗ ██║╚════██║╚════██║
+# ╚██████╗██║  ██║███████╗██║     ███████║    ██║  ██╗██║███████║███████║
+#  ╚═════╝╚═╝  ╚═╝╚══════╝╚═╝     ╚══════╝    ╚═╝  ╚═╝╚═╝╚══════╝╚══════╝
+
+print_message 'Installing custom cli tools'
+GOPATH="$(go env GOPATH)"
+export GOPATH
+go install github.com/dencoseca/biskit@latest
+go install github.com/dencoseca/boxi@latest
+go install github.com/dencoseca/jangle@latest
+
+
+
 #  ██████╗ ██████╗ ███╗   ██╗████████╗ █████╗ ██╗███╗   ██╗███████╗██████╗     ██████╗ ██╗   ██╗███╗   ██╗████████╗██╗███╗   ███╗███████╗
 # ██╔════╝██╔═══██╗████╗  ██║╚══██╔══╝██╔══██╗██║████╗  ██║██╔════╝██╔══██╗    ██╔══██╗██║   ██║████╗  ██║╚══██╔══╝██║████╗ ████║██╔════╝
 # ██║     ██║   ██║██╔██╗ ██║   ██║   ███████║██║██╔██╗ ██║█████╗  ██████╔╝    ██████╔╝██║   ██║██╔██╗ ██║   ██║   ██║██╔████╔██║█████╗
@@ -361,43 +374,6 @@ cat "$GITCONFIG_FILE" > "$HOME/.gitconfig"
 print_loading_message
 print_loading_message
 
-
-
-# ██╗      █████╗ ███╗   ██╗ ██████╗ ██╗   ██╗ █████╗  ██████╗ ███████╗    ██████╗ ██╗   ██╗███╗   ██╗████████╗██╗███╗   ███╗███████╗███████╗
-# ██║     ██╔══██╗████╗  ██║██╔════╝ ██║   ██║██╔══██╗██╔════╝ ██╔════╝    ██╔══██╗██║   ██║████╗  ██║╚══██╔══╝██║████╗ ████║██╔════╝██╔════╝
-# ██║     ███████║██╔██╗ ██║██║  ███╗██║   ██║███████║██║  ███╗█████╗      ██████╔╝██║   ██║██╔██╗ ██║   ██║   ██║██╔████╔██║█████╗  ███████╗
-# ██║     ██╔══██║██║╚██╗██║██║   ██║██║   ██║██╔══██║██║   ██║██╔══╝      ██╔══██╗██║   ██║██║╚██╗██║   ██║   ██║██║╚██╔╝██║██╔══╝  ╚════██║
-# ███████╗██║  ██║██║ ╚████║╚██████╔╝╚██████╔╝██║  ██║╚██████╔╝███████╗    ██║  ██║╚██████╔╝██║ ╚████║   ██║   ██║██║ ╚═╝ ██║███████╗███████║
-# ╚══════╝╚═╝  ╚═╝╚═╝  ╚═══╝ ╚═════╝  ╚═════╝ ╚═╝  ╚═╝ ╚═════╝ ╚══════╝    ╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═══╝   ╚═╝   ╚═╝╚═╝     ╚═╝╚══════╝╚══════╝
-
-print_message 'Configuring asdf'
-cat "$ASDF_CONFIG_FILE" > "$HOME/.asdfrc"
-
-print_message 'Install asdf completions'
-git clone https://github.com/asdf-vm/asdf.git "$HOME/.asdf"
-
-print_message 'Sourcing asdf'
-source "$HOME/.asdf/asdf.sh"
-
-print_message 'Installing latest version of go'
-asdf plugin add golang
-asdf install golang latest
-asdf global golang latest
-
-
-
-#  ██████╗██╗  ██╗███████╗███████╗███████╗    ██╗  ██╗██╗███████╗███████╗
-# ██╔════╝██║  ██║██╔════╝██╔════╝██╔════╝    ██║ ██╔╝██║██╔════╝██╔════╝
-# ██║     ███████║█████╗  █████╗  ███████╗    █████╔╝ ██║███████╗███████╗
-# ██║     ██╔══██║██╔══╝  ██╔══╝  ╚════██║    ██╔═██╗ ██║╚════██║╚════██║
-# ╚██████╗██║  ██║███████╗██║     ███████║    ██║  ██╗██║███████║███████║
-#  ╚═════╝╚═╝  ╚═╝╚══════╝╚═╝     ╚══════╝    ╚═╝  ╚═╝╚═╝╚══════╝╚══════╝
-
-print_message 'Installing custom cli tools'
-mkdir -p "$HOME/.local/bin"
-for TOOL in biskit boxi jangle; do
-  GOBIN="$HOME/.local/bin" GOPROXY="direct" "$(asdf where golang)/go/bin/go" install "github.com/dencoseca/$TOOL@latest"
-done
 
 
 # ██████╗ ██████╗ ██╗███╗   ██╗██╗  ██╗    ██╗     ███████╗███╗   ███╗ ██████╗ ███╗   ██╗ █████╗ ██████╗ ███████╗
