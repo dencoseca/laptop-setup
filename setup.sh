@@ -268,6 +268,7 @@ else
   print_message "Adding brew shellenv init to $HOME/.zprofile"
   {
     echo
+    echo '# Set PATH, MANPATH, etc., for Homebrew.'
     echo 'eval "$(/opt/homebrew/bin/brew shellenv)"'
   } >> "$HOME/.zprofile"
 fi
