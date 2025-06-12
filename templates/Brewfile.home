@@ -1,5 +1,5 @@
 # formulae
-brew "htop"
+brew "btop"
 brew "bmon"
 brew "jq"
 brew "watch"
