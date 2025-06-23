@@ -22,7 +22,7 @@ Usage:
 Flags:
   -e   Required. Specify the environment ('home' or 'work')
 
-Dependencies in dotfiles directory:
+Dependencies in templates directory:
   - Brewfile.home
   - Brewfile.work
   - docker-config.json
