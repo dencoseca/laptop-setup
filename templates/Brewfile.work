@@ -1,6 +1,5 @@
 # formulae
 brew "btop"
-brew "bmon"
 brew "jq"
 brew "watch"
 brew "tldr"
@@ -16,7 +15,6 @@ brew "docker-credential-helper"
 brew "colima"
 brew "kubectl"
 brew "dive"
-brew "lazydocker"
 brew "gh"
 
 # casks
