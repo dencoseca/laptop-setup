@@ -2,7 +2,6 @@
 brew "btop"
 brew "jq"
 brew "watch"
-brew "tldr"
 brew "tree"
 brew "starship"
 brew "git"
@@ -13,9 +12,7 @@ brew "docker-buildx"
 brew "docker-compose"
 brew "docker-credential-helper"
 brew "colima"
-brew "kubectl"
 brew "dive"
-brew "gh"
 
 # casks
 cask "alfred"
