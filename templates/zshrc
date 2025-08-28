@@ -116,10 +116,6 @@ sockswhat() {
   echo "NO_PROXY: $NO_PROXY"
 }
 
-dhc() {
-  docker inspect --format='{{json .State.Health}}' "$1" | jq
-}
-
 sweet_sweet_details() {
   get_formatted_uptime() {
     echo "$((($(date +%s) - $(sysctl -n kern.boottime | awk '{print $4}' | sed 's/,//')))) seconds" | awk '{
