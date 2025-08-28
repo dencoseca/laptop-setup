@@ -170,7 +170,11 @@ start_spinner() {
 }
 
 stop_spinner() {
-  { kill -9 $SPINNER_PID && wait; } 2> /dev/null
+  # Safely stop spinner only if it was started and is still running
+  if [ -n "${SPINNER_PID:-}" ] && kill -0 $SPINNER_PID 2> /dev/null; then
+    kill -9 $SPINNER_PID 2> /dev/null || true
+    wait $SPINNER_PID 2> /dev/null || true
+  fi
   set -m
   echo -en "\033[2K\r"
   echo "${SPINNER_MESSAGE}... done!"
@@ -228,14 +232,14 @@ print_message 'Setting Mac OS defaults'
   defaults write com.apple.dock magnification -bool true
   defaults write com.apple.dock largesize -int 60
   defaults write com.apple.dock windowtabbing -string always
-  killall Dock
+  killall Dock || true
   # finder
   defaults write com.apple.finder ShowPathbar -bool true
   defaults write com.apple.finder FXPreferredViewStyle -string clmv
   defaults write com.apple.finder _FXSortFoldersFirst -bool true
   defaults write com.apple.finder FXRemoveOldTrashItems -bool true
   defaults write com.apple.finder _FXSortFoldersFirstOnDesktop -bool true
-  killall Finder
+  killall Finder || true
   # trackpad
   defaults write com.apple.AppleMultitouchTrackpad FirstClickThreshold -int 0
   # siri
@@ -325,7 +329,9 @@ start_spinner 'Installing oh my zsh'
 stop_spinner
 
 print_message 'Backing up zshrc'
-cp "$HOME/.zshrc" "$HOME/.zshrc.bak"
+if [ -f "$HOME/.zshrc" ]; then
+  cp "$HOME/.zshrc" "$HOME/.zshrc.bak"
+fi
 
 print_loading_message
 
@@ -341,7 +347,11 @@ cat "$STARSHIP_CONFIG_FILE" > "$HOME/.config/starship.toml"
 
 print_message 'Installing Warp themes'
 mkdir -p "$HOME/.warp"
-git clone https://github.com/warpdotdev/themes.git "$HOME/.warp/themes"
+if [ -d "$HOME/.warp/themes" ]; then
+  print_message 'Warp themes already present, skipping clone'
+else
+  git clone https://github.com/warpdotdev/themes.git "$HOME/.warp/themes"
+fi
 
 
 
