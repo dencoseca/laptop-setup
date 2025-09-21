@@ -226,11 +226,11 @@ print_message 'Setting Mac OS defaults'
   defaults write -g AppleWindowTabbingMode -string always
   # dock
   defaults write com.apple.dock autohide -bool true
-  defaults write com.apple.dock tilesize -int 52
+  defaults write com.apple.dock tilesize -int 60
   defaults write com.apple.dock show-recents -bool false
   defaults write com.apple.dock show-process-indicators -bool false
   defaults write com.apple.dock magnification -bool true
-  defaults write com.apple.dock largesize -int 60
+  defaults write com.apple.dock largesize -int 70
   defaults write com.apple.dock windowtabbing -string always
   killall Dock || true
   # finder
