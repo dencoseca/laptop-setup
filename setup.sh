@@ -47,6 +47,18 @@ exit_with_message() {
   exit 1
 }
 
+confirm_step() {
+  local STEP_MESSAGE="$1"
+  echo
+  echo "==> $STEP_MESSAGE [y/n]"
+  say "$STEP_MESSAGE"
+  read -r CONFIRMATION
+  if [[ "$CONFIRMATION" == [Yy] ]]; then
+    return 0
+  fi
+  return 1
+}
+
 
 
 # ██╗   ██╗ █████╗ ██╗     ██╗██████╗  █████╗ ████████╗███████╗    ██████╗ ██╗   ██╗███╗   ██╗
@@ -185,31 +197,6 @@ trap 'stop_spinner' EXIT
 
 
 
-# ██╗  ██╗ ██████╗ ██████╗ ██████╗ ███████╗     ██████╗██╗     ██╗    ████████╗ ██████╗  ██████╗ ██╗     ███████╗
-# ╚██╗██╔╝██╔════╝██╔═══██╗██╔══██╗██╔════╝    ██╔════╝██║     ██║    ╚══██╔══╝██╔═══██╗██╔═══██╗██║     ██╔════╝
-#  ╚███╔╝ ██║     ██║   ██║██║  ██║█████╗      ██║     ██║     ██║       ██║   ██║   ██║██║   ██║██║     ███████╗
-#  ██╔██╗ ██║     ██║   ██║██║  ██║██╔══╝      ██║     ██║     ██║       ██║   ██║   ██║██║   ██║██║     ╚════██║
-# ██╔╝ ██╗╚██████╗╚██████╔╝██████╔╝███████╗    ╚██████╗███████╗██║       ██║   ╚██████╔╝╚██████╔╝███████╗███████║
-# ╚═╝  ╚═╝ ╚═════╝ ╚═════╝ ╚═════╝ ╚══════╝     ╚═════╝╚══════╝╚═╝       ╚═╝    ╚═════╝  ╚═════╝ ╚══════╝╚══════╝
-
-print_message "Checking Command Line Tools for Xcode"
-# Only run if the tools are not installed yet
-# To check that try to print the SDK path
-if ! xcode-select -p &> /dev/null; then
-  # This temporary file prompts the 'softwareupdate' utility to list the Command Line Tools
-  start_spinner "Command Line Tools for Xcode not found. Installing from software update utility"
-  {
-    touch /tmp/.com.apple.dt.CommandLineTools.installondemand.in-progress
-    version=$(softwareupdate -l | grep "\*.*Command Line" | tail -n 1 | sed 's/^[^C]* //')
-    softwareupdate -i "$version" --verbose
-  } &>> "$HOME/.xcode-select-install.log"
-  stop_spinner
-else
-  print_message "Command Line Tools for Xcode are already installed."
-fi
-
-
-
 # ███╗   ███╗ █████╗  ██████╗     ██████╗ ███████╗    ██████╗ ███████╗███████╗ █████╗ ██╗   ██╗██╗  ████████╗███████╗
 # ████╗ ████║██╔══██╗██╔════╝    ██╔═══██╗██╔════╝    ██╔══██╗██╔════╝██╔════╝██╔══██╗██║   ██║██║  ╚══██╔══╝██╔════╝
 # ██╔████╔██║███████║██║         ██║   ██║███████╗    ██║  ██║█████╗  █████╗  ███████║██║   ██║██║     ██║   ███████╗
@@ -217,37 +204,41 @@ fi
 # ██║ ╚═╝ ██║██║  ██║╚██████╗    ╚██████╔╝███████║    ██████╔╝███████╗██║     ██║  ██║╚██████╔╝███████╗██║   ███████║
 # ╚═╝     ╚═╝╚═╝  ╚═╝ ╚═════╝     ╚═════╝ ╚══════╝    ╚═════╝ ╚══════╝╚═╝     ╚═╝  ╚═╝ ╚═════╝ ╚══════╝╚═╝   ╚══════╝
 
-print_message 'Setting Mac OS defaults'
-{
-  print_log_header
-  # global
-  defaults write -g InitialKeyRepeat -int 20
-  defaults write -g KeyRepeat -int 1
-  defaults write -g AppleWindowTabbingMode -string always
-  # dock
-  defaults write com.apple.dock autohide -bool true
-  defaults write com.apple.dock tilesize -int 60
-  defaults write com.apple.dock show-recents -bool false
-  defaults write com.apple.dock show-process-indicators -bool false
-  defaults write com.apple.dock magnification -bool true
-  defaults write com.apple.dock largesize -int 70
-  defaults write com.apple.dock windowtabbing -string always
-  killall Dock || true
-  # finder
-  defaults write com.apple.finder ShowPathbar -bool true
-  defaults write com.apple.finder FXPreferredViewStyle -string clmv
-  defaults write com.apple.finder _FXSortFoldersFirst -bool true
-  defaults write com.apple.finder FXRemoveOldTrashItems -bool true
-  defaults write com.apple.finder _FXSortFoldersFirstOnDesktop -bool true
-  killall Finder || true
-  # trackpad
-  defaults write com.apple.AppleMultitouchTrackpad FirstClickThreshold -int 0
-  # siri
-  defaults write com.apple.Siri StatusMenuVisible -bool false
-} &>> "$HOME/.setting_macos_defaults.log"
+if confirm_step "Ready to set macOS defaults?"; then
+  print_message 'Setting Mac OS defaults'
+  {
+    print_log_header
+    # global
+    defaults write -g InitialKeyRepeat -int 20
+    defaults write -g KeyRepeat -int 1
+    defaults write -g AppleWindowTabbingMode -string always
+    # dock
+    defaults write com.apple.dock autohide -bool true
+    defaults write com.apple.dock tilesize -int 60
+    defaults write com.apple.dock show-recents -bool false
+    defaults write com.apple.dock show-process-indicators -bool false
+    defaults write com.apple.dock magnification -bool true
+    defaults write com.apple.dock largesize -int 70
+    defaults write com.apple.dock windowtabbing -string always
+    killall Dock || true
+    # finder
+    defaults write com.apple.finder ShowPathbar -bool true
+    defaults write com.apple.finder FXPreferredViewStyle -string clmv
+    defaults write com.apple.finder _FXSortFoldersFirst -bool true
+    defaults write com.apple.finder FXRemoveOldTrashItems -bool true
+    defaults write com.apple.finder _FXSortFoldersFirstOnDesktop -bool true
+    killall Finder || true
+    # trackpad
+    defaults write com.apple.AppleMultitouchTrackpad FirstClickThreshold -int 0
+    # siri
+    defaults write com.apple.Siri StatusMenuVisible -bool false
+  } &>> "$HOME/.setting_macos_defaults.log"
 
-print_loading_message
-print_loading_message
+  print_loading_message
+  print_loading_message
+else
+  print_message "Skipping macOS defaults."
+fi
 
 
 
@@ -258,45 +249,57 @@ print_loading_message
 # ██║██║ ╚████║███████║   ██║   ██║  ██║███████╗███████╗    ██████╔╝███████╗╚██████╔╝██║  ██║   ██║   ╚███╔███╔╝██║  ██║██║  ██║███████╗
 # ╚═╝╚═╝  ╚═══╝╚══════╝   ╚═╝   ╚═╝  ╚═╝╚══════╝╚══════╝    ╚═════╝ ╚══════╝ ╚═════╝ ╚═╝  ╚═╝   ╚═╝    ╚══╝╚══╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝
 
-start_spinner 'Installing homebrew'
-{
-  print_log_header
-  NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-} &>> "$HOME/.homebrew_install.log"
-stop_spinner
-
-print_message 'Checking for brew shellenv init'
-if [ -f "$HOME/.zprofile" ] && grep -q '/opt/homebrew/bin/brew shellenv' "$HOME/.zprofile"; then
-  print_message "Brew shellenv init already exists in $HOME/.zprofile"
-else
-  print_message "Adding brew shellenv init to $HOME/.zprofile"
+if confirm_step "Ready to install Homebrew?"; then
+  start_spinner 'Installing homebrew'
   {
-    echo
-    echo '# Set PATH, MANPATH, etc., for Homebrew.'
-    echo 'eval "$(/opt/homebrew/bin/brew shellenv)"'
-  } >> "$HOME/.zprofile"
-fi
-eval "$(/opt/homebrew/bin/brew shellenv)"
+    print_log_header
+    NONINTERACTIVE=1 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+  } &>> "$HOME/.homebrew_install.log"
+  stop_spinner
 
-print_loading_message
-print_loading_message
+  print_message 'Checking for brew shellenv init'
+  if [ -f "$HOME/.zprofile" ] && grep -q '/opt/homebrew/bin/brew shellenv' "$HOME/.zprofile"; then
+    print_message "Brew shellenv init already exists in $HOME/.zprofile"
+  else
+    print_message "Adding brew shellenv init to $HOME/.zprofile"
+    {
+      echo
+      echo '# Set PATH, MANPATH, etc., for Homebrew.'
+      echo 'eval "$(/opt/homebrew/bin/brew shellenv)"'
+    } >> "$HOME/.zprofile"
+  fi
+  eval "$(/opt/homebrew/bin/brew shellenv)"
 
-BREWFILE=''
-if [ "$ENV_FLAG" == 'home' ]; then
-  BREWFILE=$HOME_BREWFILE
+  print_loading_message
+  print_loading_message
 else
-  BREWFILE=$WORK_BREWFILE
+  print_message "Skipping Homebrew install."
 fi
-start_spinner 'Installing bloatware'
-{
-  print_log_header
-  brew bundle install --file "$BREWFILE"
-} &>> "$HOME/.brew_bundle_install.log"
-stop_spinner
 
-print_message 'Holy shit, that took ages!'
-print_loading_message
-print_loading_message
+if confirm_step "Ready to install Brew bundle packages?"; then
+  if ! command -v brew &> /dev/null; then
+    print_message "Brew not found, skipping Brew bundle install."
+  else
+    BREWFILE=''
+    if [ "$ENV_FLAG" == 'home' ]; then
+      BREWFILE=$HOME_BREWFILE
+    else
+      BREWFILE=$WORK_BREWFILE
+    fi
+    start_spinner 'Installing bloatware'
+    {
+      print_log_header
+      brew bundle install --file "$BREWFILE"
+    } &>> "$HOME/.brew_bundle_install.log"
+    stop_spinner
+
+    print_message 'Holy shit, that took ages!'
+    print_loading_message
+    print_loading_message
+  fi
+else
+  print_message "Skipping Brew bundle install."
+fi
 
 
 
@@ -307,10 +310,13 @@ print_loading_message
 # ╚██████╗╚██████╔╝██║ ╚████║   ██║   ██║  ██║██║██║ ╚████║███████╗██║  ██║    ██║  ██║╚██████╔╝██║ ╚████║   ██║   ██║██║ ╚═╝ ██║███████╗
 #  ╚═════╝ ╚═════╝ ╚═╝  ╚═══╝   ╚═╝   ╚═╝  ╚═╝╚═╝╚═╝  ╚═══╝╚══════╝╚═╝  ╚═╝    ╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═══╝   ╚═╝   ╚═╝╚═╝     ╚═╝╚══════╝
 
-print_message "Configuring Docker"
-mkdir -p "$HOME/.docker/"
-cat "$DOCKER_CONFIG_FILE" > "$HOME/.docker/config.json"
-brew services start colima
+if confirm_step "Ready to configure Docker?"; then
+  print_message "Configuring Docker"
+  mkdir -p "$HOME/.docker/"
+  cat "$DOCKER_CONFIG_FILE" > "$HOME/.docker/config.json"
+else
+  print_message "Skipping Docker configuration."
+fi
 
 
 
@@ -321,36 +327,32 @@ brew services start colima
 # ███████║██║  ██║███████╗███████╗███████╗
 # ╚══════╝╚═╝  ╚═╝╚══════╝╚══════╝╚══════╝
 
-start_spinner 'Installing oh my zsh'
-{
-  print_log_header
-  sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
-} &>> "$HOME/.oh_my_zsh_install.log"
-stop_spinner
+if confirm_step "Ready to set up the shell?"; then
+  start_spinner 'Installing oh my zsh'
+  {
+    print_log_header
+    sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
+  } &>> "$HOME/.oh_my_zsh_install.log"
+  stop_spinner
 
-print_message 'Backing up zshrc'
-if [ -f "$HOME/.zshrc" ]; then
-  cp "$HOME/.zshrc" "$HOME/.zshrc.bak"
-fi
+  print_message 'Backing up zshrc'
+  if [ -f "$HOME/.zshrc" ]; then
+    cp "$HOME/.zshrc" "$HOME/.zshrc.bak"
+  fi
 
-print_loading_message
+  print_loading_message
 
-print_message 'Customising shell'
-cat "$ZSHRC_CONFIG_FILE" > "$HOME/.zshrc"
+  print_message 'Customising shell'
+  cat "$ZSHRC_CONFIG_FILE" > "$HOME/.zshrc"
 
-print_loading_message
-print_loading_message
+  print_loading_message
+  print_loading_message
 
-print_message 'Creating starship config'
-mkdir -p "$HOME/.config/"
-cat "$STARSHIP_CONFIG_FILE" > "$HOME/.config/starship.toml"
-
-print_message 'Installing Warp themes'
-mkdir -p "$HOME/.warp"
-if [ -d "$HOME/.warp/themes" ]; then
-  print_message 'Warp themes already present, skipping clone'
+  print_message 'Creating starship config'
+  mkdir -p "$HOME/.config/"
+  cat "$STARSHIP_CONFIG_FILE" > "$HOME/.config/starship.toml"
 else
-  git clone https://github.com/warpdotdev/themes.git "$HOME/.warp/themes"
+  print_message "Skipping shell setup."
 fi
 
 
@@ -362,12 +364,32 @@ fi
 # ╚██████╔╝██║   ██║
 #  ╚═════╝ ╚═╝   ╚═╝
 
-print_message 'Configuring git global config'
-cat "$GITIGNORE_FILE" > "$HOME/.gitignore"
-cat "$GITCONFIG_FILE" > "$HOME/.gitconfig"
+if confirm_step "Ready to configure git?"; then
+  print_message 'Configuring git global config'
+  cat "$GITIGNORE_FILE" > "$HOME/.gitignore"
+  cat "$GITCONFIG_FILE" > "$HOME/.gitconfig"
 
-print_loading_message
-print_loading_message
+  print_loading_message
+  print_loading_message
+else
+  print_message "Skipping git configuration."
+fi
+
+print_message "Manual installs left for you, since the App Store wants your human fingerprints:"
+if [ "$ENV_FLAG" == 'home' ]; then
+  print_message "Home environment apps:"
+  print_message "- Amphetamine"
+  print_message "- Bear"
+  print_message "- Bitwarden"
+  print_message "- NordVPN"
+  print_message "- Things"
+else
+  print_message "Work environment apps:"
+  print_message "- Amphetamine"
+  print_message "- Bear"
+  print_message "- Bitwarden"
+  print_message "- Things"
+fi
 
 
 

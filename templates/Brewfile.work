@@ -27,8 +27,3 @@ cask "rectangle"
 cask "spotify"
 cask "warp"
 cask "gpg-suite"
-
-# mac app store
-mas "Amphetamine", id: 937984704
-mas "Bear", id: 1091189122
-mas "Bitwarden", id: 1352778147
