@@ -17,10 +17,11 @@ to afford a second home, somewhere in the mediterranean, where you can talk
 to your neighbours about how annoying taxes are.
 
 Usage:
-  sudo ./setup.sh -e <home|work>
+  ./setup.sh -e <home|work> [-y]
 
 Flags:
   -e   Required. Specify the environment ('home' or 'work')
+  -y   Optional. Assume "yes" to all prompts (non-interactive)
 
 Dependencies in templates directory:
   - Brewfile.home
@@ -49,10 +50,24 @@ exit_with_message() {
 
 confirm_step() {
   local STEP_MESSAGE="$1"
+  if [ "$AUTO_YES" -eq 1 ]; then
+    return 0
+  fi
+
   echo
   echo "==> $STEP_MESSAGE [y/n]"
   say "$STEP_MESSAGE"
-  read -r CONFIRMATION
+
+  local CONFIRMATION=""
+  if [ -t 0 ]; then
+    read -r CONFIRMATION
+  elif [ -r /dev/tty ]; then
+    read -r CONFIRMATION < /dev/tty
+  else
+    echo "No TTY available for prompt. Skipping: $STEP_MESSAGE"
+    return 1
+  fi
+
   if [[ "$CONFIRMATION" == [Yy] ]]; then
     return 0
   fi
@@ -69,9 +84,11 @@ confirm_step() {
 #   ╚═══╝  ╚═╝  ╚═╝╚══════╝╚═╝╚═════╝ ╚═╝  ╚═╝   ╚═╝   ╚══════╝    ╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═══╝
 
 ENV_FLAG=''
-while getopts ":e:" OPTION; do
+AUTO_YES=0
+while getopts ":e:y" OPTION; do
   case "${OPTION}" in
   e) ENV_FLAG=${OPTARG} ;;
+  y) AUTO_YES=1 ;;
   *)
     exit_with_message "Congratulations, you managed to screw up copying and pasting a command!"
     ;;

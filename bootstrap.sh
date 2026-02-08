@@ -68,4 +68,8 @@ fi
 print_message "Handing off to setup.sh. The Sims loading screen starts now."
 cd "$TARGET_DIR"
 chmod +x ./setup.sh
-sudo ./setup.sh -e "$ENV_FLAG"
+if [ -t 0 ]; then
+  ./setup.sh -e "$ENV_FLAG"
+else
+  ./setup.sh -e "$ENV_FLAG" -y
+fi
