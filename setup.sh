@@ -318,6 +318,20 @@ else
   print_message "Skipping Brew bundle install."
 fi
 
+if confirm_step "Ready to install pnpm?"; then
+  start_spinner 'Installing pnpm'
+  {
+    print_log_header
+    curl -fsSL https://get.pnpm.io/install.sh | sh -
+  } &>> "$HOME/.pnpm_install.log"
+  stop_spinner
+
+  print_loading_message
+  print_loading_message
+else
+  print_message "Skipping pnpm install."
+fi
+
 
 
 #  ██████╗ ██████╗ ███╗   ██╗████████╗ █████╗ ██╗███╗   ██╗███████╗██████╗     ██████╗ ██╗   ██╗███╗   ██╗████████╗██╗███╗   ███╗███████╗
