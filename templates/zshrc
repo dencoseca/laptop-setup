@@ -41,9 +41,6 @@ go_install() {
 # docker with colima
 export DOCKER_HOST="unix://$HOME/.colima/default/docker.sock"
 
-# jangle
-[ -f "$HOME/.jangle_exports" ] && source "$HOME/.jangle_exports"
-
 #------------------------------#
 #  CUSTOM ALIASES / FUNCTIONS
 #------------------------------#
