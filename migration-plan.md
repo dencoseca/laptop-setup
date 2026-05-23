@@ -13,7 +13,7 @@ Replace the current `setup.sh`-driven flow with a robust, resumable, interactive
 1. `bootstrap.sh` downloads and runs the correct release binary for host architecture (`arm64`/`amd64`).
 2. The binary provides an interactive TUI with per-stage confirmations and live progress.
 3. Non-interactive mode remains supported (`--yes`) for unattended execution.
-4. Every stage is resumable and logs to per-stage files.
+4. Every stage is resumable and emits logs into a single per-run log stream (human + structured).
 5. Existing templates remain source-of-truth inputs for generated config files.
 
 ## Technical Stack
@@ -50,7 +50,7 @@ Suggested fields:
 - `Run`: executes commands/actions
 - `CanSkip`: whether user may skip
 - `Critical`: if true, failed stage blocks later stages unless explicitly overridden
-- `LogFile`: deterministic per-stage log path
+- `LogTag`: deterministic stage tag used to filter centralized run logs
 
 ## Stage Mapping From Current Script
 Map directly to existing sections in `setup.sh`:
@@ -88,7 +88,7 @@ Primary views:
    - Abort run
 7. Final summary with:
    - Completed/skipped/failed counts
-   - Log paths
+   - Run log paths
    - manual App Store installs reminder
 
 ## Reliability and Idempotency Rules
@@ -97,7 +97,7 @@ Primary views:
 - External command failures must capture:
   - exit code
   - failing command
-  - log file path
+  - run log path + stage id/attempt context
 - Resume should restart at first non-successful stage.
 - `--yes` mode should never block for TTY interaction.
 
@@ -122,9 +122,28 @@ Implementation guidance:
 ## State and Logging
 - State directory: `~/.laptop-setup/`
 - Run file: `~/.laptop-setup/state.json`
-- Logs directory: `~/.laptop-setup/logs/<timestamp-or-run-id>/`
-- Per-stage logs: `<stage-id>.log`
-- Append a concise summary log at run end.
+- Runs directory: `~/.laptop-setup/runs/<run-id>/`
+- Human-readable run log: `run.log` (combined output across all stages)
+- Structured event log: `events.jsonl` (one JSON event per line)
+- Optional concise summary artifact at run end: `summary.json`
+
+`events.jsonl` records should include:
+- timestamp
+- level
+- run id
+- stage id
+- attempt
+- mode (`normal`/`dry-run`)
+- event type
+- command (when applicable)
+- exit code (when applicable)
+- message
+
+Logging behavior:
+- All stage output is centralized per run and tagged with `stage_id`.
+- TUI "live logs" tails `run.log` and filters by current stage tag.
+- Dry-run logs are explicitly labeled as simulated output.
+- In non-interactive (`--yes`) mode, keep file logging as source-of-truth and optionally mirror concise progress to stdout.
 
 State should include:
 - run id, start/end timestamps
@@ -148,7 +167,7 @@ Artifact strategy:
 - Use pinned GitHub release URLs.
 - Verify SHA256 checksums before execution.
 - Keep all remote script usage explicit and logged.
-- Prefer official installers when unavoidable (Homebrew, Vite+, oh-my-zsh) and isolate output in stage logs.
+- Prefer official installers when unavoidable (Homebrew, Vite+, oh-my-zsh) and isolate output in centralized run logs tagged by stage.
 
 ## Testing Strategy
 1. Unit tests:
