@@ -18,6 +18,18 @@ Replace the current `setup.sh`-driven flow with a robust, resumable, interactive
 6. User choices are collected up front, rendered as a concrete execution plan, then executed as granular stages.
 7. Brew package/app installation is driven by a generated per-run Brewfile created from the user's confirmed selection.
 
+## Messaging and Tone Policy
+- Do not carry forward humorous runtime/status copy from the current shell flow (including `templates/loading-messages.txt`).
+- Error and status messages in the migrated CLI/TUI must be concise, actionable, and professional (for example, avoid messages like `Congratulations, you managed to screw up copying and pasting a command!`).
+- One intentional exception: keep the existing humorous CLI description text in `README.md` after migration:
+
+```text
+Provides the perfect environment to ignore time, hunger, friends and family,
+most of life's responsibilities, stop blinking entirely, and eventually be able
+to afford a second home, somewhere in the mediterranean, where you can talk
+to your neighbours about how annoying taxes are.
+```
+
 ## Technical Stack
 - Language: Go (stable modern version, pinned in CI)
 - TUI libraries:
