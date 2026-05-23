@@ -57,7 +57,7 @@ Map directly to existing sections in `setup.sh`:
 1. `macos_defaults`
 2. `homebrew_install`
 3. `brew_bundle`
-4. `pnpm_install`
+4. `vite_plus_install`
 5. `docker_config`
 6. `shell_setup` (oh-my-zsh + zshrc + starship)
 7. `git_config`
@@ -148,7 +148,7 @@ Artifact strategy:
 - Use pinned GitHub release URLs.
 - Verify SHA256 checksums before execution.
 - Keep all remote script usage explicit and logged.
-- Prefer official installers when unavoidable (Homebrew, pnpm, oh-my-zsh) and isolate output in stage logs.
+- Prefer official installers when unavoidable (Homebrew, Vite+, oh-my-zsh) and isolate output in stage logs.
 
 ## Testing Strategy
 1. Unit tests:
