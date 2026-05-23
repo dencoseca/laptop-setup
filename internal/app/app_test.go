@@ -2,6 +2,7 @@ package app
 
 import (
 	"bytes"
+	"strings"
 	"testing"
 )
 
@@ -48,5 +49,28 @@ func TestParseConfigParsesSelectionFlags(t *testing.T) {
 	}
 	if len(cfg.skip) != 1 || cfg.skip[0] != "brew_bundle" {
 		t.Fatalf("unexpected skip list: %v", cfg.skip)
+	}
+}
+
+func TestParseConfigRejectsUnexpectedPositionalArgs(t *testing.T) {
+	_, err := parseConfig([]string{"--state-file", "/tmp/state.json", "extra"}, &bytes.Buffer{})
+	if err == nil {
+		t.Fatal("expected positional argument parsing error")
+	}
+	if !strings.Contains(err.Error(), "unexpected positional arguments") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestParseCSVDeduplicatesAndTrims(t *testing.T) {
+	got := parseCSV("a, b,a, ,c")
+	want := []string{"a", "b", "c"}
+	if len(got) != len(want) {
+		t.Fatalf("length mismatch: got=%v want=%v", got, want)
+	}
+	for i := range got {
+		if got[i] != want[i] {
+			t.Fatalf("value mismatch at index %d: got=%q want=%q", i, got[i], want[i])
+		}
 	}
 }
