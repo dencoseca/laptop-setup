@@ -266,7 +266,7 @@ Allowed phase statuses:
 1. Phase 1 - Foundation: `done`
 2. Phase 2 - Parity CLI Runner: `done`
 3. Phase 3 - TUI Layer: `done`
-4. Phase 4 - Bootstrap Cutover: `pending`
+4. Phase 4 - Bootstrap Cutover: `done`
 5. Phase 5 - Hardening: `pending`
 6. Phase 6 - Finalize: `pending`
 
@@ -385,6 +385,7 @@ Append one line when a phase reaches a terminal status (`done` or `blocked`):
 2026-05-23 | Phase 1 | status=done | commit=6e10949 | notes=Initialized Go module, entrypoint, and core app/stage/runner/state scaffolding with passing build verification
 2026-05-23 | Phase 2 | status=done | commit=6ceeae5 | notes=Implemented parity CLI stage runner with stage selection flags, resume-aware state transitions, and dry-run simulation behavior
 2026-05-23 | Phase 3 | status=done | commit=97cb3b1 | notes=Implemented Bubble Tea phase wizard, plan review, live execution checklist/log view, and retry/skip/abort failure actions wired to state transitions
+2026-05-23 | Phase 4 | status=done | commit=3ba8147 | notes=Cut over bootstrap.sh to architecture-aware binary download with SHA256 verification, flag forwarding, and guarded setup.sh fallback
 
 ## Definition of Done
 Global DoD is satisfied only when all items below are true:
