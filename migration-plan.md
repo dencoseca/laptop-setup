@@ -263,7 +263,7 @@ Allowed phase statuses:
 - `done`: completion gate passed
 
 ### Phase Status Ledger
-1. Phase 1 - Foundation: `pending`
+1. Phase 1 - Foundation: `done`
 2. Phase 2 - Parity CLI Runner: `pending`
 3. Phase 3 - TUI Layer: `pending`
 4. Phase 4 - Bootstrap Cutover: `pending`
@@ -382,6 +382,7 @@ Allowed phase statuses:
 Append one line when a phase reaches a terminal status (`done` or `blocked`):
 - Format: `YYYY-MM-DD | Phase N | status=<done|blocked> | commit=<sha> | notes=<short summary>`
 - Example: `2026-05-23 | Phase 2 | status=done | commit=abc1234 | notes=CLI parity and dry-run path implemented`
+2026-05-23 | Phase 1 | status=done | commit=6e10949 | notes=Initialized Go module, entrypoint, and core app/stage/runner/state scaffolding with passing build verification
 
 ## Definition of Done
 Global DoD is satisfied only when all items below are true:
