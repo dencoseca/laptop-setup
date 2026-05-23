@@ -23,7 +23,7 @@ All phases below are actionable for an implementing agent.
 5. Phase 5 - Final Summary Manual Reminder: `done`
 6. Phase 6 - Centralized Stage Output Logging: `done`
 7. Phase 7 - Integration Coverage Expansion: `done`
-8. Phase 8 - Pinned Bootstrap Release Strategy: `pending`
+8. Phase 8 - Pinned Bootstrap Release Strategy: `done`
 
 ## Phase 1 - CLI Contract Cleanup
 - Goal:
@@ -149,3 +149,4 @@ Append one line per terminal phase update:
 - `2026-05-23 | Phase 5 | status=done | commit=uncommitted | notes=Added explicit manual App Store reminder section to the final run summary while preserving stage counts and log paths, centralized reminder app list in stages, and passed go test ./....`
 - `2026-05-23 | Phase 6 | status=done | commit=uncommitted | notes=Centralized command stdout/stderr into run logs with stage+attempt context, retained command lifecycle and structured events, improved human log command/exit visibility, and added success/failure output logging tests; go test ./... passed.`
 - `2026-05-23 | Phase 7 | status=done | commit=uncommitted | notes=Expanded integration-style coverage for the --yes non-interactive end-to-end path, TUI phase prompt + review confirmation flow, brew selection to generated Brewfile and brew bundle command alignment, and resume-after-failure behavior with persisted plan/decisions; go test ./... passed.`
+- `2026-05-23 | Phase 8 | status=done | commit=uncommitted | notes=Bootstrap now defaults to pinned release tag v0.1.0 via a single script constant, retains LAPTOP_SETUP_RELEASE_TAG override support (including latest), updated README and operations docs, and passed sh bootstrap.sh --help plus go test ./....`

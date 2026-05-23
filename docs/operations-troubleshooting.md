@@ -3,6 +3,7 @@
 This runbook is for operators validating or supporting the Go-based setup flow during migration.
 Default production entrypoint is `bootstrap.sh` (binary-first). `go run` workflows are for local repository validation.
 `bootstrap.sh` intentionally has no `setup.sh` fallback path; it only runs verified release binaries and exits on bootstrap errors.
+`bootstrap.sh` defaults to pinned release tag `v0.1.0`; override with `LAPTOP_SETUP_RELEASE_TAG` (for example `v0.1.1` or `latest`) when operators need to target a different release.
 
 ## Runtime Artifacts
 

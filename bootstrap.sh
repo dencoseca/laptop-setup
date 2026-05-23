@@ -3,6 +3,7 @@
 set -eu
 
 REPO_SLUG="dencoseca/laptop-setup"
+DEFAULT_RELEASE_TAG="v0.1.0"
 CHECKSUM_FILE="checksums.txt"
 TMP_DIR=""
 DOWNLOADED_BINARY=""
@@ -21,7 +22,10 @@ Common flags:
   -h, --help                      Show usage
 
 All flags are forwarded to the downloaded `laptop-setup` binary.
-Set `LAPTOP_SETUP_RELEASE_TAG` to pin to a specific GitHub release tag.
+EOF
+  printf 'Default release tag: %s\n' "$DEFAULT_RELEASE_TAG"
+  cat <<'EOF'
+Set `LAPTOP_SETUP_RELEASE_TAG` to override (for example: v0.1.1 or latest).
 EOF
 }
 
@@ -81,7 +85,7 @@ resolve_artifact_name() {
 }
 
 release_base_url() {
-  release_tag=${LAPTOP_SETUP_RELEASE_TAG:-latest}
+  release_tag=${LAPTOP_SETUP_RELEASE_TAG:-$DEFAULT_RELEASE_TAG}
   if [ "$release_tag" = "latest" ]; then
     printf 'https://github.com/%s/releases/latest/download\n' "$REPO_SLUG"
   else
