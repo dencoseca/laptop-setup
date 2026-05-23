@@ -245,31 +245,151 @@ Artifact strategy:
    - stage skip and failure recovery
    - dry-run TUI walkthrough (confirm no system changes)
 
-## Migration Phases
-1. **Foundation**
-   - Initialize Go module and project structure.
-   - Implement stage contract, runner, logger, and state persistence.
-2. **Parity CLI Runner**
-   - Recreate all existing stage behaviors without TUI.
-   - Ensure `--yes` parity with current script.
-3. **TUI Layer**
-   - Build Bubble Tea phase decision wizard, execution-plan review, stage list, and live progress.
-   - Add failure actions (retry/skip/abort).
-4. **Bootstrap Cutover**
-   - Update `bootstrap.sh` to fetch/run binary.
-   - Keep `setup.sh` as fallback during transition.
-5. **Hardening**
-   - Add tests and VM smoke-test checklist.
-   - Document operations and troubleshooting.
-6. **Finalize**
-   - Default docs to binary flow.
-   - Mark `setup.sh` as legacy path.
+## Migration Phases (Executable Contract)
+This section is intentionally structured for fresh agent-session execution using prompts like:
+`Please execute Phase N of migration-plan.md and mark it complete.`
+
+Execution rules for each phase run:
+1. Execute only the requested phase.
+2. Respect `DependsOn`; if unmet, set phase to `blocked` with reason and stop.
+3. Keep changes scoped to the phase `Scope` and listed deliverables.
+4. Run all listed verification commands for that phase.
+5. Update `Phase Status Ledger` and `Completion Notes` in this file before finishing.
+
+Allowed phase statuses:
+- `pending`: not started
+- `in_progress`: work actively being implemented
+- `blocked`: cannot finish due to unmet dependency or failing gate
+- `done`: completion gate passed
+
+### Phase Status Ledger
+1. Phase 1 - Foundation: `pending`
+2. Phase 2 - Parity CLI Runner: `pending`
+3. Phase 3 - TUI Layer: `pending`
+4. Phase 4 - Bootstrap Cutover: `pending`
+5. Phase 5 - Hardening: `pending`
+6. Phase 6 - Finalize: `pending`
+
+### Phase 1 - Foundation
+- DependsOn: none
+- Scope:
+  - Initialize Go module and baseline project structure.
+  - Implement stage contract, command runner abstraction, logger skeleton, and state persistence skeleton.
+- OutOfScope:
+  - Full stage behavior parity.
+  - TUI screens.
+  - Bootstrap cutover.
+- Deliverables:
+  - `go.mod` and `cmd/laptop-setup/main.go`.
+  - Initial `internal/stages`, `internal/runner`, `internal/state`, and `internal/app` wiring.
+  - Minimal end-to-end invocation path that compiles.
+- Verification Commands:
+  - `go test ./...`
+- Completion Gate (all required):
+  - Repository builds/tests cleanly via verification command.
+  - Core package structure exists and is wired into a runnable entry point.
+
+### Phase 2 - Parity CLI Runner
+- DependsOn: Phase 1 `done`
+- Scope:
+  - Recreate existing setup behavior as structured stages without TUI interaction.
+  - Implement CLI flags required for execution control: `--yes`, `--resume`, `--from`, `--only`, `--skip`, `--dry-run`.
+  - Implement decision persistence + stage plan resolution in CLI mode.
+- OutOfScope:
+  - Bubble Tea views and interaction model.
+  - Bootstrap artifact download flow.
+- Deliverables:
+  - Stage implementations mapped from current behavior (`xcode_clt`, `macos_defaults`, `homebrew_install`, `brew_bundle`, `vite_plus_install`, `docker_config`, `shell_setup`, `git_config`, `manual_app_store_apps`).
+  - Resume-aware state transitions and per-stage status tracking.
+  - Dry-run simulation path with non-mutating behavior.
+- Verification Commands:
+  - `go test ./...`
+- Completion Gate (all required):
+  - CLI can execute stages end-to-end without TUI.
+  - Flag behaviors and resume flow are wired and testable.
+  - Dry-run mode does not execute mutating actions.
+
+### Phase 3 - TUI Layer
+- DependsOn: Phase 2 `done`
+- Scope:
+  - Build Bubble Tea flow for phase decisions, plan review, stage checklist, and live progress/log display.
+  - Add failure handling actions (retry/skip/abort) in UI.
+- OutOfScope:
+  - Release distribution changes in `bootstrap.sh`.
+- Deliverables:
+  - Interactive decision wizard aligned to phase model.
+  - Execution view with stage status transitions and tailed logs.
+  - Failure dialog actions integrated with runner/state.
+- Verification Commands:
+  - `go test ./...`
+- Completion Gate (all required):
+  - Interactive TUI can complete a run and show final summary.
+  - Retry/skip/abort actions are connected to execution state transitions.
+
+### Phase 4 - Bootstrap Cutover
+- DependsOn: Phase 3 `done`
+- Scope:
+  - Update `bootstrap.sh` to download architecture-correct binary release artifact.
+  - Add checksum download and SHA256 verification before execution.
+  - Keep `setup.sh` available as fallback during transition.
+- OutOfScope:
+  - Full legacy script removal.
+- Deliverables:
+  - Binary-first bootstrap path for `darwin-arm64` and `darwin-amd64`.
+  - Checksum validation and clear bootstrap failure output.
+- Verification Commands:
+  - `go test ./...`
+- Completion Gate (all required):
+  - Bootstrap path resolves artifact by architecture and verifies checksum.
+  - Script forwards flags to the binary correctly.
+
+### Phase 5 - Hardening
+- DependsOn: Phase 4 `done`
+- Scope:
+  - Expand automated test coverage and integration checks.
+  - Add/refresh operational troubleshooting documentation.
+  - Validate VM smoke-test checklist coverage.
+- OutOfScope:
+  - Default-doc workflow switch and legacy marker finalization.
+- Deliverables:
+  - Unit/integration tests covering selection logic, state/resume, dry-run, and failure paths.
+  - Documented smoke-test checklist and operator troubleshooting notes.
+- Verification Commands:
+  - `go test ./...`
+- Completion Gate (all required):
+  - Test suite passes and includes critical path coverage from Testing Strategy.
+  - Troubleshooting and operational docs are present and updated.
+
+### Phase 6 - Finalize
+- DependsOn: Phase 5 `done`
+- Scope:
+  - Make binary workflow the default documented path.
+  - Mark `setup.sh` as legacy path.
+  - Ensure migration artifacts and docs are internally consistent.
+- OutOfScope:
+  - Post-migration feature expansion.
+- Deliverables:
+  - README/docs updated to binary-first workflow.
+  - Clear legacy messaging for `setup.sh`.
+  - Final validation pass against global Definition of Done.
+- Verification Commands:
+  - `go test ./...`
+- Completion Gate (all required):
+  - Documentation defaults to binary flow.
+  - Legacy path is explicitly documented as non-default.
+
+### Completion Notes
+Append one line when a phase reaches a terminal status (`done` or `blocked`):
+- Format: `YYYY-MM-DD | Phase N | status=<done|blocked> | commit=<sha> | notes=<short summary>`
+- Example: `2026-05-23 | Phase 2 | status=done | commit=abc1234 | notes=CLI parity and dry-run path implemented`
 
 ## Definition of Done
-- New binary handles full setup flow end-to-end on a fresh macOS machine.
-- Interactive TUI phase decision prompts drive a clear stage execution flow with error recovery.
-- Non-interactive mode works for unattended runs.
-- Dry-run mode provides full UX simulation with zero machine mutation.
-- Resume works after interruption/failure.
-- Bootstrap path is binary-first and checksum-verified.
-- Documentation reflects the new default workflow.
+Global DoD is satisfied only when all items below are true:
+1. Phase status ledger shows Phases 1-6 as `done`.
+2. New binary handles full setup flow end-to-end on a fresh macOS machine.
+3. Interactive TUI phase decision prompts drive a clear stage execution flow with error recovery.
+4. Non-interactive mode works for unattended runs.
+5. Dry-run mode provides full UX simulation with zero machine mutation.
+6. Resume works after interruption/failure and reuses persisted decisions/plan.
+7. Bootstrap path is binary-first and checksum-verified.
+8. Documentation reflects the new default workflow and marks `setup.sh` as legacy.
