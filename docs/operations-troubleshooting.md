@@ -2,6 +2,7 @@
 
 This runbook is for operators validating or supporting the Go-based setup flow during migration.
 Default production entrypoint is `bootstrap.sh` (binary-first). `go run` workflows are for local repository validation.
+`bootstrap.sh` intentionally has no `setup.sh` fallback path; it only runs verified release binaries and exits on bootstrap errors.
 
 ## Runtime Artifacts
 
@@ -32,6 +33,23 @@ Use the latest `run_id` from `state.json` to locate the active run directory.
    ```
 
 ## Common Failure Cases
+
+### Bootstrap script exits before `laptop-setup` starts
+
+Symptom:
+- `bootstrap error:` includes one of:
+  - unsupported host OS/arch
+  - release artifact download failure
+  - checksum lookup/mismatch
+  - missing checksum tool (`shasum` or `sha256sum`)
+
+Action:
+1. Use the exact error text to fix the root cause.
+2. Re-run:
+   ```shell
+   sh bootstrap.sh [flags]
+   ```
+3. Do not expect fallback to legacy scripts; bootstrap intentionally fails fast until verification passes.
 
 ### No TTY in interactive mode
 

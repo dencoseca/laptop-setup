@@ -49,7 +49,6 @@ to your neighbours about how annoying taxes are.
 ├── internal/ui/                # Bubble Tea models/views
 ├── templates/                  # existing config templates (reuse)
 ├── bootstrap.sh                # downloads and executes binary
-├── setup.sh                    # legacy path (kept during migration)
 └── migration-plan.md
 ```
 
@@ -78,7 +77,7 @@ Suggested fields:
 - `StageIDs`: ordered list of stage IDs governed by this phase
 
 ## Stage Mapping From Current Behavior
-Map from existing `bootstrap.sh` + `setup.sh` behavior:
+Map from existing shell-era setup behavior:
 1. **Phase: `macos_setup` (MacOS setup)**
    - `xcode_clt`
      - Precheck: `xcode-select -p`
@@ -331,9 +330,9 @@ Allowed phase statuses:
 - Scope:
   - Update `bootstrap.sh` to download architecture-correct binary release artifact.
   - Add checksum download and SHA256 verification before execution.
-  - Keep `setup.sh` available as fallback during transition.
+  - Keep bootstrap binary-only with explicit fail-fast errors on bootstrap failures.
 - OutOfScope:
-  - Full legacy script removal.
+  - Alternative fallback execution paths.
 - Deliverables:
   - Binary-first bootstrap path for `darwin-arm64` and `darwin-amd64`.
   - Checksum validation and clear bootstrap failure output.
@@ -364,19 +363,19 @@ Allowed phase statuses:
 - DependsOn: Phase 5 `done`
 - Scope:
   - Make binary workflow the default documented path.
-  - Mark `setup.sh` as legacy path.
+  - Document no `setup.sh` fallback policy as intentional.
   - Ensure migration artifacts and docs are internally consistent.
 - OutOfScope:
   - Post-migration feature expansion.
 - Deliverables:
   - README/docs updated to binary-first workflow.
-  - Clear legacy messaging for `setup.sh`.
+  - Clear no-fallback messaging for `setup.sh`.
   - Final validation pass against global Definition of Done.
 - Verification Commands:
   - `go test ./...`
 - Completion Gate (all required):
   - Documentation defaults to binary flow.
-  - Legacy path is explicitly documented as non-default.
+  - No-fallback policy is explicitly documented.
 
 ### Completion Notes
 Append one line when a phase reaches a terminal status (`done` or `blocked`):
@@ -385,9 +384,9 @@ Append one line when a phase reaches a terminal status (`done` or `blocked`):
 2026-05-23 | Phase 1 | status=done | commit=6e10949 | notes=Initialized Go module, entrypoint, and core app/stage/runner/state scaffolding with passing build verification
 2026-05-23 | Phase 2 | status=done | commit=6ceeae5 | notes=Implemented parity CLI stage runner with stage selection flags, resume-aware state transitions, and dry-run simulation behavior
 2026-05-23 | Phase 3 | status=done | commit=97cb3b1 | notes=Implemented Bubble Tea phase wizard, plan review, live execution checklist/log view, and retry/skip/abort failure actions wired to state transitions
-2026-05-23 | Phase 4 | status=done | commit=3ba8147 | notes=Cut over bootstrap.sh to architecture-aware binary download with SHA256 verification, flag forwarding, and guarded setup.sh fallback
+2026-05-23 | Phase 4 | status=done | commit=3ba8147 | notes=Cut over bootstrap.sh to architecture-aware binary download with SHA256 verification, flag forwarding, and clear bootstrap failure output
 2026-05-23 | Phase 5 | status=done | commit=uncommitted | notes=Expanded critical path tests for dry-run/resume/failure handling and added operator troubleshooting plus VM smoke-test docs
-2026-05-23 | Phase 6 | status=done | commit=uncommitted | notes=Updated documentation to binary-first workflow and marked setup.sh as explicit legacy path
+2026-05-23 | Phase 6 | status=done | commit=uncommitted | notes=Updated documentation to binary-first workflow with explicit no-fallback bootstrap policy
 
 ## Definition of Done
 Global DoD is satisfied only when all items below are true:
@@ -398,4 +397,4 @@ Global DoD is satisfied only when all items below are true:
 5. Dry-run mode provides full UX simulation with zero machine mutation.
 6. Resume works after interruption/failure and reuses persisted decisions/plan.
 7. Bootstrap path is binary-first and checksum-verified.
-8. Documentation reflects the new default workflow and marks `setup.sh` as legacy.
+8. Documentation reflects the new default workflow and states there is no `setup.sh` fallback path.

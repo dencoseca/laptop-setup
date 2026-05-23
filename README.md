@@ -11,6 +11,7 @@ sh bootstrap.sh
 ```
 
 `bootstrap.sh` is the default entrypoint. It downloads the release binary for your macOS architecture, verifies SHA256 checksums, then executes `laptop-setup`.
+There is intentionally no `setup.sh` fallback path: bootstrap is binary-only and fails fast when download or verification prerequisites are not met.
 
 For non-interactive use:
 ```shell
