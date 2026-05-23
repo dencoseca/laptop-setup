@@ -28,6 +28,16 @@ type config struct {
 	statePath string
 }
 
+var (
+	defaultCatalogFn       = stages.DefaultCatalog
+	resolveSelectedBrewIDs = stages.ResolveSelectedBrewIDs
+	newCommandRunner       = func() runner.CommandRunner { return runner.NewOSCommandRunner() }
+	uiRun                  = ui.Run
+	executeRun             = execution.Execute
+	getwd                  = os.Getwd
+	userHomeDirectory      = os.UserHomeDir
+)
+
 func Run(ctx context.Context, args []string, stdout io.Writer, stderr io.Writer) error {
 	cfg, err := parseConfig(args, stderr)
 	if err != nil {
@@ -63,16 +73,16 @@ func Run(ctx context.Context, args []string, stdout io.Writer, stderr io.Writer)
 			return errors.New("interactive mode requires a TTY; rerun with --yes for non-interactive execution")
 		}
 
-		repoRoot, err := os.Getwd()
+		repoRoot, err := getwd()
 		if err != nil {
 			return fmt.Errorf("resolve repository root: %w", err)
 		}
-		homeDir, err := os.UserHomeDir()
+		homeDir, err := userHomeDirectory()
 		if err != nil {
 			return fmt.Errorf("resolve home directory: %w", err)
 		}
 
-		return ui.Run(ctx, ui.Options{
+		return uiRun(ctx, ui.Options{
 			Config: ui.Config{
 				Resume: cfg.resume,
 				DryRun: cfg.dryRun,
@@ -82,11 +92,11 @@ func Run(ctx context.Context, args []string, stdout io.Writer, stderr io.Writer)
 			},
 			Store:     store,
 			Current:   current,
-			Catalog:   stages.DefaultCatalog(),
+			Catalog:   defaultCatalogFn(),
 			RepoRoot:  repoRoot,
 			HomeDir:   homeDir,
 			Out:       stdout,
-			Commander: runner.NewOSCommandRunner(),
+			Commander: newCommandRunner(),
 		})
 	}
 
@@ -100,12 +110,12 @@ func runNonInteractive(
 	current *state.RunState,
 	stdout io.Writer,
 ) error {
-	catalog := stages.DefaultCatalog()
-	repoRoot, err := os.Getwd()
+	catalog := defaultCatalogFn()
+	repoRoot, err := getwd()
 	if err != nil {
 		return fmt.Errorf("resolve repository root: %w", err)
 	}
-	homeDir, err := os.UserHomeDir()
+	homeDir, err := userHomeDirectory()
 	if err != nil {
 		return fmt.Errorf("resolve home directory: %w", err)
 	}
@@ -125,7 +135,7 @@ func runNonInteractive(
 		if resolveErr != nil {
 			return resolveErr
 		}
-		selectedIDs, selectErr := stages.ResolveSelectedBrewIDs(repoRoot)
+		selectedIDs, selectErr := resolveSelectedBrewIDs(repoRoot)
 		if selectErr != nil {
 			return selectErr
 		}
@@ -150,7 +160,7 @@ func runNonInteractive(
 		runState.Decisions[stages.DecisionSelectedStageIDs] = append([]string(nil), runState.ResolvedPlan...)
 	}
 	if len(runState.SelectedIDs) == 0 {
-		selectedIDs, selectErr := stages.ResolveSelectedBrewIDs(repoRoot)
+		selectedIDs, selectErr := resolveSelectedBrewIDs(repoRoot)
 		if selectErr != nil {
 			return selectErr
 		}
@@ -186,7 +196,7 @@ func runNonInteractive(
 
 	logger := runner.NewEventLogger(io.MultiWriter(stdout, humanLog), eventLog)
 
-	return execution.Execute(ctx, execution.Options{
+	return executeRun(ctx, execution.Options{
 		Store:         store,
 		RunState:      runState,
 		Catalog:       catalog,
@@ -194,7 +204,7 @@ func runNonInteractive(
 		RepoRoot:      repoRoot,
 		HomeDir:       homeDir,
 		RunDir:        runDir,
-		CommandRunner: runner.NewOSCommandRunner(),
+		CommandRunner: newCommandRunner(),
 		Logger:        logger,
 	})
 }

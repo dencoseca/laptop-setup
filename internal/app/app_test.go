@@ -2,8 +2,16 @@ package app
 
 import (
 	"bytes"
+	"context"
+	"os"
+	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
+
+	"github.com/dencoseca/laptop-setup/internal/runner"
+	"github.com/dencoseca/laptop-setup/internal/stages"
+	"github.com/dencoseca/laptop-setup/internal/state"
 )
 
 func TestParseConfigAllowsInteractiveDefaults(t *testing.T) {
@@ -68,5 +76,123 @@ func TestParseCSVDeduplicatesAndTrims(t *testing.T) {
 		if got[i] != want[i] {
 			t.Fatalf("value mismatch at index %d: got=%q want=%q", i, got[i], want[i])
 		}
+	}
+}
+
+type noOpCommandRunner struct{}
+
+func (r *noOpCommandRunner) Run(context.Context, runner.Command) (runner.Result, error) {
+	return runner.Result{}, nil
+}
+
+func TestRunNonInteractiveEndToEndPath(t *testing.T) {
+	homeDir := t.TempDir()
+	repoRoot := t.TempDir()
+	t.Setenv("HOME", homeDir)
+
+	statePath := filepath.Join(t.TempDir(), "state.json")
+	store := state.NewStore(statePath)
+
+	origCatalogFn := defaultCatalogFn
+	origResolveSelected := resolveSelectedBrewIDs
+	origNewRunner := newCommandRunner
+	origGetwd := getwd
+	origHome := userHomeDirectory
+	t.Cleanup(func() {
+		defaultCatalogFn = origCatalogFn
+		resolveSelectedBrewIDs = origResolveSelected
+		newCommandRunner = origNewRunner
+		getwd = origGetwd
+		userHomeDirectory = origHome
+	})
+
+	firstRunCalls := 0
+	secondRunCalls := 0
+	defaultCatalogFn = func() []stages.Stage {
+		return []stages.Stage{
+			{
+				ID:      "first",
+				Title:   "First",
+				CanSkip: true,
+				Precheck: func(context.Context, stages.ExecutionContext) (stages.CheckResult, error) {
+					return stages.CheckResult{Satisfied: false}, nil
+				},
+				Run: func(context.Context, stages.ExecutionContext) error {
+					firstRunCalls++
+					return nil
+				},
+				Simulate: func(context.Context, stages.ExecutionContext) error { return nil },
+			},
+			{
+				ID:      "second",
+				Title:   "Second",
+				CanSkip: true,
+				Precheck: func(context.Context, stages.ExecutionContext) (stages.CheckResult, error) {
+					return stages.CheckResult{Satisfied: true, Message: "already configured"}, nil
+				},
+				Run: func(context.Context, stages.ExecutionContext) error {
+					secondRunCalls++
+					return nil
+				},
+				Simulate: func(context.Context, stages.ExecutionContext) error { return nil },
+			},
+		}
+	}
+	resolveSelectedBrewIDs = func(string) ([]string, error) {
+		return []string{"go", "warp"}, nil
+	}
+	newCommandRunner = func() runner.CommandRunner { return &noOpCommandRunner{} }
+	getwd = func() (string, error) { return repoRoot, nil }
+	userHomeDirectory = func() (string, error) { return homeDir, nil }
+
+	var stdout bytes.Buffer
+	err := runNonInteractive(context.Background(), config{
+		yes:       true,
+		statePath: statePath,
+	}, store, nil, &stdout)
+	if err != nil {
+		t.Fatalf("runNonInteractive returned error: %v", err)
+	}
+
+	if firstRunCalls != 1 {
+		t.Fatalf("expected first stage to execute once, got %d", firstRunCalls)
+	}
+	if secondRunCalls != 0 {
+		t.Fatalf("expected prechecked stage not to run, got %d", secondRunCalls)
+	}
+
+	loaded, err := store.Load(context.Background())
+	if err != nil {
+		t.Fatalf("load persisted state: %v", err)
+	}
+	if loaded == nil {
+		t.Fatal("expected persisted run state")
+	}
+
+	if !slices.Equal(loaded.ResolvedPlan, []string{"first", "second"}) {
+		t.Fatalf("resolved plan mismatch: %v", loaded.ResolvedPlan)
+	}
+	if !slices.Equal(loaded.SelectedIDs, []string{"go", "warp"}) {
+		t.Fatalf("selected brew ids mismatch: %v", loaded.SelectedIDs)
+	}
+	if status := loaded.Stages["first"].Status; status != string(stages.StatusSuccess) {
+		t.Fatalf("first stage status mismatch: %q", status)
+	}
+	if status := loaded.Stages["second"].Status; status != string(stages.StatusAlreadyDone) {
+		t.Fatalf("second stage status mismatch: %q", status)
+	}
+	if got := stages.NodeToolchainFromDecisions(loaded.Decisions); got != stages.NodeToolchainVitePlus {
+		t.Fatalf("default node toolchain mismatch: %q", got)
+	}
+
+	runDir, err := state.RunDir(loaded.RunID)
+	if err != nil {
+		t.Fatalf("resolve run dir: %v", err)
+	}
+	if _, err = os.Stat(filepath.Join(runDir, "run.log")); err != nil {
+		t.Fatalf("expected run log to exist: %v", err)
+	}
+	if _, err = os.Stat(filepath.Join(runDir, "events.jsonl")); err != nil {
+		t.Fatalf("expected events log to exist: %v", err)
 	}
 }

@@ -6,8 +6,11 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/charmbracelet/bubbles/textinput"
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/dencoseca/laptop-setup/internal/runner"
 	"github.com/dencoseca/laptop-setup/internal/stages"
 	"github.com/dencoseca/laptop-setup/internal/state"
 )
@@ -207,6 +210,246 @@ func TestViewSummaryIncludesManualAppStoreReminders(t *testing.T) {
 	for _, item := range stages.ManualAppStoreApps() {
 		if !strings.Contains(summary, "- "+item) {
 			t.Fatalf("expected manual app %q in summary, got %q", item, summary)
+		}
+	}
+}
+
+type noOpRunner struct{}
+
+func (r *noOpRunner) Run(context.Context, runner.Command) (runner.Result, error) {
+	return runner.Result{}, nil
+}
+
+func sendEnter(t *testing.T, m model) model {
+	t.Helper()
+	next, _ := m.updateKey(tea.KeyMsg{Type: tea.KeyEnter})
+	updated, ok := next.(model)
+	if !ok {
+		t.Fatalf("expected model type after update, got %T", next)
+	}
+	return updated
+}
+
+func TestPromptFlowReachesReviewScreen(t *testing.T) {
+	m := model{
+		screen: screenWelcome,
+		macOSOptions: []toggleOption{
+			{ID: "xcode_clt", Title: "Xcode", Selected: true},
+		},
+		installOptions: []toggleOption{
+			{ID: "brew_bundle", Title: "Brew Bundle", Selected: true},
+		},
+		brewEntries: []stages.BrewEntry{{ID: "go", Kind: "brew"}},
+		brewSelected: map[string]bool{
+			"go": true,
+		},
+		devOptions: []toggleOption{
+			{ID: "git_config", Title: "Git", Selected: true},
+		},
+		nodeOptions: []selectOption{
+			{ID: stages.NodeToolchainVitePlus, Title: "vite+"},
+			{ID: stages.NodeToolchainNvmPnpm, Title: "pnpm + nvm"},
+		},
+		dockerOptions: []selectOption{
+			{ID: stages.DockerRuntimeColima, Title: "colima"},
+		},
+		shellOptions: []toggleOption{
+			{ID: stages.DecisionShellInstallOhMyZsh, Title: "Install oh-my-zsh", Selected: true},
+		},
+		gitModeOptions: []selectOption{
+			{ID: stages.GitConfigModeTemplate, Title: "template"},
+		},
+		manualOptions: []toggleOption{
+			{ID: "manual_app_store_apps", Title: "Manual", Selected: true},
+		},
+	}
+
+	m = sendEnter(t, m)
+	if m.screen != screenMacOS {
+		t.Fatalf("expected macOS screen, got %v", m.screen)
+	}
+	m = sendEnter(t, m)
+	if m.screen != screenInstall {
+		t.Fatalf("expected install screen, got %v", m.screen)
+	}
+	m = sendEnter(t, m)
+	if m.screen != screenBrew {
+		t.Fatalf("expected brew screen, got %v", m.screen)
+	}
+	m = sendEnter(t, m)
+	if m.screen != screenDevTools {
+		t.Fatalf("expected dev tools screen, got %v", m.screen)
+	}
+	m = sendEnter(t, m)
+	if m.screen != screenNodeToolchain {
+		t.Fatalf("expected node screen, got %v", m.screen)
+	}
+	m = sendEnter(t, m)
+	if m.screen != screenDockerRuntime {
+		t.Fatalf("expected docker screen, got %v", m.screen)
+	}
+	m = sendEnter(t, m)
+	if m.screen != screenShellOptions {
+		t.Fatalf("expected shell options screen, got %v", m.screen)
+	}
+	m = sendEnter(t, m)
+	if m.screen != screenGitConfig {
+		t.Fatalf("expected git config screen, got %v", m.screen)
+	}
+	m = sendEnter(t, m)
+	if m.screen != screenManual {
+		t.Fatalf("expected manual screen, got %v", m.screen)
+	}
+	m = sendEnter(t, m)
+	if m.screen != screenReview {
+		t.Fatalf("expected review screen, got %v", m.screen)
+	}
+}
+
+func TestReviewEnterBlocksExecutionWhenPlanInvalid(t *testing.T) {
+	m := model{
+		ctx:    context.Background(),
+		screen: screenReview,
+		catalog: []stages.Stage{
+			{ID: "brew_bundle", Title: "Brew Bundle"},
+		},
+		stageMap: map[string]stages.Stage{
+			"brew_bundle": {ID: "brew_bundle", Title: "Brew Bundle"},
+		},
+		installOptions: []toggleOption{
+			{ID: "brew_bundle", Title: "Brew Bundle", Selected: true},
+		},
+		brewEntries:   []stages.BrewEntry{},
+		brewSelected:  map[string]bool{},
+		nodeOptions:   []selectOption{{ID: stages.NodeToolchainVitePlus, Title: "vite+"}},
+		dockerOptions: []selectOption{{ID: stages.DockerRuntimeColima, Title: "colima"}},
+		gitModeOptions: []selectOption{
+			{ID: stages.GitConfigModeTemplate, Title: "template"},
+		},
+		stageStatuses: make(map[string]state.StageStatus),
+	}
+
+	m = sendEnter(t, m)
+
+	if m.screen != screenReview {
+		t.Fatalf("expected to stay on review screen, got %v", m.screen)
+	}
+	if m.executing {
+		t.Fatalf("expected execution not to start")
+	}
+	if !strings.Contains(m.planError, "brew_bundle selected with no Brew entries") {
+		t.Fatalf("expected plan validation error, got %q", m.planError)
+	}
+}
+
+func TestReviewEnterConfirmsPlanAndStartsExecution(t *testing.T) {
+	homeDir := t.TempDir()
+	t.Setenv("HOME", homeDir)
+
+	store := state.NewStore(filepath.Join(t.TempDir(), "state.json"))
+	catalog := []stages.Stage{
+		{
+			ID:      "xcode_clt",
+			Title:   "Xcode",
+			CanSkip: true,
+			Precheck: func(context.Context, stages.ExecutionContext) (stages.CheckResult, error) {
+				return stages.CheckResult{Satisfied: true, Message: "already done"}, nil
+			},
+			Run:      func(context.Context, stages.ExecutionContext) error { return nil },
+			Simulate: func(context.Context, stages.ExecutionContext) error { return nil },
+		},
+		{
+			ID:      "brew_bundle",
+			Title:   "Brew Bundle",
+			CanSkip: true,
+			Precheck: func(context.Context, stages.ExecutionContext) (stages.CheckResult, error) {
+				return stages.CheckResult{Satisfied: true, Message: "already done"}, nil
+			},
+			Run:      func(context.Context, stages.ExecutionContext) error { return nil },
+			Simulate: func(context.Context, stages.ExecutionContext) error { return nil },
+		},
+	}
+	stageMap := map[string]stages.Stage{}
+	for _, stage := range catalog {
+		stageMap[stage.ID] = stage
+	}
+
+	m := model{
+		ctx:      context.Background(),
+		screen:   screenReview,
+		store:    store,
+		catalog:  catalog,
+		stageMap: stageMap,
+		runner:   &noOpRunner{},
+		repoRoot: t.TempDir(),
+		homeDir:  homeDir,
+		macOSOptions: []toggleOption{
+			{ID: "xcode_clt", Title: "Xcode", Selected: true},
+		},
+		installOptions: []toggleOption{
+			{ID: "brew_bundle", Title: "Brew Bundle", Selected: true},
+		},
+		brewEntries: []stages.BrewEntry{{ID: "go", Kind: "brew"}},
+		brewSelected: map[string]bool{
+			"go": true,
+		},
+		nodeOptions: []selectOption{
+			{ID: stages.NodeToolchainVitePlus, Title: "vite+"},
+		},
+		dockerOptions: []selectOption{
+			{ID: stages.DockerRuntimeColima, Title: "colima"},
+		},
+		shellOptions: []toggleOption{
+			{ID: stages.DecisionShellInstallOhMyZsh, Title: "Install oh-my-zsh", Selected: true},
+		},
+		gitModeOptions: []selectOption{
+			{ID: stages.GitConfigModeTemplate, Title: "template"},
+		},
+		stageStatuses: make(map[string]state.StageStatus),
+	}
+
+	next, cmd := m.updateKey(tea.KeyMsg{Type: tea.KeyEnter})
+	updated, ok := next.(model)
+	if !ok {
+		t.Fatalf("expected model type after update, got %T", next)
+	}
+
+	if updated.screen != screenExecuting {
+		t.Fatalf("expected executing screen, got %v", updated.screen)
+	}
+	if !updated.executing {
+		t.Fatalf("expected executing=true")
+	}
+	if updated.runState == nil {
+		t.Fatal("expected run state to be initialized")
+	}
+	if len(updated.stageOrder) == 0 {
+		t.Fatal("expected stage order to be set from plan")
+	}
+	if cmd == nil {
+		t.Fatal("expected execution command to be created")
+	}
+	startup := cmd()
+	batch, ok := startup.(tea.BatchMsg)
+	if !ok {
+		t.Fatalf("expected batch startup command, got %#v", startup)
+	}
+	if len(batch) == 0 {
+		t.Fatal("expected non-empty startup command batch")
+	}
+	if msg := batch[0](); msg != nil {
+		t.Fatalf("expected worker start command to return nil, got %#v", msg)
+	}
+
+	timeout := time.After(2 * time.Second)
+	for {
+		select {
+		case _, ok := <-updated.updates:
+			if !ok {
+				return
+			}
+		case <-timeout:
+			t.Fatal("execution worker did not finish in time")
 		}
 	}
 }

@@ -435,3 +435,140 @@ func TestExecutePassesPersistedDecisionsToStageContext(t *testing.T) {
 		t.Fatalf("expected decision in stage context, got %q", seenValue)
 	}
 }
+
+func TestExecuteResumeAfterFailureUsesPersistedPlanAndDecisions(t *testing.T) {
+	store := state.NewStore(filepath.Join(t.TempDir(), "state.json"))
+	runState := &state.RunState{
+		RunID:        state.NewRunID(time.Now()),
+		StartAt:      time.Now().UTC(),
+		Mode:         "normal",
+		ResolvedPlan: []string{"first", "second", "third"},
+		Decisions: map[string]any{
+			stages.DecisionNodeToolchain: stages.NodeToolchainNvmPnpm,
+		},
+		Stages: map[string]state.StageStatus{},
+	}
+	if err := store.Save(context.Background(), runState); err != nil {
+		t.Fatalf("save initial state: %v", err)
+	}
+
+	failSecond := true
+	firstCalls := 0
+	secondCalls := 0
+	thirdCalls := 0
+	seenDecision := ""
+	catalog := []stages.Stage{
+		{
+			ID:      "first",
+			Title:   "First",
+			CanSkip: true,
+			Precheck: func(context.Context, stages.ExecutionContext) (stages.CheckResult, error) {
+				return stages.CheckResult{}, nil
+			},
+			Run: func(context.Context, stages.ExecutionContext) error {
+				firstCalls++
+				return nil
+			},
+			Simulate: func(context.Context, stages.ExecutionContext) error { return nil },
+		},
+		{
+			ID:      "second",
+			Title:   "Second",
+			CanSkip: true,
+			Precheck: func(context.Context, stages.ExecutionContext) (stages.CheckResult, error) {
+				return stages.CheckResult{}, nil
+			},
+			Run: func(_ context.Context, execCtx stages.ExecutionContext) error {
+				secondCalls++
+				if failSecond {
+					return errors.New("intentional interruption")
+				}
+				seenDecision = stages.NodeToolchainFromDecisions(execCtx.Decisions)
+				return nil
+			},
+			Simulate: func(context.Context, stages.ExecutionContext) error { return nil },
+		},
+		{
+			ID:      "third",
+			Title:   "Third",
+			CanSkip: true,
+			Precheck: func(context.Context, stages.ExecutionContext) (stages.CheckResult, error) {
+				return stages.CheckResult{}, nil
+			},
+			Run: func(context.Context, stages.ExecutionContext) error {
+				thirdCalls++
+				return nil
+			},
+			Simulate: func(context.Context, stages.ExecutionContext) error { return nil },
+		},
+	}
+
+	logger := runner.NewEventLogger(&bytes.Buffer{}, &bytes.Buffer{})
+	err := Execute(context.Background(), Options{
+		Store:         store,
+		RunState:      runState,
+		Catalog:       catalog,
+		DryRun:        false,
+		RepoRoot:      t.TempDir(),
+		HomeDir:       t.TempDir(),
+		RunDir:        t.TempDir(),
+		CommandRunner: runner.NewOSCommandRunner(),
+		Logger:        logger,
+	})
+	if err == nil {
+		t.Fatal("expected first execution to fail")
+	}
+	if !strings.Contains(err.Error(), "stage failed for second") {
+		t.Fatalf("unexpected first execution error: %v", err)
+	}
+
+	persisted, err := store.Load(context.Background())
+	if err != nil {
+		t.Fatalf("load persisted failed state: %v", err)
+	}
+	if persisted == nil {
+		t.Fatal("expected persisted run state after failure")
+	}
+	if status := persisted.Stages["first"].Status; status != string(stages.StatusSuccess) {
+		t.Fatalf("expected first stage success before resume, got %q", status)
+	}
+	if status := persisted.Stages["second"].Status; status != string(stages.StatusFailed) {
+		t.Fatalf("expected second stage failed before resume, got %q", status)
+	}
+
+	failSecond = false
+	logger = runner.NewEventLogger(&bytes.Buffer{}, &bytes.Buffer{})
+	err = Execute(context.Background(), Options{
+		Store:         store,
+		RunState:      persisted,
+		Catalog:       catalog,
+		DryRun:        false,
+		RepoRoot:      t.TempDir(),
+		HomeDir:       t.TempDir(),
+		RunDir:        t.TempDir(),
+		CommandRunner: runner.NewOSCommandRunner(),
+		Logger:        logger,
+	})
+	if err != nil {
+		t.Fatalf("resume execution returned error: %v", err)
+	}
+
+	if firstCalls != 1 {
+		t.Fatalf("expected first stage to run once total, got %d", firstCalls)
+	}
+	if secondCalls != 2 {
+		t.Fatalf("expected second stage to run twice total, got %d", secondCalls)
+	}
+	if thirdCalls != 1 {
+		t.Fatalf("expected third stage to run once after resume, got %d", thirdCalls)
+	}
+	if seenDecision != stages.NodeToolchainNvmPnpm {
+		t.Fatalf("expected resumed stage to read persisted decision, got %q", seenDecision)
+	}
+	if status := persisted.Stages["second"].Status; status != string(stages.StatusSuccess) {
+		t.Fatalf("expected second stage success after resume, got %q", status)
+	}
+	if status := persisted.Stages["third"].Status; status != string(stages.StatusSuccess) {
+		t.Fatalf("expected third stage success after resume, got %q", status)
+	}
+}

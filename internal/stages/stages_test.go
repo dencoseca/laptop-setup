@@ -144,6 +144,77 @@ func TestGenerateBrewfileRejectsEmptyOutput(t *testing.T) {
 	}
 }
 
+func TestRunBrewBundleUsesGeneratedBrewfileMatchingSelectedEntries(t *testing.T) {
+	repoRoot := t.TempDir()
+	runDir := t.TempDir()
+	templatesDir := filepath.Join(repoRoot, "templates")
+	if err := os.MkdirAll(templatesDir, 0o755); err != nil {
+		t.Fatalf("create templates directory: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(templatesDir, "Brewfile"), []byte(strings.Join([]string{
+		`brew "go"`,
+		`brew "jq"`,
+		`cask "warp"`,
+		"",
+	}, "\n")), 0o644); err != nil {
+		t.Fatalf("write template Brewfile: %v", err)
+	}
+
+	binDir := filepath.Join(t.TempDir(), "bin")
+	if err := os.MkdirAll(binDir, 0o755); err != nil {
+		t.Fatalf("create bin directory: %v", err)
+	}
+	brewPath := filepath.Join(binDir, "brew")
+	if err := os.WriteFile(brewPath, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatalf("write fake brew binary: %v", err)
+	}
+	t.Setenv("PATH", binDir+":"+os.Getenv("PATH"))
+
+	runnerStub := &recordingRunner{}
+	generatedPath := ""
+	err := runBrewBundle(context.Background(), ExecutionContext{
+		Runner:          runnerStub,
+		RepoRoot:        repoRoot,
+		RunDir:          runDir,
+		SelectedBrewIDs: []string{"jq", "warp"},
+		SetGeneratedBrewfilePath: func(path string) {
+			generatedPath = path
+		},
+	})
+	if err != nil {
+		t.Fatalf("runBrewBundle returned error: %v", err)
+	}
+	if len(runnerStub.commands) != 1 {
+		t.Fatalf("expected one brew invocation, got %d", len(runnerStub.commands))
+	}
+	command := runnerStub.commands[0]
+	if command.Name != "brew" {
+		t.Fatalf("expected brew command, got %q", command.Name)
+	}
+	if len(command.Args) != 4 || command.Args[0] != "bundle" || command.Args[1] != "install" || command.Args[2] != "--file" {
+		t.Fatalf("unexpected brew args: %v", command.Args)
+	}
+	if generatedPath == "" {
+		t.Fatal("expected generated Brewfile path to be recorded")
+	}
+	if command.Args[3] != generatedPath {
+		t.Fatalf("command file path mismatch: got=%q want=%q", command.Args[3], generatedPath)
+	}
+
+	entries, err := LoadBrewEntries(generatedPath)
+	if err != nil {
+		t.Fatalf("load generated Brewfile: %v", err)
+	}
+	if len(entries) != 2 {
+		t.Fatalf("expected 2 generated entries, got %d", len(entries))
+	}
+	gotIDs := []string{entries[0].ID, entries[1].ID}
+	wantIDs := []string{"jq", "warp"}
+	if !slices.Equal(gotIDs, wantIDs) {
+		t.Fatalf("generated brew entries mismatch: got=%v want=%v", gotIDs, wantIDs)
+	}
+}
+
 func TestResolveSelectedBrewIDs(t *testing.T) {
 	repoRoot := t.TempDir()
 	templatesDir := filepath.Join(repoRoot, "templates")
