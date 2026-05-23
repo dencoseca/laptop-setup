@@ -16,7 +16,7 @@ func TestStoreSaveLoadRoundTrip(t *testing.T) {
 		Mode:         "normal",
 		ResolvedPlan: []string{"a", "b"},
 		Decisions: map[string]any{
-			"environment": "work",
+			"selected_stage_ids": []string{"a", "b"},
 		},
 		SelectedIDs: []string{"go", "jq"},
 		Stages: map[string]StageStatus{
@@ -42,7 +42,7 @@ func TestStoreSaveLoadRoundTrip(t *testing.T) {
 	if loaded.Mode != "normal" {
 		t.Fatalf("mode mismatch: %s", loaded.Mode)
 	}
-	if got := loaded.Decisions["environment"]; got != "work" {
+	if got := loaded.Decisions["selected_stage_ids"]; got == nil {
 		t.Fatalf("decision mismatch: %v", got)
 	}
 	if loaded.Stages["a"].Status != "success" {

@@ -38,7 +38,6 @@ type Options struct {
 	RunState      *state.RunState
 	Catalog       []stages.Stage
 	DryRun        bool
-	Environment   string
 	RepoRoot      string
 	HomeDir       string
 	RunDir        string
@@ -150,7 +149,6 @@ func Execute(ctx context.Context, options Options) error {
 				RunDir:                options.RunDir,
 				RepoRoot:              options.RepoRoot,
 				HomeDir:               options.HomeDir,
-				Environment:           options.Environment,
 				SelectedBrewIDs:       runState.SelectedIDs,
 				GeneratedBrewfilePath: runState.GeneratedFile,
 				SetGeneratedBrewfilePath: func(path string) {

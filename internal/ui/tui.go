@@ -28,12 +28,11 @@ var (
 )
 
 type Config struct {
-	Resume      bool
-	DryRun      bool
-	Environment string
-	From        string
-	Only        []string
-	Skip        []string
+	Resume bool
+	DryRun bool
+	From   string
+	Only   []string
+	Skip   []string
 }
 
 type Options struct {
@@ -51,7 +50,6 @@ type screen int
 
 const (
 	screenWelcome screen = iota
-	screenEnvironment
 	screenMacOS
 	screenInstall
 	screenBrew
@@ -97,7 +95,6 @@ type failureRequestMsg struct {
 
 type executionSetup struct {
 	runState     *state.RunState
-	environment  string
 	dryRun       bool
 	humanLogPath string
 	eventsPath   string
@@ -122,9 +119,6 @@ type model struct {
 	screen    screen
 	cursor    int
 	resumeRun bool
-
-	environmentChoices []string
-	environment        string
 
 	macOSOptions   []toggleOption
 	installOptions []toggleOption
@@ -172,27 +166,25 @@ func Run(ctx context.Context, options Options) error {
 	spin.Spinner = spinner.Dot
 
 	m := model{
-		ctx:                runCtx,
-		cancel:             cancel,
-		config:             options.Config,
-		store:              options.Store,
-		current:            options.Current,
-		catalog:            options.Catalog,
-		stageMap:           stageMap,
-		runner:             options.Commander,
-		repoRoot:           options.RepoRoot,
-		homeDir:            options.HomeDir,
-		screen:             screenWelcome,
-		resumeRun:          options.Config.Resume,
-		environmentChoices: []string{"home", "work"},
-		environment:        defaultEnvironment(options.Config, options.Current),
-		macOSOptions:       optionsForStageIDs(options.Catalog, phaseMacOSStages),
-		installOptions:     optionsForStageIDs(options.Catalog, phaseInstallStages),
-		devOptions:         optionsForStageIDs(options.Catalog, phaseDevStages),
-		manualOptions:      optionsForStageIDs(options.Catalog, phaseManualStages),
-		brewSelected:       make(map[string]bool),
-		stageStatuses:      make(map[string]state.StageStatus),
-		spinner:            spin,
+		ctx:            runCtx,
+		cancel:         cancel,
+		config:         options.Config,
+		store:          options.Store,
+		current:        options.Current,
+		catalog:        options.Catalog,
+		stageMap:       stageMap,
+		runner:         options.Commander,
+		repoRoot:       options.RepoRoot,
+		homeDir:        options.HomeDir,
+		screen:         screenWelcome,
+		resumeRun:      options.Config.Resume,
+		macOSOptions:   optionsForStageIDs(options.Catalog, phaseMacOSStages),
+		installOptions: optionsForStageIDs(options.Catalog, phaseInstallStages),
+		devOptions:     optionsForStageIDs(options.Catalog, phaseDevStages),
+		manualOptions:  optionsForStageIDs(options.Catalog, phaseManualStages),
+		brewSelected:   make(map[string]bool),
+		stageStatuses:  make(map[string]state.StageStatus),
+		spinner:        spin,
 	}
 
 	if err := m.reloadBrewEntries(); err != nil && !m.resumeRun {
@@ -275,34 +267,12 @@ func (m model) updateKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if m.resumeRun {
 				m.screen = screenReview
 			} else {
-				m.screen = screenEnvironment
+				m.screen = screenMacOS
 			}
-			m.cursor = 0
-		}
-	case screenEnvironment:
-		switch key.String() {
-		case "q":
-			return m, tea.Quit
-		case "up", "k":
-			if m.cursor > 0 {
-				m.cursor--
-			}
-		case "down", "j":
-			if m.cursor < len(m.environmentChoices)-1 {
-				m.cursor++
-			}
-		case "enter":
-			m.environment = m.environmentChoices[m.cursor]
-			if err := m.reloadBrewEntries(); err != nil {
-				m.planError = err.Error()
-				return m, nil
-			}
-			m.planError = ""
-			m.screen = screenMacOS
 			m.cursor = 0
 		}
 	case screenMacOS:
-		return m.updateToggleScreen(key, &m.macOSOptions, screenEnvironment, screenInstall)
+		return m.updateToggleScreen(key, &m.macOSOptions, screenWelcome, screenInstall)
 	case screenInstall:
 		return m.updateToggleScreen(key, &m.installOptions, screenMacOS, screenBrew)
 	case screenBrew:
@@ -435,8 +405,6 @@ func (m model) View() string {
 	switch m.screen {
 	case screenWelcome:
 		return m.viewWelcome()
-	case screenEnvironment:
-		return m.viewEnvironment()
 	case screenMacOS:
 		return m.viewToggleOptions("Phase: MacOS Setup", m.macOSOptions)
 	case screenInstall:
@@ -476,27 +444,6 @@ func (m model) viewWelcome() string {
 	return b.String()
 }
 
-func (m model) viewEnvironment() string {
-	var b strings.Builder
-	title := lipgloss.NewStyle().Bold(true).Render("Phase: Environment")
-	fmt.Fprintf(&b, "%s\n\n", title)
-	fmt.Fprintf(&b, "Choose environment profile:\n\n")
-
-	for index, value := range m.environmentChoices {
-		prefix := "  "
-		if m.cursor == index {
-			prefix = "> "
-		}
-		selected := " "
-		if strings.EqualFold(m.environment, value) || (m.cursor == index && m.environment == "") {
-			selected = "x"
-		}
-		fmt.Fprintf(&b, "%s[%s] %s\n", prefix, selected, value)
-	}
-	fmt.Fprintf(&b, "\nUse up/down and Enter.")
-	return b.String()
-}
-
 func (m model) viewToggleOptions(title string, options []toggleOption) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s\n\n", lipgloss.NewStyle().Bold(true).Render(title))
@@ -521,7 +468,7 @@ func (m model) viewBrewSelection() string {
 	fmt.Fprintf(&b, "Toggle entries with space. Enter to continue, b to go back.\n\n")
 
 	if len(m.brewEntries) == 0 {
-		fmt.Fprintf(&b, "No Brew entries found for environment %q.\n", m.environment)
+		fmt.Fprintf(&b, "No Brew entries found in templates/Brewfile.\n")
 		return b.String()
 	}
 
@@ -550,7 +497,6 @@ func (m *model) viewReview() string {
 
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s\n\n", lipgloss.NewStyle().Bold(true).Render("Execution Plan Review"))
-	fmt.Fprintf(&b, "Environment: %s\n", m.effectiveEnvironment())
 	fmt.Fprintf(&b, "Mode: %s\n", modeName(m.effectiveDryRun()))
 	if !m.resumeRun {
 		fmt.Fprintf(&b, "Selected Brew entries: %d\n", len(m.selectedBrewIDs()))
@@ -632,11 +578,7 @@ func (m model) viewSummary() string {
 }
 
 func (m *model) reloadBrewEntries() error {
-	templateName, err := stages.BrewTemplateName(m.environment)
-	if err != nil {
-		return err
-	}
-	entries, err := stages.LoadBrewEntries(filepath.Join(m.repoRoot, "templates", templateName))
+	entries, err := stages.LoadBrewEntries(filepath.Join(m.repoRoot, "templates", "Brewfile"))
 	if err != nil {
 		return err
 	}
@@ -690,9 +632,8 @@ func (m *model) prepareExecutionSetup() (executionSetup, error) {
 	}
 
 	var (
-		runState    *state.RunState
-		environment string
-		dryRun      bool
+		runState *state.RunState
+		dryRun   bool
 	)
 
 	if m.resumeRun {
@@ -700,10 +641,8 @@ func (m *model) prepareExecutionSetup() (executionSetup, error) {
 			return executionSetup{}, errors.New("resume requested but no existing run state found")
 		}
 		runState = m.current
-		environment = m.effectiveEnvironment()
 		dryRun = runState.Mode == "dry-run"
 	} else {
-		environment = m.effectiveEnvironment()
 		dryRun = m.config.DryRun
 		runState = &state.RunState{
 			RunID:        state.NewRunID(time.Now()),
@@ -711,8 +650,7 @@ func (m *model) prepareExecutionSetup() (executionSetup, error) {
 			Mode:         modeName(dryRun),
 			ResolvedPlan: plan,
 			Decisions: map[string]any{
-				stages.DecisionEnvironment: environment,
-				"selected_stage_ids":       m.selectedStageIDs(),
+				"selected_stage_ids": m.selectedStageIDs(),
 			},
 			SelectedIDs: m.selectedBrewIDs(),
 			Stages:      make(map[string]state.StageStatus, len(m.catalog)),
@@ -722,7 +660,6 @@ func (m *model) prepareExecutionSetup() (executionSetup, error) {
 	if runState.Decisions == nil {
 		runState.Decisions = make(map[string]any)
 	}
-	runState.Decisions[stages.DecisionEnvironment] = environment
 	if !m.resumeRun {
 		runState.SelectedIDs = m.selectedBrewIDs()
 		runState.ResolvedPlan = plan
@@ -754,7 +691,6 @@ func (m *model) prepareExecutionSetup() (executionSetup, error) {
 
 	return executionSetup{
 		runState:     runState,
-		environment:  environment,
 		dryRun:       dryRun,
 		humanLogPath: humanLogPath,
 		eventsPath:   eventsPath,
@@ -802,18 +738,6 @@ func (m *model) effectiveDryRun() bool {
 		return m.current.Mode == "dry-run"
 	}
 	return m.config.DryRun
-}
-
-func (m *model) effectiveEnvironment() string {
-	if strings.TrimSpace(m.environment) != "" {
-		return m.environment
-	}
-	if m.current != nil && m.current.Decisions != nil {
-		if value, ok := m.current.Decisions[stages.DecisionEnvironment].(string); ok {
-			return value
-		}
-	}
-	return "home"
 }
 
 func (m *model) initialiseStageStatuses() {
@@ -872,7 +796,6 @@ func startExecutionWorker(
 				RunState:      setup.runState,
 				Catalog:       catalog,
 				DryRun:        setup.dryRun,
-				Environment:   setup.environment,
 				RepoRoot:      repoRoot,
 				HomeDir:       homeDir,
 				RunDir:        filepath.Dir(setup.humanLogPath),
@@ -938,18 +861,6 @@ func waitForExecutionUpdate(updates <-chan tea.Msg) tea.Cmd {
 		}
 		return message
 	}
-}
-
-func defaultEnvironment(config Config, current *state.RunState) string {
-	if strings.TrimSpace(config.Environment) != "" {
-		return strings.ToLower(strings.TrimSpace(config.Environment))
-	}
-	if current != nil && current.Decisions != nil {
-		if value, ok := current.Decisions[stages.DecisionEnvironment].(string); ok {
-			return strings.ToLower(strings.TrimSpace(value))
-		}
-	}
-	return "home"
 }
 
 func optionsForStageIDs(catalog []stages.Stage, ids []string) []toggleOption {

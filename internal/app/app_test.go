@@ -6,17 +6,17 @@ import (
 	"testing"
 )
 
-func TestParseConfigAllowsMissingEnvironmentForInteractive(t *testing.T) {
+func TestParseConfigAllowsInteractiveDefaults(t *testing.T) {
 	cfg, err := parseConfig([]string{"--state-file", "/tmp/state.json"}, &bytes.Buffer{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if cfg.environment != "" {
-		t.Fatalf("expected empty environment, got %q", cfg.environment)
+	if cfg.statePath != "/tmp/state.json" {
+		t.Fatalf("state path mismatch: %q", cfg.statePath)
 	}
 }
 
-func TestParseConfigResumeAllowsMissingEnvironment(t *testing.T) {
+func TestParseConfigResumeFlag(t *testing.T) {
 	cfg, err := parseConfig([]string{"--resume", "--state-file", "/tmp/state.json"}, &bytes.Buffer{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -28,7 +28,6 @@ func TestParseConfigResumeAllowsMissingEnvironment(t *testing.T) {
 
 func TestParseConfigParsesSelectionFlags(t *testing.T) {
 	cfg, err := parseConfig([]string{
-		"--environment", "work",
 		"--from", "brew_bundle",
 		"--only", "homebrew_install,brew_bundle",
 		"--skip", "brew_bundle",
@@ -38,9 +37,6 @@ func TestParseConfigParsesSelectionFlags(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if cfg.environment != "work" {
-		t.Fatalf("environment mismatch: %q", cfg.environment)
-	}
 	if cfg.from != "brew_bundle" {
 		t.Fatalf("from mismatch: %q", cfg.from)
 	}

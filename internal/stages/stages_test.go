@@ -45,7 +45,7 @@ func TestGenerateBrewfileUsesSelectedIDs(t *testing.T) {
 		t.Fatalf("create templates directory: %v", err)
 	}
 
-	templatePath := filepath.Join(templatesDir, "Brewfile.home")
+	templatePath := filepath.Join(templatesDir, "Brewfile")
 	content := strings.Join([]string{
 		`brew "go"`,
 		`brew "jq"`,
@@ -59,7 +59,6 @@ func TestGenerateBrewfileUsesSelectedIDs(t *testing.T) {
 	path, selectedIDs, err := GenerateBrewfile(ExecutionContext{
 		RepoRoot:        repoRoot,
 		RunDir:          runDir,
-		Environment:     "home",
 		SelectedBrewIDs: []string{"warp", "go"},
 	})
 	if err != nil {
@@ -94,7 +93,7 @@ func TestGenerateBrewfileRejectsEmptyOutput(t *testing.T) {
 		t.Fatalf("create templates directory: %v", err)
 	}
 
-	templatePath := filepath.Join(templatesDir, "Brewfile.work")
+	templatePath := filepath.Join(templatesDir, "Brewfile")
 	if err := os.WriteFile(templatePath, []byte(`brew "go"`+"\n"), 0o644); err != nil {
 		t.Fatalf("write template Brewfile: %v", err)
 	}
@@ -102,7 +101,6 @@ func TestGenerateBrewfileRejectsEmptyOutput(t *testing.T) {
 	_, _, err := GenerateBrewfile(ExecutionContext{
 		RepoRoot:        repoRoot,
 		RunDir:          runDir,
-		Environment:     "work",
 		SelectedBrewIDs: []string{"missing"},
 	})
 	if err == nil {
@@ -120,7 +118,7 @@ func TestResolveSelectedBrewIDs(t *testing.T) {
 		t.Fatalf("create templates directory: %v", err)
 	}
 
-	templatePath := filepath.Join(templatesDir, "Brewfile.home")
+	templatePath := filepath.Join(templatesDir, "Brewfile")
 	content := strings.Join([]string{
 		`brew "go"`,
 		`brew "jq"`,
@@ -132,24 +130,12 @@ func TestResolveSelectedBrewIDs(t *testing.T) {
 		t.Fatalf("write template Brewfile: %v", err)
 	}
 
-	ids, err := ResolveSelectedBrewIDs(repoRoot, "home")
+	ids, err := ResolveSelectedBrewIDs(repoRoot)
 	if err != nil {
 		t.Fatalf("resolve selected brew ids: %v", err)
 	}
 	expected := []string{"go", "jq", "go", "warp"}
 	if !slices.Equal(ids, expected) {
 		t.Fatalf("selected id mismatch: got=%v want=%v", ids, expected)
-	}
-}
-
-func TestValidateEnvironment(t *testing.T) {
-	if err := ValidateEnvironment("home"); err != nil {
-		t.Fatalf("expected home env to be valid: %v", err)
-	}
-	if err := ValidateEnvironment("work"); err != nil {
-		t.Fatalf("expected work env to be valid: %v", err)
-	}
-	if err := ValidateEnvironment("other"); err == nil {
-		t.Fatal("expected invalid environment error")
 	}
 }

@@ -17,13 +17,12 @@ Mark each item pass/fail and capture `run_id` plus log path.
 1. Interactive run with default package/app selection (all selected).
 2. Interactive run with custom package/app deselection in Brew selection screen.
 3. Interactive phase decisions verified:
-   - environment selection
    - package/app selection
    - dev tools phase toggles
    - manual apps summary
 4. Non-interactive run:
    ```shell
-   go run ./cmd/laptop-setup --yes --environment work
+   go run ./cmd/laptop-setup --yes
    ```
 5. Interrupted run and resume:
    - start run

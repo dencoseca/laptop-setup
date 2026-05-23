@@ -39,9 +39,9 @@ Symptom:
 - Error indicates interactive mode requires a TTY.
 
 Action:
-- Re-run in non-interactive mode with explicit environment:
+- Re-run in non-interactive mode:
   ```shell
-  laptop-setup --yes --environment work
+  laptop-setup --yes
   ```
 
 ### Resume blocked by mode mismatch
@@ -78,7 +78,7 @@ Action:
 - Fix the underlying issue and retry that stage by resuming.
 - For a one-stage investigation run, use:
   ```shell
-  laptop-setup --yes --environment work --only <stage-id>
+  laptop-setup --yes --only <stage-id>
   ```
 
 ### Missing previous state for resume
@@ -87,9 +87,9 @@ Symptom:
 - `no previous run state found for --resume`.
 
 Action:
-- Start a new run with explicit environment:
+- Start a new run:
   ```shell
-  laptop-setup --yes --environment home
+  laptop-setup --yes
   ```
 
 ## Escalation Data to Collect

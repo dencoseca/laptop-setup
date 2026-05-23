@@ -29,7 +29,7 @@ const (
 )
 
 const (
-	DecisionEnvironment = "environment"
+	defaultBrewTemplate = "Brewfile"
 )
 
 type CheckResult struct {
@@ -52,7 +52,6 @@ type ExecutionContext struct {
 	RunDir                   string
 	RepoRoot                 string
 	HomeDir                  string
-	Environment              string
 	SelectedBrewIDs          []string
 	GeneratedBrewfilePath    string
 	SetGeneratedBrewfilePath func(path string)
@@ -122,7 +121,7 @@ func DefaultCatalog() []Stage {
 			ID:           "brew_bundle",
 			Title:        "Brew Bundle",
 			Description:  "Install selected packages and apps with brew bundle",
-			DecisionDeps: []string{DecisionEnvironment},
+			DecisionDeps: nil,
 			CanSkip:      true,
 			Critical:     false,
 			LogTag:       "brew_bundle",
@@ -182,7 +181,7 @@ func DefaultCatalog() []Stage {
 			ID:           "manual_app_store_apps",
 			Title:        "Manual App Store Apps",
 			Description:  "Display manual App Store install reminders",
-			DecisionDeps: []string{DecisionEnvironment},
+			DecisionDeps: nil,
 			CanSkip:      true,
 			Critical:     false,
 			LogTag:       "manual_app_store_apps",
@@ -477,10 +476,7 @@ func simulateGitConfig(_ context.Context, execCtx ExecutionContext) error {
 }
 
 func runManualAppStoreApps(_ context.Context, execCtx ExecutionContext) error {
-	items := []string{"Amphetamine", "Bear", "Bitwarden", "Things"}
-	if strings.EqualFold(execCtx.Environment, "home") {
-		items = append(items, "NordVPN")
-	}
+	items := []string{"Amphetamine", "Bear", "Bitwarden", "Things", "NordVPN"}
 	return logStageMessage(execCtx, "Manual App Store apps: "+strings.Join(items, ", "))
 }
 
@@ -618,35 +614,17 @@ func copyFile(sourcePath, destinationPath string) error {
 }
 
 func brewTemplatePath(execCtx ExecutionContext) (string, error) {
-	templateName, err := BrewTemplateName(execCtx.Environment)
-	if err != nil {
-		return "", err
+	if strings.TrimSpace(execCtx.RepoRoot) == "" {
+		return "", errors.New("repository root is required")
 	}
-	return filepath.Join(execCtx.RepoRoot, "templates", templateName), nil
+	return filepath.Join(execCtx.RepoRoot, "templates", defaultBrewTemplate), nil
 }
 
-func BrewTemplateName(environment string) (string, error) {
-	switch strings.ToLower(strings.TrimSpace(environment)) {
-	case "home":
-		return "Brewfile.home", nil
-	case "work":
-		return "Brewfile.work", nil
-	default:
-		return "", fmt.Errorf("unsupported environment %q (valid: home, work)", environment)
+func ResolveSelectedBrewIDs(repoRoot string) ([]string, error) {
+	if strings.TrimSpace(repoRoot) == "" {
+		return nil, errors.New("repository root is required")
 	}
-}
-
-func ValidateEnvironment(environment string) error {
-	_, err := BrewTemplateName(environment)
-	return err
-}
-
-func ResolveSelectedBrewIDs(repoRoot, environment string) ([]string, error) {
-	templateName, err := BrewTemplateName(environment)
-	if err != nil {
-		return nil, err
-	}
-	entries, err := LoadBrewEntries(filepath.Join(repoRoot, "templates", templateName))
+	entries, err := LoadBrewEntries(filepath.Join(repoRoot, "templates", defaultBrewTemplate))
 	if err != nil {
 		return nil, err
 	}

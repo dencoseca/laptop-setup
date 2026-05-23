@@ -19,14 +19,13 @@ import (
 )
 
 type config struct {
-	yes         bool
-	resume      bool
-	dryRun      bool
-	environment string
-	from        string
-	only        []string
-	skip        []string
-	statePath   string
+	yes       bool
+	resume    bool
+	dryRun    bool
+	from      string
+	only      []string
+	skip      []string
+	statePath string
 }
 
 func Run(ctx context.Context, args []string, stdout io.Writer, stderr io.Writer) error {
@@ -75,12 +74,11 @@ func Run(ctx context.Context, args []string, stdout io.Writer, stderr io.Writer)
 
 		return ui.Run(ctx, ui.Options{
 			Config: ui.Config{
-				Resume:      cfg.resume,
-				DryRun:      cfg.dryRun,
-				Environment: cfg.environment,
-				From:        cfg.from,
-				Only:        cfg.only,
-				Skip:        cfg.skip,
+				Resume: cfg.resume,
+				DryRun: cfg.dryRun,
+				From:   cfg.from,
+				Only:   cfg.only,
+				Skip:   cfg.skip,
 			},
 			Store:     store,
 			Current:   current,
@@ -102,10 +100,6 @@ func runNonInteractive(
 	current *state.RunState,
 	stdout io.Writer,
 ) error {
-	if !cfg.resume && strings.TrimSpace(cfg.environment) == "" {
-		return errors.New("environment is required in non-interactive mode (use --environment home|work)")
-	}
-
 	catalog := stages.DefaultCatalog()
 	repoRoot, err := os.Getwd()
 	if err != nil {
@@ -123,9 +117,6 @@ func runNonInteractive(
 		runState = current
 		effectiveDryRun = runState.Mode == "dry-run"
 	} else {
-		if err = stages.ValidateEnvironment(cfg.environment); err != nil {
-			return err
-		}
 		plan, resolveErr := stages.ResolvePlan(catalog, stages.PlanOptions{
 			FromID:  cfg.from,
 			OnlyIDs: cfg.only,
@@ -134,7 +125,7 @@ func runNonInteractive(
 		if resolveErr != nil {
 			return resolveErr
 		}
-		selectedIDs, selectErr := stages.ResolveSelectedBrewIDs(repoRoot, cfg.environment)
+		selectedIDs, selectErr := stages.ResolveSelectedBrewIDs(repoRoot)
 		if selectErr != nil {
 			return selectErr
 		}
@@ -143,29 +134,17 @@ func runNonInteractive(
 			StartAt:      time.Now().UTC(),
 			Mode:         modeName(effectiveDryRun),
 			ResolvedPlan: plan,
-			Decisions: map[string]any{
-				stages.DecisionEnvironment: cfg.environment,
-			},
-			SelectedIDs: selectedIDs,
-			Stages:      make(map[string]state.StageStatus, len(catalog)),
+			Decisions:    map[string]any{},
+			SelectedIDs:  selectedIDs,
+			Stages:       make(map[string]state.StageStatus, len(catalog)),
 		}
 	}
 
 	if runState.Decisions == nil {
 		runState.Decisions = map[string]any{}
 	}
-	environment := strings.TrimSpace(cfg.environment)
-	if environment == "" {
-		if existing, ok := runState.Decisions[stages.DecisionEnvironment].(string); ok {
-			environment = existing
-		}
-	}
-	if err = stages.ValidateEnvironment(environment); err != nil {
-		return err
-	}
-	runState.Decisions[stages.DecisionEnvironment] = environment
 	if len(runState.SelectedIDs) == 0 {
-		selectedIDs, selectErr := stages.ResolveSelectedBrewIDs(repoRoot, environment)
+		selectedIDs, selectErr := stages.ResolveSelectedBrewIDs(repoRoot)
 		if selectErr != nil {
 			return selectErr
 		}
@@ -206,7 +185,6 @@ func runNonInteractive(
 		RunState:      runState,
 		Catalog:       catalog,
 		DryRun:        effectiveDryRun,
-		Environment:   environment,
 		RepoRoot:      repoRoot,
 		HomeDir:       homeDir,
 		RunDir:        runDir,
@@ -224,8 +202,6 @@ func parseConfig(args []string, stderr io.Writer) (config, error) {
 	fs.BoolVar(&cfg.yes, "y", false, "Run non-interactively")
 	fs.BoolVar(&cfg.resume, "resume", false, "Resume from existing run state")
 	fs.BoolVar(&cfg.dryRun, "dry-run", false, "Simulate execution without machine changes")
-	fs.StringVar(&cfg.environment, "environment", "", "Environment profile to apply (home|work)")
-	fs.StringVar(&cfg.environment, "e", "", "Environment profile to apply (home|work)")
 	fs.StringVar(&cfg.from, "from", "", "Start execution from stage id")
 	var onlyRaw string
 	var skipRaw string
@@ -242,7 +218,6 @@ func parseConfig(args []string, stderr io.Writer) (config, error) {
 
 	cfg.only = parseCSV(onlyRaw)
 	cfg.skip = parseCSV(skipRaw)
-	cfg.environment = strings.ToLower(strings.TrimSpace(cfg.environment))
 
 	if cfg.statePath == "" {
 		defaultPath, err := state.DefaultPath()
