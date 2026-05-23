@@ -268,7 +268,7 @@ Allowed phase statuses:
 3. Phase 3 - TUI Layer: `done`
 4. Phase 4 - Bootstrap Cutover: `done`
 5. Phase 5 - Hardening: `done`
-6. Phase 6 - Finalize: `pending`
+6. Phase 6 - Finalize: `done`
 
 ### Phase 1 - Foundation
 - DependsOn: none
@@ -387,6 +387,7 @@ Append one line when a phase reaches a terminal status (`done` or `blocked`):
 2026-05-23 | Phase 3 | status=done | commit=97cb3b1 | notes=Implemented Bubble Tea phase wizard, plan review, live execution checklist/log view, and retry/skip/abort failure actions wired to state transitions
 2026-05-23 | Phase 4 | status=done | commit=3ba8147 | notes=Cut over bootstrap.sh to architecture-aware binary download with SHA256 verification, flag forwarding, and guarded setup.sh fallback
 2026-05-23 | Phase 5 | status=done | commit=uncommitted | notes=Expanded critical path tests for dry-run/resume/failure handling and added operator troubleshooting plus VM smoke-test docs
+2026-05-23 | Phase 6 | status=done | commit=uncommitted | notes=Updated documentation to binary-first workflow and marked setup.sh as explicit legacy path
 
 ## Definition of Done
 Global DoD is satisfied only when all items below are true:

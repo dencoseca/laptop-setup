@@ -1,6 +1,7 @@
 # VM Smoke Test Checklist
 
 Use this checklist on a clean macOS VM to validate migration behavior end-to-end.
+Use `bootstrap.sh` as the default execution path; use `go run ./cmd/laptop-setup` only when validating from a local checkout.
 
 ## Preconditions
 

@@ -1,5 +1,8 @@
 #!/usr/bin/env zsh
 
+# Legacy compatibility script. Prefer `bootstrap.sh`, which downloads and runs
+# the checksum-verified Go binary release.
+
 # ████████╗ █████╗ ██╗  ██╗███████╗     █████╗     ██████╗ ███████╗███████╗██████╗     ██████╗ ██████╗ ███████╗ █████╗ ████████╗██╗  ██╗
 # ╚══██╔══╝██╔══██╗██║ ██╔╝██╔════╝    ██╔══██╗    ██╔══██╗██╔════╝██╔════╝██╔══██╗    ██╔══██╗██╔══██╗██╔════╝██╔══██╗╚══██╔══╝██║  ██║
 #    ██║   ███████║█████╔╝ █████╗      ███████║    ██║  ██║█████╗  █████╗  ██████╔╝    ██████╔╝██████╔╝█████╗  ███████║   ██║   ███████║
@@ -11,6 +14,9 @@ set -euo pipefail
 
 print_usage() {
   cat <<- EOF
+Legacy compatibility mode for laptop setup.
+Default path: run bootstrap.sh to execute the release binary.
+
 Provides the perfect environment to ignore time, hunger, friends and family,
 most of life's responsibilities, stop blinking entirely, and eventually be able
 to afford a second home, somewhere in the mediterranean, where you can talk
@@ -100,6 +106,7 @@ if [ -z "$ENV_FLAG" ]; then
 elif [ "$ENV_FLAG" != "home" ] && [ "$ENV_FLAG" != "work" ]; then
   exit_with_message "It literally tells you what the options are!"
 else
+  echo "warning: setup.sh is legacy; prefer bootstrap.sh for the default binary workflow" >&2
   print_message "Using $ENV_FLAG config for setup"
 fi
 

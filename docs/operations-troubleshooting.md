@@ -1,6 +1,7 @@
 # laptop-setup Troubleshooting
 
 This runbook is for operators validating or supporting the Go-based setup flow during migration.
+Default production entrypoint is `bootstrap.sh` (binary-first). `go run` workflows are for local repository validation.
 
 ## Runtime Artifacts
 
