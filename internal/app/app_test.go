@@ -5,10 +5,13 @@ import (
 	"testing"
 )
 
-func TestParseConfigRequiresEnvironmentWhenNotResume(t *testing.T) {
-	_, err := parseConfig([]string{"--yes", "--state-file", "/tmp/state.json"}, &bytes.Buffer{})
-	if err == nil {
-		t.Fatal("expected error for missing environment")
+func TestParseConfigAllowsMissingEnvironmentForInteractive(t *testing.T) {
+	cfg, err := parseConfig([]string{"--state-file", "/tmp/state.json"}, &bytes.Buffer{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.environment != "" {
+		t.Fatalf("expected empty environment, got %q", cfg.environment)
 	}
 }
 

@@ -1,7 +1,6 @@
 package app
 
 import (
-	"bufio"
 	"context"
 	"errors"
 	"flag"
@@ -12,9 +11,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dencoseca/laptop-setup/internal/execution"
 	"github.com/dencoseca/laptop-setup/internal/runner"
 	"github.com/dencoseca/laptop-setup/internal/stages"
 	"github.com/dencoseca/laptop-setup/internal/state"
+	"github.com/dencoseca/laptop-setup/internal/ui"
 )
 
 type config struct {
@@ -46,13 +47,66 @@ func Run(ctx context.Context, args []string, stdout io.Writer, stderr io.Writer)
 		return err
 	}
 
-	var runState *state.RunState
-	catalog := stages.DefaultCatalog()
-	stageIndex := make(map[string]stages.Stage, len(catalog))
-	for _, stage := range catalog {
-		stageIndex[stage.ID] = stage
+	if cfg.resume && current == nil {
+		return errors.New("no previous run state found for --resume")
+	}
+	if cfg.resume && cfg.dryRun && current != nil && current.Mode != "dry-run" {
+		return errors.New("cannot resume a normal run as dry-run")
 	}
 
+	promptEnabled, err := canPrompt()
+	if err != nil {
+		return err
+	}
+
+	if !cfg.yes {
+		if !promptEnabled {
+			return errors.New("interactive mode requires a TTY; rerun with --yes for non-interactive execution")
+		}
+
+		repoRoot, err := os.Getwd()
+		if err != nil {
+			return fmt.Errorf("resolve repository root: %w", err)
+		}
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return fmt.Errorf("resolve home directory: %w", err)
+		}
+
+		return ui.Run(ctx, ui.Options{
+			Config: ui.Config{
+				Resume:      cfg.resume,
+				DryRun:      cfg.dryRun,
+				Environment: cfg.environment,
+				From:        cfg.from,
+				Only:        cfg.only,
+				Skip:        cfg.skip,
+			},
+			Store:     store,
+			Current:   current,
+			Catalog:   stages.DefaultCatalog(),
+			RepoRoot:  repoRoot,
+			HomeDir:   homeDir,
+			Out:       stdout,
+			Commander: runner.NewOSCommandRunner(),
+		})
+	}
+
+	return runNonInteractive(ctx, cfg, store, current, stdout)
+}
+
+func runNonInteractive(
+	ctx context.Context,
+	cfg config,
+	store *state.Store,
+	current *state.RunState,
+	stdout io.Writer,
+) error {
+	if !cfg.resume && strings.TrimSpace(cfg.environment) == "" {
+		return errors.New("environment is required in non-interactive mode (use --environment home|work)")
+	}
+
+	catalog := stages.DefaultCatalog()
 	repoRoot, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("resolve repository root: %w", err)
@@ -63,15 +117,10 @@ func Run(ctx context.Context, args []string, stdout io.Writer, stderr io.Writer)
 	}
 
 	effectiveDryRun := cfg.dryRun
+	var runState *state.RunState
 
 	if cfg.resume {
-		if current == nil {
-			return errors.New("no previous run state found for --resume")
-		}
 		runState = current
-		if cfg.dryRun && runState.Mode != "dry-run" {
-			return errors.New("cannot resume a normal run as dry-run")
-		}
 		effectiveDryRun = runState.Mode == "dry-run"
 	} else {
 		if err = stages.ValidateEnvironment(cfg.environment); err != nil {
@@ -85,12 +134,10 @@ func Run(ctx context.Context, args []string, stdout io.Writer, stderr io.Writer)
 		if resolveErr != nil {
 			return resolveErr
 		}
-
 		selectedIDs, selectErr := stages.ResolveSelectedBrewIDs(repoRoot, cfg.environment)
 		if selectErr != nil {
 			return selectErr
 		}
-
 		runState = &state.RunState{
 			RunID:        state.NewRunID(time.Now()),
 			StartAt:      time.Now().UTC(),
@@ -153,181 +200,19 @@ func Run(ctx context.Context, args []string, stdout io.Writer, stderr io.Writer)
 	defer eventLog.Close()
 
 	logger := runner.NewEventLogger(io.MultiWriter(stdout, humanLog), eventLog)
-	commandRunner := runner.NewOSCommandRunner()
 
-	if err = logger.Log(runner.Event{
-		RunID:     runState.RunID,
-		Mode:      runState.Mode,
-		EventType: "run_started",
-		Message:   "Starting stage execution",
-	}); err != nil {
-		return err
-	}
-
-	promptEnabled, err := canPrompt()
-	if err != nil {
-		return err
-	}
-
-	for _, stageID := range runState.ResolvedPlan {
-		stage, ok := stageIndex[stageID]
-		if !ok {
-			return fmt.Errorf("unknown stage in plan: %s", stageID)
-		}
-
-		progress := runState.Stages[stageID]
-		if progress.Status == string(stages.StatusSuccess) ||
-			progress.Status == string(stages.StatusAlreadyDone) ||
-			progress.Status == string(stages.StatusSimulatedSuccess) ||
-			progress.Status == string(stages.StatusSkipped) {
-			continue
-		}
-
-		if !cfg.yes && stage.CanSkip {
-			shouldRun, confirmErr := confirmStage(stdout, promptEnabled, stage)
-			if confirmErr != nil {
-				return confirmErr
-			}
-			if !shouldRun {
-				progress.Status = string(stages.StatusSkipped)
-				runState.Stages[stageID] = progress
-				if err = store.Save(ctx, runState); err != nil {
-					return err
-				}
-				if err = logger.Log(runner.Event{
-					RunID:     runState.RunID,
-					StageID:   stageID,
-					Attempt:   progress.Attempts,
-					Mode:      runState.Mode,
-					EventType: "stage_skipped",
-					Message:   "user skipped stage",
-				}); err != nil {
-					return err
-				}
-				continue
-			}
-		}
-
-		progress.Status = string(stages.StatusRunning)
-		progress.Attempts++
-		runState.Stages[stageID] = progress
-		if err = store.Save(ctx, runState); err != nil {
-			return err
-		}
-
-		if err = logger.Log(runner.Event{
-			RunID:     runState.RunID,
-			StageID:   stageID,
-			Attempt:   progress.Attempts,
-			Mode:      runState.Mode,
-			EventType: "stage_started",
-			Message:   stage.Title,
-		}); err != nil {
-			return err
-		}
-
-		execCtx := stages.ExecutionContext{
-			DryRun:                effectiveDryRun,
-			Runner:                commandRunner,
-			Logger:                logger,
-			RunID:                 runState.RunID,
-			Mode:                  runState.Mode,
-			StageID:               stageID,
-			Attempt:               progress.Attempts,
-			RunDir:                runDir,
-			RepoRoot:              repoRoot,
-			HomeDir:               homeDir,
-			Environment:           environment,
-			SelectedBrewIDs:       runState.SelectedIDs,
-			GeneratedBrewfilePath: runState.GeneratedFile,
-			SetGeneratedBrewfilePath: func(path string) {
-				runState.GeneratedFile = path
-			},
-		}
-
-		checkResult, err := stage.Precheck(ctx, execCtx)
-		if err != nil {
-			progress.Status = string(stages.StatusFailed)
-			progress.LastError = err.Error()
-			runState.Stages[stageID] = progress
-			runState.LastFailure = err.Error()
-			_ = store.Save(ctx, runState)
-			return fmt.Errorf("precheck failed for %s: %w", stageID, err)
-		}
-		if checkResult.Satisfied {
-			progress.Status = string(stages.StatusAlreadyDone)
-			runState.Stages[stageID] = progress
-			if err = store.Save(ctx, runState); err != nil {
-				return err
-			}
-			if err = logger.Log(runner.Event{
-				RunID:     runState.RunID,
-				StageID:   stageID,
-				Attempt:   progress.Attempts,
-				Mode:      runState.Mode,
-				EventType: "stage_already_done",
-				Message:   checkResult.Message,
-			}); err != nil {
-				return err
-			}
-			continue
-		}
-
-		if effectiveDryRun {
-			if err = stage.Simulate(ctx, execCtx); err != nil {
-				progress.Status = string(stages.StatusFailed)
-				progress.LastError = err.Error()
-				runState.Stages[stageID] = progress
-				runState.LastFailure = err.Error()
-				_ = store.Save(ctx, runState)
-				return fmt.Errorf("simulate failed for %s: %w", stageID, err)
-			}
-			progress.Status = string(stages.StatusSimulatedSuccess)
-		} else {
-			if err = stage.Run(ctx, execCtx); err != nil {
-				progress.Status = string(stages.StatusFailed)
-				progress.LastError = err.Error()
-				runState.Stages[stageID] = progress
-				runState.LastFailure = err.Error()
-				_ = store.Save(ctx, runState)
-				return fmt.Errorf("stage failed for %s: %w", stageID, err)
-			}
-			progress.Status = string(stages.StatusSuccess)
-		}
-
-		runState.Stages[stageID] = progress
-		if err = store.Save(ctx, runState); err != nil {
-			return err
-		}
-
-		if err = logger.Log(runner.Event{
-			RunID:     runState.RunID,
-			StageID:   stageID,
-			Attempt:   progress.Attempts,
-			Mode:      runState.Mode,
-			EventType: "stage_completed",
-			Message:   progress.Status,
-		}); err != nil {
-			return err
-		}
-	}
-
-	endAt := time.Now().UTC()
-	runState.EndAt = &endAt
-	if err = store.Save(ctx, runState); err != nil {
-		return err
-	}
-
-	if err = logger.Log(runner.Event{
-		RunID:     runState.RunID,
-		Mode:      runState.Mode,
-		EventType: "run_completed",
-		Message:   "All planned stages processed",
-	}); err != nil {
-		return err
-	}
-
-	return nil
+	return execution.Execute(ctx, execution.Options{
+		Store:         store,
+		RunState:      runState,
+		Catalog:       catalog,
+		DryRun:        effectiveDryRun,
+		Environment:   environment,
+		RepoRoot:      repoRoot,
+		HomeDir:       homeDir,
+		RunDir:        runDir,
+		CommandRunner: runner.NewOSCommandRunner(),
+		Logger:        logger,
+	})
 }
 
 func parseConfig(args []string, stderr io.Writer) (config, error) {
@@ -367,10 +252,6 @@ func parseConfig(args []string, stderr io.Writer) (config, error) {
 		cfg.statePath = defaultPath
 	}
 
-	if !cfg.resume && cfg.environment == "" {
-		return config{}, errors.New("environment is required (use --environment home|work)")
-	}
-
 	return cfg, nil
 }
 
@@ -408,22 +289,4 @@ func canPrompt() (bool, error) {
 		return false, fmt.Errorf("inspect stdin: %w", err)
 	}
 	return (stat.Mode() & os.ModeCharDevice) != 0, nil
-}
-
-func confirmStage(stdout io.Writer, promptEnabled bool, stage stages.Stage) (bool, error) {
-	if !promptEnabled {
-		return false, errors.New("interactive confirmation required but no TTY detected; rerun with --yes")
-	}
-
-	if _, err := fmt.Fprintf(stdout, "\nRun stage %s (%s)? [y/N]: ", stage.ID, stage.Title); err != nil {
-		return false, fmt.Errorf("write prompt: %w", err)
-	}
-
-	reader := bufio.NewReader(os.Stdin)
-	line, err := reader.ReadString('\n')
-	if err != nil && !errors.Is(err, io.EOF) {
-		return false, fmt.Errorf("read stage confirmation: %w", err)
-	}
-	normalized := strings.ToLower(strings.TrimSpace(line))
-	return normalized == "y" || normalized == "yes", nil
 }
