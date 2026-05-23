@@ -1,0 +1,197 @@
+# Laptop Setup TUI Migration Plan
+
+## Objective
+Replace the current `setup.sh`-driven flow with a robust, resumable, interactive TUI application built in Go using Bubble Tea, while preserving the current setup behavior and stage boundaries.
+
+## Why This Direction
+- Fresh-machine friendly: ship a single statically linked binary.
+- Minimal prerequisites: bootstrap can run with macOS built-ins (`curl`, `sh`, `chmod`).
+- Better reliability: structured stages, state persistence, and explicit retry/skip flows.
+- Better UX: clear progress, confirmation at each stage, and readable failure diagnostics.
+
+## End-State Goals
+1. `bootstrap.sh` downloads and runs the correct release binary for host architecture (`arm64`/`amd64`).
+2. The binary provides an interactive TUI with per-stage confirmations and live progress.
+3. Non-interactive mode remains supported (`--yes`) for unattended execution.
+4. Every stage is resumable and logs to per-stage files.
+5. Existing templates remain source-of-truth inputs for generated config files.
+
+## Technical Stack
+- Language: Go (stable modern version, pinned in CI)
+- TUI libraries:
+  - `github.com/charmbracelet/bubbletea`
+  - `github.com/charmbracelet/bubbles`
+  - `github.com/charmbracelet/lipgloss`
+- Packaging/releases: GitHub Releases + checksums
+
+## Proposed Repository Layout
+```text
+.
+├── cmd/laptop-setup/main.go
+├── internal/app/               # app wiring, CLI/TUI mode selection
+├── internal/stages/            # stage definitions and execution logic
+├── internal/runner/            # command runner, retries, logging
+├── internal/state/             # run state persistence/resume
+├── internal/ui/                # Bubble Tea models/views
+├── templates/                  # existing config templates (reuse)
+├── bootstrap.sh                # downloads and executes binary
+├── setup.sh                    # legacy path (kept during migration)
+└── migration-plan.md
+```
+
+## Stage Model (Core Contract)
+Each stage should be declared as structured metadata plus an execution function.
+
+Suggested fields:
+- `ID`: stable identifier (for state/logging)
+- `Title`: user-facing stage name
+- `Description`: short explanation in UI
+- `Precheck`: determines if stage is already satisfied
+- `Run`: executes commands/actions
+- `CanSkip`: whether user may skip
+- `Critical`: if true, failed stage blocks later stages unless explicitly overridden
+- `LogFile`: deterministic per-stage log path
+
+## Stage Mapping From Current Script
+Map directly to existing sections in `setup.sh`:
+1. `macos_defaults`
+2. `homebrew_install`
+3. `brew_bundle`
+4. `pnpm_install`
+5. `docker_config`
+6. `shell_setup` (oh-my-zsh + zshrc + starship)
+7. `git_config`
+8. `manual_app_store_apps` (summary/reminder stage, no automation)
+
+## CLI Contract (Target)
+Support both interactive and automation use cases:
+- `-e, --env <home|work>` (required)
+- `-y, --yes` (non-interactive, auto-approve applicable stages)
+- `--resume` (continue from last incomplete run)
+- `--from <stage-id>` (start from stage)
+- `--only <stage-id>[,<stage-id>...]`
+- `--skip <stage-id>[,<stage-id>...]`
+- `--no-say` (disable voice output)
+- `--dry-run` (simulate the full flow without mutating the machine)
+
+## TUI Experience (Target)
+Primary views:
+1. Welcome/setup summary
+2. Environment selector (`home`/`work`) if not provided
+3. Stage checklist with status indicators:
+   - `pending`, `running`, `success`, `skipped`, `failed`, `already_done`
+4. Stage confirmation prompt before execution
+5. Live execution panel with spinner + tailed logs
+6. Failure dialog with actions:
+   - Retry stage
+   - Skip stage (if allowed)
+   - Abort run
+7. Final summary with:
+   - Completed/skipped/failed counts
+   - Log paths
+   - manual App Store installs reminder
+
+## Reliability and Idempotency Rules
+- Stage prechecks must mark already-satisfied setup as `already_done` rather than fail.
+- File writes should be deterministic and safe to rerun.
+- External command failures must capture:
+  - exit code
+  - failing command
+  - log file path
+- Resume should restart at first non-successful stage.
+- `--yes` mode should never block for TTY interaction.
+
+## Dry-Run Mode Specification
+`--dry-run` should be treated as a full simulation mode for UX and flow testing.
+
+Behavior requirements:
+- No mutating commands are executed (`defaults write`, installers, file overwrites, package installs).
+- TUI screens and prompts remain identical to normal mode so interaction paths are testable.
+- Each stage renders the commands/actions it would run.
+- Stage status uses `simulated_success` (or equivalent clear simulated status) instead of `success`.
+- Logs are still written, clearly prefixed/labeled as dry-run output.
+- State file records that run mode was dry-run and must not be resumable into a real run.
+
+Implementation guidance:
+- Stage contract should expose two paths:
+  - `Run`: real execution
+  - `Simulate`: dry-run preview/details
+- If `Simulate` is not provided for a stage, fallback behavior should print a structured action plan for that stage.
+- Optional follow-on flag for testing error UX: `--dry-run-fail-at <stage-id>` to force a simulated failure path.
+
+## State and Logging
+- State directory: `~/.laptop-setup/`
+- Run file: `~/.laptop-setup/state.json`
+- Logs directory: `~/.laptop-setup/logs/<timestamp-or-run-id>/`
+- Per-stage logs: `<stage-id>.log`
+- Append a concise summary log at run end.
+
+State should include:
+- run id, start/end timestamps
+- env (`home|work`)
+- per-stage status + attempts
+- last failure details (if any)
+
+## Bootstrap and Distribution Plan
+`bootstrap.sh` responsibilities:
+1. Validate args and detect architecture.
+2. Download release artifact for host (`darwin-arm64`/`darwin-amd64`).
+3. Download and verify checksum.
+4. Mark executable and run with forwarded flags.
+
+Artifact strategy:
+- `laptop-setup_darwin_arm64`
+- `laptop-setup_darwin_amd64`
+- `checksums.txt`
+
+## Security and Trust
+- Use pinned GitHub release URLs.
+- Verify SHA256 checksums before execution.
+- Keep all remote script usage explicit and logged.
+- Prefer official installers when unavoidable (Homebrew, pnpm, oh-my-zsh) and isolate output in stage logs.
+
+## Testing Strategy
+1. Unit tests:
+   - CLI parsing
+   - stage selection (`--only`, `--skip`, `--from`)
+   - state transitions and resume behavior
+2. Integration tests (mock runner):
+   - success path
+   - retry path
+   - non-interactive path
+   - dry-run path (no mutating command execution)
+   - dry-run forced failure path (if `--dry-run-fail-at` is implemented)
+3. Manual smoke tests on clean macOS VM:
+   - interactive run (`home` and `work`)
+   - interrupted run + resume
+   - stage skip and failure recovery
+   - dry-run TUI walkthrough (confirm no system changes)
+
+## Migration Phases
+1. **Foundation**
+   - Initialize Go module and project structure.
+   - Implement stage contract, runner, logger, and state persistence.
+2. **Parity CLI Runner**
+   - Recreate all existing stage behaviors without TUI.
+   - Ensure `--yes` parity with current script.
+3. **TUI Layer**
+   - Build Bubble Tea stage list, prompts, and live progress.
+   - Add failure actions (retry/skip/abort).
+4. **Bootstrap Cutover**
+   - Update `bootstrap.sh` to fetch/run binary.
+   - Keep `setup.sh` as fallback during transition.
+5. **Hardening**
+   - Add tests and VM smoke-test checklist.
+   - Document operations and troubleshooting.
+6. **Finalize**
+   - Default docs to binary flow.
+   - Mark `setup.sh` as legacy path.
+
+## Definition of Done
+- New binary handles full setup flow end-to-end on a fresh macOS machine.
+- Interactive TUI prompts at each stage with clear status and error recovery.
+- Non-interactive mode works for unattended runs.
+- Dry-run mode provides full UX simulation with zero machine mutation.
+- Resume works after interruption/failure.
+- Bootstrap path is binary-first and checksum-verified.
+- Documentation reflects the new default workflow.
