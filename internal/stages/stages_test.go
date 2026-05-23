@@ -2,6 +2,7 @@ package stages
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"slices"
@@ -18,6 +19,26 @@ type recordingRunner struct {
 func (r *recordingRunner) Run(_ context.Context, command runner.Command) (runner.Result, error) {
 	r.commands = append(r.commands, command)
 	return runner.Result{}, nil
+}
+
+type scriptedRunner struct {
+	commands []runner.Command
+	result   runner.Result
+	err      error
+}
+
+func (r *scriptedRunner) Run(_ context.Context, command runner.Command) (runner.Result, error) {
+	r.commands = append(r.commands, command)
+	return r.result, r.err
+}
+
+type recordingEventLogger struct {
+	events []runner.Event
+}
+
+func (l *recordingEventLogger) Log(event runner.Event) error {
+	l.events = append(l.events, event)
+	return nil
 }
 
 func TestLoadBrewEntries(t *testing.T) {
@@ -281,5 +302,124 @@ func TestRunGitConfigCustomIdentityWritesUserValues(t *testing.T) {
 	}
 	if !strings.Contains(body, "email = alice@example.com") {
 		t.Fatalf("expected custom user.email in gitconfig, got %q", body)
+	}
+}
+
+func TestRunCommandLogsOutputAndLifecycleOnSuccess(t *testing.T) {
+	command := runner.Command{Name: "echo", Args: []string{"hello"}}
+	run := &scriptedRunner{
+		result: runner.Result{
+			ExitCode: 0,
+			Stdout:   "line one\nline two\n",
+			Stderr:   "warn one\n",
+		},
+	}
+	logger := &recordingEventLogger{}
+	execCtx := ExecutionContext{
+		Runner:  run,
+		Logger:  logger,
+		RunID:   "run-123",
+		StageID: "brew_bundle",
+		Attempt: 2,
+		Mode:    "normal",
+	}
+
+	if err := runCommand(context.Background(), execCtx, command); err != nil {
+		t.Fatalf("runCommand returned error: %v", err)
+	}
+
+	if len(logger.events) != 5 {
+		t.Fatalf("expected 5 log events, got %d", len(logger.events))
+	}
+
+	expectedTypes := []string{
+		"command_started",
+		"command_stdout",
+		"command_stdout",
+		"command_stderr",
+		"command_completed",
+	}
+	for idx, event := range logger.events {
+		if event.EventType != expectedTypes[idx] {
+			t.Fatalf("event %d type mismatch: got=%s want=%s", idx, event.EventType, expectedTypes[idx])
+		}
+		if event.StageID != execCtx.StageID {
+			t.Fatalf("event %d stage mismatch: got=%s want=%s", idx, event.StageID, execCtx.StageID)
+		}
+		if event.Attempt != execCtx.Attempt {
+			t.Fatalf("event %d attempt mismatch: got=%d want=%d", idx, event.Attempt, execCtx.Attempt)
+		}
+	}
+
+	if got := logger.events[1].Message; got != "line one" {
+		t.Fatalf("unexpected stdout line 1: %q", got)
+	}
+	if got := logger.events[2].Message; got != "line two" {
+		t.Fatalf("unexpected stdout line 2: %q", got)
+	}
+	if got := logger.events[3].Message; got != "warn one" {
+		t.Fatalf("unexpected stderr line: %q", got)
+	}
+	if got := logger.events[3].Level; got != "warn" {
+		t.Fatalf("expected stderr event level warn, got %q", got)
+	}
+	completed := logger.events[4]
+	if completed.Command != command.String() {
+		t.Fatalf("command mismatch in completion event: got=%q want=%q", completed.Command, command.String())
+	}
+	if completed.ExitCode == nil || *completed.ExitCode != 0 {
+		t.Fatalf("expected completion exit code 0, got %+v", completed.ExitCode)
+	}
+	if completed.Message != "ok" {
+		t.Fatalf("expected completion message ok, got %q", completed.Message)
+	}
+}
+
+func TestRunCommandLogsOutputAndFailureContext(t *testing.T) {
+	command := runner.Command{Name: "brew", Args: []string{"bundle", "install"}}
+	run := &scriptedRunner{
+		result: runner.Result{
+			ExitCode: 7,
+			Stdout:   "before failure\n",
+			Stderr:   "fatal details\n",
+		},
+		err: errors.New("exit status 7"),
+	}
+	logger := &recordingEventLogger{}
+	execCtx := ExecutionContext{
+		Runner:  run,
+		Logger:  logger,
+		RunID:   "run-123",
+		StageID: "brew_bundle",
+		Attempt: 3,
+		Mode:    "normal",
+	}
+
+	err := runCommand(context.Background(), execCtx, command)
+	if err == nil {
+		t.Fatal("expected runCommand error")
+	}
+	if !strings.Contains(err.Error(), "command failed (exit=7): brew bundle install") {
+		t.Fatalf("expected contextual failure error, got %v", err)
+	}
+
+	if len(logger.events) != 4 {
+		t.Fatalf("expected 4 log events, got %d", len(logger.events))
+	}
+	completed := logger.events[3]
+	if completed.EventType != "command_completed" {
+		t.Fatalf("expected command_completed event, got %q", completed.EventType)
+	}
+	if completed.Level != "error" {
+		t.Fatalf("expected command_completed error level, got %q", completed.Level)
+	}
+	if completed.Command != command.String() {
+		t.Fatalf("completion command mismatch: got=%q want=%q", completed.Command, command.String())
+	}
+	if completed.ExitCode == nil || *completed.ExitCode != 7 {
+		t.Fatalf("expected exit code 7, got %+v", completed.ExitCode)
+	}
+	if !strings.Contains(completed.Message, "exit status 7") {
+		t.Fatalf("expected error details in completion message, got %q", completed.Message)
 	}
 }

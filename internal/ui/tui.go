@@ -1382,6 +1382,8 @@ func isEventToken(value string) bool {
 		"stage_skipped",
 		"command_started",
 		"command_completed",
+		"command_stdout",
+		"command_stderr",
 		"simulation",
 		"stage_message":
 		return true

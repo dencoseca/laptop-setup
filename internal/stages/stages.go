@@ -628,6 +628,13 @@ func runCommand(ctx context.Context, execCtx ExecutionContext, command runner.Co
 
 	result, err := execCtx.Runner.Run(ctx, command)
 	if execCtx.Logger != nil {
+		if logErr := logCommandOutput(execCtx, "command_stdout", result.Stdout); logErr != nil {
+			return logErr
+		}
+		if logErr := logCommandOutput(execCtx, "command_stderr", result.Stderr); logErr != nil {
+			return logErr
+		}
+
 		exitCode := result.ExitCode
 		event := runner.Event{
 			RunID:     execCtx.RunID,
@@ -653,6 +660,47 @@ func runCommand(ctx context.Context, execCtx ExecutionContext, command runner.Co
 		return fmt.Errorf("command failed (exit=%d): %s: %w", result.ExitCode, command.String(), err)
 	}
 	return nil
+}
+
+func logCommandOutput(execCtx ExecutionContext, eventType string, output string) error {
+	if execCtx.Logger == nil || output == "" {
+		return nil
+	}
+	for _, line := range splitOutputLines(output) {
+		message := line
+		if message == "" {
+			message = "<blank>"
+		}
+		event := runner.Event{
+			RunID:     execCtx.RunID,
+			StageID:   execCtx.StageID,
+			Attempt:   execCtx.Attempt,
+			Mode:      execCtx.Mode,
+			EventType: eventType,
+			Message:   message,
+		}
+		if eventType == "command_stderr" {
+			event.Level = "warn"
+		}
+		if err := execCtx.Logger.Log(event); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func splitOutputLines(output string) []string {
+	normalized := strings.ReplaceAll(output, "\r\n", "\n")
+	normalized = strings.ReplaceAll(normalized, "\r", "\n")
+
+	lines := strings.Split(normalized, "\n")
+	if len(lines) == 0 {
+		return nil
+	}
+	if lines[len(lines)-1] == "" {
+		lines = lines[:len(lines)-1]
+	}
+	return lines
 }
 
 func logSimulation(execCtx ExecutionContext, message string) error {

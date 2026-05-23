@@ -73,8 +73,17 @@ func formatHuman(event Event) string {
 	if event.StageID != "" {
 		parts = append(parts, event.StageID)
 	}
+	if event.Attempt > 0 {
+		parts = append(parts, fmt.Sprintf("attempt=%d", event.Attempt))
+	}
 	if event.EventType != "" {
 		parts = append(parts, event.EventType)
+	}
+	if event.Command != "" {
+		parts = append(parts, event.Command)
+	}
+	if event.ExitCode != nil {
+		parts = append(parts, fmt.Sprintf("exit=%d", *event.ExitCode))
 	}
 	if event.Message != "" {
 		parts = append(parts, event.Message)
