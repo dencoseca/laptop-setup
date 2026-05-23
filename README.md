@@ -23,4 +23,10 @@ Common flags:
 |------|--------------|
 | `--yes`, `-y` | non-interactive mode |
 | `--resume` | resume previous run |
+| `--from <stage-id>` | start execution from a stage |
+| `--only <stage-id>[,<stage-id>...]` | run only specific stages |
+| `--skip <stage-id>[,<stage-id>...]` | skip specific stages |
 | `--dry-run` | simulate without system mutation |
+
+Package/app selection is configured interactively in the TUI.
+No voice output feature is implemented.

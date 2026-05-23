@@ -103,13 +103,13 @@ Notes:
 ## CLI Contract (Target)
 Support both interactive and automation use cases:
 - `-y, --yes` (non-interactive, auto-approve applicable stages)
-- `--brew-selection <entry-id>[,<entry-id>...]` (optional explicit package/app selection; defaults to all catalog entries)
 - `--resume` (continue from last incomplete run)
 - `--from <stage-id>` (start from stage)
 - `--only <stage-id>[,<stage-id>...]`
 - `--skip <stage-id>[,<stage-id>...]`
-- `--no-say` (disable voice output)
 - `--dry-run` (simulate the full flow without mutating the machine)
+- Package/app selection is configured interactively in the TUI selection screen.
+- No voice output feature is implemented.
 
 ## TUI Experience (Target)
 Primary views:

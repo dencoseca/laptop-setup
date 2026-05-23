@@ -16,7 +16,7 @@ All phases below are actionable for an implementing agent.
 4. Update the phase ledger and completion notes in this file after each phase.
 
 ## Phase Status Ledger
-1. Phase 1 - CLI Contract Cleanup: `pending`
+1. Phase 1 - CLI Contract Cleanup: `done`
 2. Phase 2 - Bootstrap/Legacy Policy Alignment: `pending`
 3. Phase 3 - Dev Tools Decision Model: `pending`
 4. Phase 4 - TUI Live Log Tail/Filter: `pending`
@@ -142,3 +142,4 @@ All phases below are actionable for an implementing agent.
 ## Completion Notes
 Append one line per terminal phase update:
 - Format: `YYYY-MM-DD | Phase N | status=<done|blocked> | commit=<sha> | notes=<short summary>`
+- `2026-05-23 | Phase 1 | status=done | commit=87da472 | notes=Removed obsolete CLI flag references from docs/plans, documented interactive package selection and no voice output, verification commands passed.`
