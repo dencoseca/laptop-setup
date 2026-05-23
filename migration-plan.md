@@ -1,7 +1,7 @@
 # Laptop Setup TUI Migration Plan
 
 ## Objective
-Replace the current `setup.sh`-driven flow with a robust, resumable, interactive TUI application built in Go using Bubble Tea, while preserving the current setup behavior and stage boundaries.
+Replace the current `setup.sh`-driven flow with a robust, resumable, interactive TUI application built in Go using Bubble Tea, while preserving the current setup behavior and granular execution stage boundaries.
 
 ## Why This Direction
 - Fresh-machine friendly: ship a single statically linked binary.
@@ -11,10 +11,11 @@ Replace the current `setup.sh`-driven flow with a robust, resumable, interactive
 
 ## End-State Goals
 1. `bootstrap.sh` downloads and runs the correct release binary for host architecture (`arm64`/`amd64`).
-2. The binary provides an interactive TUI with per-stage confirmations and live progress.
+2. The binary provides an interactive TUI with phase-level decision prompts and per-stage live progress.
 3. Non-interactive mode remains supported (`--yes`) for unattended execution.
 4. Every stage is resumable and emits logs into a single per-run log stream (human + structured).
 5. Existing templates remain source-of-truth inputs for generated config files.
+6. User choices are collected up front, rendered as a concrete execution plan, then executed as granular stages.
 
 ## Technical Stack
 - Language: Go (stable modern version, pinned in CI)
@@ -48,24 +49,43 @@ Suggested fields:
 - `Description`: short explanation in UI
 - `Precheck`: determines if stage is already satisfied
 - `Run`: executes commands/actions
+- `DecisionDeps`: references to user decisions this stage consumes
 - `CanSkip`: whether user may skip
 - `Critical`: if true, failed stage blocks later stages unless explicitly overridden
 - `LogTag`: deterministic stage tag used to filter centralized run logs
 
+## Phase Model (User Decision Layer)
+Phases are user-facing planning buckets that collect decisions before execution. Phases do not replace execution stages.
+
+Suggested fields:
+- `ID`: stable identifier for phase-level UI/state
+- `Title`: user-facing phase name
+- `Description`: short explanation in UI
+- `Configure`: renders prompts and persists decisions
+- `StageIDs`: ordered list of stage IDs governed by this phase
+
 ## Stage Mapping From Current Behavior
 Map from existing `bootstrap.sh` + `setup.sh` behavior:
-1. `xcode_clt`
-   - Precheck: `xcode-select -p`
-   - If missing: install Command Line Tools via `softwareupdate`
-   - Mark `already_done` when CLT is already present
-2. `macos_defaults`
-3. `homebrew_install`
-4. `brew_bundle`
-5. `vite_plus_install`
-6. `docker_config`
-7. `shell_setup` (oh-my-zsh + zshrc + starship)
-8. `git_config`
-9. `manual_app_store_apps` (summary/reminder stage, no automation)
+1. **Phase: `macos_setup` (MacOS setup)**
+   - `xcode_clt`
+     - Precheck: `xcode-select -p`
+     - If missing: install Command Line Tools via `softwareupdate`
+     - Mark `already_done` when CLT is already present
+   - `macos_defaults`
+2. **Phase: `install_apps_packages` (Install apps/packages)**
+   - `homebrew_install`
+   - `brew_bundle` (respect selected Brewfile entries)
+3. **Phase: `dev_tools_setup` (Dev tools setup)**
+   - `vite_plus_install` (or alternative Node toolchain path per user decision)
+   - `docker_config` (e.g., Colima toggle/config)
+   - `shell_setup` (oh-my-zsh + zshrc + starship; decision-driven options)
+   - `git_config` (confirm/edit identity and config prior to run)
+4. **Phase: `manual_steps` (Manual App Store apps)**
+   - `manual_app_store_apps` (summary/reminder stage, no automation)
+
+Notes:
+- Stage IDs remain stable and granular for `--from`, `--only`, `--skip`, and resume behavior.
+- Phases are a UX/planning layer; stages remain the execution/recovery layer.
 
 ## CLI Contract (Target)
 Support both interactive and automation use cases:
@@ -82,15 +102,26 @@ Support both interactive and automation use cases:
 Primary views:
 1. Welcome/setup summary
 2. Environment selector (`home`/`work`) if not provided
-3. Stage checklist with status indicators:
+3. Phase decision wizard:
+   - `MacOS setup`: confirm defaults/skip options where applicable
+   - `Install apps/packages`: list Brewfile entries with check/uncheck selection
+   - `Dev tools setup`:
+     - Node environment choice (`vite+` vs `nvm + pnpm`)
+     - Docker runtime preference (e.g., use Colima)
+     - Shell setup options
+     - Git identity/config confirmation and edits
+   - `Manual App Store apps`: reminder configuration for final checklist
+4. Execution plan review/confirmation:
+   - show selected decisions
+   - show resolved stage list and order
+5. Stage checklist with status indicators:
    - `pending`, `running`, `success`, `skipped`, `failed`, `already_done`
-4. Stage confirmation prompt before execution
-5. Live execution panel with spinner + tailed logs
-6. Failure dialog with actions:
+6. Live execution panel with spinner + tailed logs
+7. Failure dialog with actions:
    - Retry stage
    - Skip stage (if allowed)
    - Abort run
-7. Final summary with:
+8. Final summary with:
    - Completed/skipped/failed counts
    - Run log paths
    - manual App Store installs reminder
@@ -98,11 +129,14 @@ Primary views:
 ## Reliability and Idempotency Rules
 - Stage prechecks must mark already-satisfied setup as `already_done` rather than fail.
 - File writes should be deterministic and safe to rerun.
+- Phase decisions are collected before execution and persisted as run configuration.
+- Stages must be pure consumers of persisted decisions (no hidden interactive prompts in stage execution).
 - External command failures must capture:
   - exit code
   - failing command
   - run log path + stage id/attempt context
 - Resume should restart at first non-successful stage.
+- Resume should reuse persisted decisions and resolved plan by default.
 - `--yes` mode should never block for TTY interaction.
 
 ## Dry-Run Mode Specification
@@ -111,6 +145,7 @@ Primary views:
 Behavior requirements:
 - No mutating commands are executed (`defaults write`, installers, file overwrites, package installs).
 - TUI screens and prompts remain identical to normal mode so interaction paths are testable.
+- Dry-run still performs phase decision prompts and plan resolution.
 - Each stage renders the commands/actions it would run.
 - Stage status uses `simulated_success` (or equivalent clear simulated status) instead of `success`.
 - Logs are still written, clearly prefixed/labeled as dry-run output.
@@ -152,6 +187,8 @@ Logging behavior:
 State should include:
 - run id, start/end timestamps
 - env (`home|work`)
+- phase decisions (selected package/app/tooling options)
+- resolved execution plan (ordered stage IDs derived from decisions)
 - per-stage status + attempts
 - last failure details (if any)
 
@@ -176,16 +213,19 @@ Artifact strategy:
 ## Testing Strategy
 1. Unit tests:
    - CLI parsing
+   - decision-to-plan resolution (phase decisions -> stage execution plan)
    - stage selection (`--only`, `--skip`, `--from`)
    - state transitions and resume behavior
 2. Integration tests (mock runner):
    - success path
    - retry path
    - non-interactive path
+   - phase prompt flow and execution-plan confirmation flow
    - dry-run path (no mutating command execution)
    - dry-run forced failure path (if `--dry-run-fail-at` is implemented)
 3. Manual smoke tests on clean macOS VM:
    - interactive run (`home` and `work`)
+   - phase decisions for package selection / Node toolchain / Docker runtime / git config
    - interrupted run + resume
    - stage skip and failure recovery
    - dry-run TUI walkthrough (confirm no system changes)
@@ -198,7 +238,7 @@ Artifact strategy:
    - Recreate all existing stage behaviors without TUI.
    - Ensure `--yes` parity with current script.
 3. **TUI Layer**
-   - Build Bubble Tea stage list, prompts, and live progress.
+   - Build Bubble Tea phase decision wizard, execution-plan review, stage list, and live progress.
    - Add failure actions (retry/skip/abort).
 4. **Bootstrap Cutover**
    - Update `bootstrap.sh` to fetch/run binary.
@@ -212,7 +252,7 @@ Artifact strategy:
 
 ## Definition of Done
 - New binary handles full setup flow end-to-end on a fresh macOS machine.
-- Interactive TUI prompts at each stage with clear status and error recovery.
+- Interactive TUI phase decision prompts drive a clear stage execution flow with error recovery.
 - Non-interactive mode works for unattended runs.
 - Dry-run mode provides full UX simulation with zero machine mutation.
 - Resume works after interruption/failure.
