@@ -32,6 +32,14 @@ const (
 	defaultBrewTemplate = "Brewfile"
 )
 
+var manualAppStoreApps = []string{
+	"Amphetamine",
+	"Bear",
+	"Bitwarden",
+	"Things",
+	"NordVPN",
+}
+
 type CheckResult struct {
 	Satisfied bool
 	Message   string
@@ -78,6 +86,10 @@ type BrewEntry struct {
 	Kind string
 	ID   string
 	Line string
+}
+
+func ManualAppStoreApps() []string {
+	return append([]string(nil), manualAppStoreApps...)
 }
 
 func DefaultCatalog() []Stage {
@@ -588,7 +600,7 @@ func simulateGitConfig(_ context.Context, execCtx ExecutionContext) error {
 }
 
 func runManualAppStoreApps(_ context.Context, execCtx ExecutionContext) error {
-	items := []string{"Amphetamine", "Bear", "Bitwarden", "Things", "NordVPN"}
+	items := ManualAppStoreApps()
 	return logStageMessage(execCtx, "Manual App Store apps: "+strings.Join(items, ", "))
 }
 

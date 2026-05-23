@@ -922,6 +922,11 @@ func (m model) viewSummary() string {
 	if m.eventsLogPath != "" {
 		fmt.Fprintf(&b, "Events log: %s\n", m.eventsLogPath)
 	}
+	fmt.Fprintf(&b, "\nManual App Store reminders:\n")
+	manualApps := stages.ManualAppStoreApps()
+	for _, item := range manualApps {
+		fmt.Fprintf(&b, "- %s\n", item)
+	}
 	fmt.Fprintf(&b, "\nPress Enter to exit.")
 	return b.String()
 }

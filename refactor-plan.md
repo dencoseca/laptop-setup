@@ -20,7 +20,7 @@ All phases below are actionable for an implementing agent.
 2. Phase 2 - Bootstrap/Legacy Policy Alignment: `done`
 3. Phase 3 - Dev Tools Decision Model: `done`
 4. Phase 4 - TUI Live Log Tail/Filter: `done`
-5. Phase 5 - Final Summary Manual Reminder: `pending`
+5. Phase 5 - Final Summary Manual Reminder: `done`
 6. Phase 6 - Centralized Stage Output Logging: `pending`
 7. Phase 7 - Integration Coverage Expansion: `pending`
 8. Phase 8 - Pinned Bootstrap Release Strategy: `pending`
@@ -146,3 +146,4 @@ Append one line per terminal phase update:
 - `2026-05-23 | Phase 2 | status=done | commit=uncommitted | notes=Improved bootstrap fail-fast root-cause errors, documented intentional no-setup.sh fallback policy, and passed phase verification commands.`
 - `2026-05-23 | Phase 3 | status=done | commit=uncommitted | notes=Added persisted dev-tools decisions (node, docker, shell, git) in TUI and --yes defaults, wired stages to consume decisions, and added tests for decision persistence and decision-driven stage behavior.`
 - `2026-05-23 | Phase 4 | status=done | commit=uncommitted | notes=Execution screen now tails run.log from disk with bounded buffering, filters visible log lines to the current stage tag, handles polling/EOF/partial lines cleanly, and adds targeted log parsing/filtering tests; go test ./... passed.`
+- `2026-05-23 | Phase 5 | status=done | commit=uncommitted | notes=Added explicit manual App Store reminder section to the final run summary while preserving stage counts and log paths, centralized reminder app list in stages, and passed go test ./....`

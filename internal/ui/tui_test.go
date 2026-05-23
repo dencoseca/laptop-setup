@@ -4,6 +4,7 @@ import (
 	"context"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -177,5 +178,35 @@ func TestConsumeLogTailChunkHandlesPartialLines(t *testing.T) {
 	}
 	if m.tailedLogs[0].StageID != "xcode_clt" || m.tailedLogs[1].StageID != "xcode_clt" {
 		t.Fatalf("unexpected stage ids: %+v", m.tailedLogs)
+	}
+}
+
+func TestViewSummaryIncludesManualAppStoreReminders(t *testing.T) {
+	m := model{
+		stageStatuses: map[string]state.StageStatus{
+			"xcode_clt":             {Status: string(stages.StatusSuccess)},
+			"manual_app_store_apps": {Status: string(stages.StatusSkipped)},
+		},
+		humanLogPath:  "/tmp/run.log",
+		eventsLogPath: "/tmp/events.jsonl",
+	}
+
+	summary := m.viewSummary()
+	if !strings.Contains(summary, "Stage counts: completed=1 skipped=1 failed=0") {
+		t.Fatalf("expected stage counts in summary, got %q", summary)
+	}
+	if !strings.Contains(summary, "Run log: /tmp/run.log") {
+		t.Fatalf("expected run log path in summary, got %q", summary)
+	}
+	if !strings.Contains(summary, "Events log: /tmp/events.jsonl") {
+		t.Fatalf("expected events log path in summary, got %q", summary)
+	}
+	if !strings.Contains(summary, "Manual App Store reminders:") {
+		t.Fatalf("expected manual app reminder section in summary, got %q", summary)
+	}
+	for _, item := range stages.ManualAppStoreApps() {
+		if !strings.Contains(summary, "- "+item) {
+			t.Fatalf("expected manual app %q in summary, got %q", item, summary)
+		}
 	}
 }
