@@ -3,6 +3,7 @@ package ui
 import (
 	"context"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -103,5 +104,78 @@ func TestParseGitIdentity(t *testing.T) {
 	}
 	if email != "ada@example.com" {
 		t.Fatalf("email mismatch: %q", email)
+	}
+}
+
+func TestParseRunLogLineExtractsStageID(t *testing.T) {
+	line := "2026-05-23T12:30:00Z | INFO | brew_bundle | stage_started | Brew Bundle"
+	parsed := parseRunLogLine(line)
+	if parsed.StageID != "brew_bundle" {
+		t.Fatalf("expected stage id brew_bundle, got %q", parsed.StageID)
+	}
+	if parsed.Line != line {
+		t.Fatalf("line mismatch: %q", parsed.Line)
+	}
+}
+
+func TestParseRunLogLineWithoutStageID(t *testing.T) {
+	line := "2026-05-23T12:30:00Z | INFO | run_started | Starting stage execution"
+	parsed := parseRunLogLine(line)
+	if parsed.StageID != "" {
+		t.Fatalf("expected empty stage id, got %q", parsed.StageID)
+	}
+	if parsed.Line != line {
+		t.Fatalf("line mismatch: %q", parsed.Line)
+	}
+}
+
+func TestCurrentLogStageIDPrefersRunningStage(t *testing.T) {
+	stageOrder := []string{"xcode_clt", "brew_bundle", "git_config"}
+	statuses := map[string]state.StageStatus{
+		"xcode_clt":   {Status: string(stages.StatusSuccess)},
+		"brew_bundle": {Status: string(stages.StatusRunning)},
+		"git_config":  {Status: string(stages.StatusPending)},
+	}
+
+	if got := currentLogStageID(stageOrder, statuses); got != "brew_bundle" {
+		t.Fatalf("current stage mismatch: got=%q", got)
+	}
+}
+
+func TestFilteredLogLinesByStage(t *testing.T) {
+	lines := []tailedLogLine{
+		{StageID: "xcode_clt", Line: "a"},
+		{StageID: "brew_bundle", Line: "b"},
+		{StageID: "brew_bundle", Line: "c"},
+		{StageID: "git_config", Line: "d"},
+	}
+
+	got := filteredLogLines(lines, "brew_bundle", 10)
+	want := []string{"b", "c"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("filtered lines mismatch: got=%v want=%v", got, want)
+	}
+}
+
+func TestConsumeLogTailChunkHandlesPartialLines(t *testing.T) {
+	var m model
+
+	m.consumeLogTailChunk("2026-05-23T12:30:00Z | INFO | xcode_clt | stage_started | Xcode")
+	if m.logTailCarry == "" {
+		t.Fatalf("expected partial line to be buffered")
+	}
+	if len(m.tailedLogs) != 0 {
+		t.Fatalf("expected no completed lines yet")
+	}
+
+	m.consumeLogTailChunk(" CLT\n2026-05-23T12:30:05Z | INFO | xcode_clt | stage_completed | success\n")
+	if m.logTailCarry != "" {
+		t.Fatalf("expected buffered fragment to be flushed")
+	}
+	if len(m.tailedLogs) != 2 {
+		t.Fatalf("expected two log lines, got %d", len(m.tailedLogs))
+	}
+	if m.tailedLogs[0].StageID != "xcode_clt" || m.tailedLogs[1].StageID != "xcode_clt" {
+		t.Fatalf("unexpected stage ids: %+v", m.tailedLogs)
 	}
 }
