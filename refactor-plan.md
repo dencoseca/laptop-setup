@@ -18,7 +18,7 @@ All phases below are actionable for an implementing agent.
 ## Phase Status Ledger
 1. Phase 1 - CLI Contract Cleanup: `done`
 2. Phase 2 - Bootstrap/Legacy Policy Alignment: `done`
-3. Phase 3 - Dev Tools Decision Model: `pending`
+3. Phase 3 - Dev Tools Decision Model: `done`
 4. Phase 4 - TUI Live Log Tail/Filter: `pending`
 5. Phase 5 - Final Summary Manual Reminder: `pending`
 6. Phase 6 - Centralized Stage Output Logging: `pending`
@@ -144,3 +144,4 @@ Append one line per terminal phase update:
 - Format: `YYYY-MM-DD | Phase N | status=<done|blocked> | commit=<sha> | notes=<short summary>`
 - `2026-05-23 | Phase 1 | status=done | commit=87da472 | notes=Removed obsolete CLI flag references from docs/plans, documented interactive package selection and no voice output, verification commands passed.`
 - `2026-05-23 | Phase 2 | status=done | commit=uncommitted | notes=Improved bootstrap fail-fast root-cause errors, documented intentional no-setup.sh fallback policy, and passed phase verification commands.`
+- `2026-05-23 | Phase 3 | status=done | commit=uncommitted | notes=Added persisted dev-tools decisions (node, docker, shell, git) in TUI and --yes defaults, wired stages to consume decisions, and added tests for decision persistence and decision-driven stage behavior.`

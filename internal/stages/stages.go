@@ -52,6 +52,7 @@ type ExecutionContext struct {
 	RunDir                   string
 	RepoRoot                 string
 	HomeDir                  string
+	Decisions                map[string]any
 	SelectedBrewIDs          []string
 	GeneratedBrewfilePath    string
 	SetGeneratedBrewfilePath func(path string)
@@ -133,7 +134,7 @@ func DefaultCatalog() []Stage {
 			ID:           "vite_plus_install",
 			Title:        "Vite+ Install",
 			Description:  "Set up Node toolchain",
-			DecisionDeps: nil,
+			DecisionDeps: []string{DecisionNodeToolchain},
 			CanSkip:      true,
 			Critical:     false,
 			LogTag:       "vite_plus_install",
@@ -145,7 +146,7 @@ func DefaultCatalog() []Stage {
 			ID:           "docker_config",
 			Title:        "Docker Configuration",
 			Description:  "Configure Docker runtime preferences",
-			DecisionDeps: nil,
+			DecisionDeps: []string{DecisionDockerRuntime},
 			CanSkip:      true,
 			Critical:     false,
 			LogTag:       "docker_config",
@@ -154,22 +155,26 @@ func DefaultCatalog() []Stage {
 			Simulate:     simulateDockerConfig,
 		},
 		{
-			ID:           "shell_setup",
-			Title:        "Shell Setup",
-			Description:  "Configure shell environment",
-			DecisionDeps: nil,
-			CanSkip:      true,
-			Critical:     false,
-			LogTag:       "shell_setup",
-			Precheck:     precheckNotSatisfied,
-			Run:          runShellSetup,
-			Simulate:     simulateShellSetup,
+			ID:          "shell_setup",
+			Title:       "Shell Setup",
+			Description: "Configure shell environment",
+			DecisionDeps: []string{
+				DecisionShellInstallOhMyZsh,
+				DecisionShellApplyZshrc,
+				DecisionShellApplyStarship,
+			},
+			CanSkip:  true,
+			Critical: false,
+			LogTag:   "shell_setup",
+			Precheck: precheckNotSatisfied,
+			Run:      runShellSetup,
+			Simulate: simulateShellSetup,
 		},
 		{
 			ID:           "git_config",
 			Title:        "Git Configuration",
 			Description:  "Configure git identity and defaults",
-			DecisionDeps: nil,
+			DecisionDeps: []string{DecisionGitConfigMode, DecisionGitUserName, DecisionGitUserEmail},
 			CanSkip:      true,
 			Critical:     false,
 			LogTag:       "git_config",
@@ -411,68 +416,175 @@ func simulateBrewBundle(ctx context.Context, execCtx ExecutionContext) error {
 }
 
 func runVitePlusInstall(ctx context.Context, execCtx ExecutionContext) error {
-	return runCommand(ctx, execCtx, runner.Command{
-		Name: "/bin/bash",
-		Args: []string{"-c", "curl -fsSL https://vite.plus | bash"},
-	})
+	switch NodeToolchainFromDecisions(execCtx.Decisions) {
+	case NodeToolchainNvmPnpm:
+		if err := runCommand(ctx, execCtx, runner.Command{
+			Name: "/bin/bash",
+			Args: []string{"-c", "curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash"},
+		}); err != nil {
+			return err
+		}
+		return runCommand(ctx, execCtx, runner.Command{
+			Name: "/bin/bash",
+			Args: []string{"-c", "curl -fsSL https://get.pnpm.io/install.sh | sh -"},
+		})
+	default:
+		return runCommand(ctx, execCtx, runner.Command{
+			Name: "/bin/bash",
+			Args: []string{"-c", "curl -fsSL https://vite.plus | bash"},
+		})
+	}
 }
 
 func simulateVitePlusInstall(_ context.Context, execCtx ExecutionContext) error {
-	return logSimulation(execCtx, "Would run Vite+ installer (curl https://vite.plus | bash)")
+	switch NodeToolchainFromDecisions(execCtx.Decisions) {
+	case NodeToolchainNvmPnpm:
+		if err := logSimulation(execCtx, "Would install nvm (curl raw.githubusercontent.com/nvm-sh/.../install.sh | bash)"); err != nil {
+			return err
+		}
+		return logSimulation(execCtx, "Would install pnpm (curl https://get.pnpm.io/install.sh | sh -)")
+	default:
+		return logSimulation(execCtx, "Would run Vite+ installer (curl https://vite.plus | bash)")
+	}
 }
 
 func runDockerConfig(_ context.Context, execCtx ExecutionContext) error {
+	runtime := DockerRuntimeFromDecisions(execCtx.Decisions)
+	if runtime != DockerRuntimeColima {
+		return logStageMessage(execCtx, fmt.Sprintf("No docker runtime handler for %q; skipping config", runtime))
+	}
 	return copyFromTemplates(execCtx, "docker-config.json", filepath.Join(execCtx.HomeDir, ".docker", "config.json"))
 }
 
 func simulateDockerConfig(_ context.Context, execCtx ExecutionContext) error {
-	return logSimulation(execCtx, "Would write templates/docker-config.json to ~/.docker/config.json")
+	runtime := DockerRuntimeFromDecisions(execCtx.Decisions)
+	if runtime != DockerRuntimeColima {
+		return logSimulation(execCtx, fmt.Sprintf("Would skip docker config for unsupported runtime %q", runtime))
+	}
+	return logSimulation(execCtx, "Would write templates/docker-config.json to ~/.docker/config.json (runtime: colima)")
 }
 
 func runShellSetup(ctx context.Context, execCtx ExecutionContext) error {
-	if err := runCommand(ctx, execCtx, runner.Command{
-		Name: "/bin/bash",
-		Args: []string{"-c", "curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh | sh -s -- --unattended"},
-	}); err != nil {
+	installOhMyZsh := ShellInstallOhMyZsh(execCtx.Decisions)
+	applyZshrc := ShellApplyZshrcTemplate(execCtx.Decisions)
+	applyStarship := ShellApplyStarshipTemplate(execCtx.Decisions)
+
+	if installOhMyZsh {
+		if err := runCommand(ctx, execCtx, runner.Command{
+			Name: "/bin/bash",
+			Args: []string{"-c", "curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh | sh -s -- --unattended"},
+		}); err != nil {
+			return err
+		}
+	} else if err := logStageMessage(execCtx, "Skipping oh-my-zsh install by decision"); err != nil {
 		return err
 	}
 
 	zshrcPath := filepath.Join(execCtx.HomeDir, ".zshrc")
-	if _, err := os.Stat(zshrcPath); err == nil {
-		if err = copyFile(zshrcPath, filepath.Join(execCtx.HomeDir, ".zshrc.bak")); err != nil {
+	if applyZshrc {
+		if _, err := os.Stat(zshrcPath); err == nil {
+			if err = copyFile(zshrcPath, filepath.Join(execCtx.HomeDir, ".zshrc.bak")); err != nil {
+				return err
+			}
+		}
+
+		if err := copyFromTemplates(execCtx, "zshrc", zshrcPath); err != nil {
 			return err
 		}
+	} else if err := logStageMessage(execCtx, "Skipping ~/.zshrc template write by decision"); err != nil {
+		return err
 	}
 
-	if err := copyFromTemplates(execCtx, "zshrc", zshrcPath); err != nil {
+	if applyStarship {
+		starshipPath := filepath.Join(execCtx.HomeDir, ".config", "starship.toml")
+		if err := copyFromTemplates(execCtx, "starship.toml", starshipPath); err != nil {
+			return err
+		}
+	} else if err := logStageMessage(execCtx, "Skipping starship config write by decision"); err != nil {
 		return err
 	}
-	starshipPath := filepath.Join(execCtx.HomeDir, ".config", "starship.toml")
-	if err := copyFromTemplates(execCtx, "starship.toml", starshipPath); err != nil {
-		return err
-	}
+
 	return nil
 }
 
 func simulateShellSetup(_ context.Context, execCtx ExecutionContext) error {
-	if err := logSimulation(execCtx, "Would install oh-my-zsh in unattended mode"); err != nil {
+	if ShellInstallOhMyZsh(execCtx.Decisions) {
+		if err := logSimulation(execCtx, "Would install oh-my-zsh in unattended mode"); err != nil {
+			return err
+		}
+	} else if err := logSimulation(execCtx, "Would skip oh-my-zsh install by decision"); err != nil {
 		return err
 	}
-	if err := logSimulation(execCtx, "Would back up ~/.zshrc to ~/.zshrc.bak when present"); err != nil {
+
+	if ShellApplyZshrcTemplate(execCtx.Decisions) {
+		if err := logSimulation(execCtx, "Would back up ~/.zshrc to ~/.zshrc.bak when present"); err != nil {
+			return err
+		}
+		if err := logSimulation(execCtx, "Would write templates/zshrc to ~/.zshrc"); err != nil {
+			return err
+		}
+	} else if err := logSimulation(execCtx, "Would skip ~/.zshrc template write by decision"); err != nil {
 		return err
 	}
-	return logSimulation(execCtx, "Would write templates/zshrc and templates/starship.toml to ~/.zshrc and ~/.config/starship.toml")
+
+	if ShellApplyStarshipTemplate(execCtx.Decisions) {
+		return logSimulation(execCtx, "Would write templates/starship.toml to ~/.config/starship.toml")
+	}
+	return logSimulation(execCtx, "Would skip starship config write by decision")
 }
 
 func runGitConfig(_ context.Context, execCtx ExecutionContext) error {
 	if err := copyFromTemplates(execCtx, "gitignore", filepath.Join(execCtx.HomeDir, ".gitignore")); err != nil {
 		return err
 	}
-	return copyFromTemplates(execCtx, "gitconfig", filepath.Join(execCtx.HomeDir, ".gitconfig"))
+
+	gitConfigPath := filepath.Join(execCtx.HomeDir, ".gitconfig")
+	switch GitConfigModeFromDecisions(execCtx.Decisions) {
+	case GitConfigModeExisting:
+		if _, err := os.Stat(gitConfigPath); err == nil {
+			return logStageMessage(execCtx, "Keeping existing ~/.gitconfig by decision")
+		}
+		return copyFromTemplates(execCtx, "gitconfig", gitConfigPath)
+	case GitConfigModeCustom:
+		name, email := GitIdentityFromDecisions(execCtx.Decisions)
+		if err := validateGitIdentity(name, email); err != nil {
+			return err
+		}
+		if err := copyFromTemplates(execCtx, "gitconfig", gitConfigPath); err != nil {
+			return err
+		}
+
+		content, err := os.ReadFile(gitConfigPath)
+		if err != nil {
+			return fmt.Errorf("read gitconfig: %w", err)
+		}
+		configBody := strings.TrimRight(string(content), "\n") + "\n\n[user]\n  name = " + name + "\n  email = " + email + "\n"
+		if err = os.WriteFile(gitConfigPath, []byte(configBody), 0o644); err != nil {
+			return fmt.Errorf("write gitconfig identity: %w", err)
+		}
+		return nil
+	default:
+		return copyFromTemplates(execCtx, "gitconfig", gitConfigPath)
+	}
 }
 
 func simulateGitConfig(_ context.Context, execCtx ExecutionContext) error {
-	return logSimulation(execCtx, "Would write templates/gitignore and templates/gitconfig to ~/.gitignore and ~/.gitconfig")
+	mode := GitConfigModeFromDecisions(execCtx.Decisions)
+	if err := logSimulation(execCtx, "Would write templates/gitignore to ~/.gitignore"); err != nil {
+		return err
+	}
+	switch mode {
+	case GitConfigModeExisting:
+		return logSimulation(execCtx, "Would keep existing ~/.gitconfig when present, otherwise write templates/gitconfig")
+	case GitConfigModeCustom:
+		name, email := GitIdentityFromDecisions(execCtx.Decisions)
+		if err := validateGitIdentity(name, email); err != nil {
+			return err
+		}
+		return logSimulation(execCtx, fmt.Sprintf("Would write templates/gitconfig and set git identity to %q <%s>", name, email))
+	default:
+		return logSimulation(execCtx, "Would write templates/gitconfig to ~/.gitconfig")
+	}
 }
 
 func runManualAppStoreApps(_ context.Context, execCtx ExecutionContext) error {
@@ -609,6 +721,22 @@ func copyFile(sourcePath, destinationPath string) error {
 	}
 	if err = os.WriteFile(destinationPath, payload, 0o644); err != nil {
 		return fmt.Errorf("write destination file: %w", err)
+	}
+	return nil
+}
+
+func validateGitIdentity(name, email string) error {
+	if strings.TrimSpace(name) == "" {
+		return errors.New("git user name is required for custom git identity mode")
+	}
+	if strings.TrimSpace(email) == "" {
+		return errors.New("git user email is required for custom git identity mode")
+	}
+	if strings.ContainsAny(name, "\r\n") {
+		return errors.New("git user name cannot contain newlines")
+	}
+	if strings.ContainsAny(email, "\r\n") {
+		return errors.New("git user email cannot contain newlines")
 	}
 	return nil
 }

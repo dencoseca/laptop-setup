@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/bubbles/spinner"
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/dencoseca/laptop-setup/internal/execution"
@@ -54,6 +55,12 @@ const (
 	screenInstall
 	screenBrew
 	screenDevTools
+	screenNodeToolchain
+	screenDockerRuntime
+	screenShellOptions
+	screenGitConfig
+	screenGitName
+	screenGitEmail
 	screenManual
 	screenReview
 	screenExecuting
@@ -65,6 +72,12 @@ type toggleOption struct {
 	ID       string
 	Title    string
 	Selected bool
+}
+
+type selectOption struct {
+	ID          string
+	Title       string
+	Description string
 }
 
 type stageStatusMsg struct {
@@ -123,10 +136,23 @@ type model struct {
 	macOSOptions   []toggleOption
 	installOptions []toggleOption
 	devOptions     []toggleOption
+	nodeOptions    []selectOption
+	dockerOptions  []selectOption
+	shellOptions   []toggleOption
+	gitModeOptions []selectOption
 	manualOptions  []toggleOption
 
 	brewEntries  []stages.BrewEntry
 	brewSelected map[string]bool
+
+	nodeSelection    int
+	dockerSelection  int
+	gitModeSelection int
+	gitNameInput     textinput.Model
+	gitEmailInput    textinput.Model
+	gitCurrentName   string
+	gitCurrentEmail  string
+	inputError       string
 
 	plan          []string
 	planError     string
@@ -164,6 +190,18 @@ func Run(ctx context.Context, options Options) error {
 
 	spin := spinner.New()
 	spin.Spinner = spinner.Dot
+	currentGitName, currentGitEmail := readGitIdentity(options.HomeDir)
+	gitNameInput := textinput.New()
+	gitNameInput.Placeholder = "Git user.name"
+	gitNameInput.CharLimit = 128
+	gitNameInput.Prompt = "> "
+	gitNameInput.SetValue(currentGitName)
+
+	gitEmailInput := textinput.New()
+	gitEmailInput.Placeholder = "Git user.email"
+	gitEmailInput.CharLimit = 128
+	gitEmailInput.Prompt = "> "
+	gitEmailInput.SetValue(currentGitEmail)
 
 	m := model{
 		ctx:            runCtx,
@@ -181,10 +219,31 @@ func Run(ctx context.Context, options Options) error {
 		macOSOptions:   optionsForStageIDs(options.Catalog, phaseMacOSStages),
 		installOptions: optionsForStageIDs(options.Catalog, phaseInstallStages),
 		devOptions:     optionsForStageIDs(options.Catalog, phaseDevStages),
-		manualOptions:  optionsForStageIDs(options.Catalog, phaseManualStages),
-		brewSelected:   make(map[string]bool),
-		stageStatuses:  make(map[string]state.StageStatus),
-		spinner:        spin,
+		nodeOptions: []selectOption{
+			{ID: stages.NodeToolchainVitePlus, Title: "vite+", Description: "Install Vite+ toolchain via official installer"},
+			{ID: stages.NodeToolchainNvmPnpm, Title: "pnpm + nvm", Description: "Install nvm and pnpm using official install scripts"},
+		},
+		dockerOptions: []selectOption{
+			{ID: stages.DockerRuntimeColima, Title: "colima", Description: "Configure Docker client context for Colima"},
+		},
+		shellOptions: []toggleOption{
+			{ID: stages.DecisionShellInstallOhMyZsh, Title: "Install oh-my-zsh", Selected: true},
+			{ID: stages.DecisionShellApplyZshrc, Title: "Write ~/.zshrc from template", Selected: true},
+			{ID: stages.DecisionShellApplyStarship, Title: "Write starship.toml from template", Selected: true},
+		},
+		gitModeOptions: []selectOption{
+			{ID: stages.GitConfigModeTemplate, Title: "Use template git config", Description: "Write templates/gitconfig as ~/.gitconfig"},
+			{ID: stages.GitConfigModeExisting, Title: "Keep existing git config", Description: "Keep ~/.gitconfig when present"},
+			{ID: stages.GitConfigModeCustom, Title: "Set custom identity", Description: "Write template config and override user.name/user.email"},
+		},
+		manualOptions:   optionsForStageIDs(options.Catalog, phaseManualStages),
+		brewSelected:    make(map[string]bool),
+		gitNameInput:    gitNameInput,
+		gitEmailInput:   gitEmailInput,
+		gitCurrentName:  currentGitName,
+		gitCurrentEmail: currentGitEmail,
+		stageStatuses:   make(map[string]state.StageStatus),
+		spinner:         spin,
 	}
 
 	if err := m.reloadBrewEntries(); err != nil && !m.resumeRun {
@@ -300,9 +359,189 @@ func (m model) updateKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		}
 	case screenDevTools:
-		return m.updateToggleScreen(key, &m.devOptions, screenBrew, screenManual)
+		switch key.String() {
+		case "q":
+			return m, tea.Quit
+		case "b":
+			m.screen = screenBrew
+			m.cursor = 0
+		case "up", "k":
+			if m.cursor > 0 {
+				m.cursor--
+			}
+		case "down", "j":
+			if m.cursor < len(m.devOptions)-1 {
+				m.cursor++
+			}
+		case " ":
+			if len(m.devOptions) > 0 {
+				m.devOptions[m.cursor].Selected = !m.devOptions[m.cursor].Selected
+			}
+		case "enter":
+			m.screen = screenNodeToolchain
+			m.cursor = m.nodeSelection
+		}
+	case screenNodeToolchain:
+		switch key.String() {
+		case "q":
+			return m, tea.Quit
+		case "b":
+			m.screen = screenDevTools
+			m.cursor = 0
+		case "up", "k":
+			if m.cursor > 0 {
+				m.cursor--
+			}
+		case "down", "j":
+			if m.cursor < len(m.nodeOptions)-1 {
+				m.cursor++
+			}
+		case " ":
+			if len(m.nodeOptions) > 0 {
+				m.nodeSelection = m.cursor
+			}
+		case "enter":
+			if len(m.nodeOptions) > 0 {
+				m.nodeSelection = m.cursor
+			}
+			m.screen = screenDockerRuntime
+			m.cursor = m.dockerSelection
+		}
+	case screenDockerRuntime:
+		switch key.String() {
+		case "q":
+			return m, tea.Quit
+		case "b":
+			m.screen = screenNodeToolchain
+			m.cursor = m.nodeSelection
+		case "up", "k":
+			if m.cursor > 0 {
+				m.cursor--
+			}
+		case "down", "j":
+			if m.cursor < len(m.dockerOptions)-1 {
+				m.cursor++
+			}
+		case " ":
+			if len(m.dockerOptions) > 0 {
+				m.dockerSelection = m.cursor
+			}
+		case "enter":
+			if len(m.dockerOptions) > 0 {
+				m.dockerSelection = m.cursor
+			}
+			m.screen = screenShellOptions
+			m.cursor = 0
+		}
+	case screenShellOptions:
+		switch key.String() {
+		case "q":
+			return m, tea.Quit
+		case "b":
+			m.screen = screenDockerRuntime
+			m.cursor = m.dockerSelection
+		case "up", "k":
+			if m.cursor > 0 {
+				m.cursor--
+			}
+		case "down", "j":
+			if m.cursor < len(m.shellOptions)-1 {
+				m.cursor++
+			}
+		case " ":
+			if len(m.shellOptions) > 0 {
+				m.shellOptions[m.cursor].Selected = !m.shellOptions[m.cursor].Selected
+			}
+		case "enter":
+			m.screen = screenGitConfig
+			m.cursor = m.gitModeSelection
+		}
+	case screenGitConfig:
+		switch key.String() {
+		case "q":
+			return m, tea.Quit
+		case "b":
+			m.screen = screenShellOptions
+			m.cursor = 0
+		case "up", "k":
+			if m.cursor > 0 {
+				m.cursor--
+			}
+		case "down", "j":
+			if m.cursor < len(m.gitModeOptions)-1 {
+				m.cursor++
+			}
+		case " ":
+			if len(m.gitModeOptions) > 0 {
+				m.gitModeSelection = m.cursor
+			}
+		case "enter":
+			if len(m.gitModeOptions) > 0 {
+				m.gitModeSelection = m.cursor
+			}
+			m.inputError = ""
+			if m.selectedGitModeID() == stages.GitConfigModeCustom {
+				m.screen = screenGitName
+				m.gitNameInput.Focus()
+				return m, textinput.Blink
+			}
+			m.screen = screenManual
+			m.cursor = 0
+		}
+	case screenGitName:
+		switch key.String() {
+		case "q":
+			return m, tea.Quit
+		case "b":
+			m.inputError = ""
+			m.gitNameInput.Blur()
+			m.screen = screenGitConfig
+			m.cursor = m.gitModeSelection
+			return m, nil
+		case "enter":
+			name := strings.TrimSpace(m.gitNameInput.Value())
+			if name == "" {
+				m.inputError = "Git user.name is required."
+				return m, nil
+			}
+			m.inputError = ""
+			m.gitNameInput.SetValue(name)
+			m.gitNameInput.Blur()
+			m.gitEmailInput.Focus()
+			m.screen = screenGitEmail
+			return m, textinput.Blink
+		}
+		var cmd tea.Cmd
+		m.gitNameInput, cmd = m.gitNameInput.Update(key)
+		return m, cmd
+	case screenGitEmail:
+		switch key.String() {
+		case "q":
+			return m, tea.Quit
+		case "b":
+			m.inputError = ""
+			m.gitEmailInput.Blur()
+			m.gitNameInput.Focus()
+			m.screen = screenGitName
+			return m, textinput.Blink
+		case "enter":
+			email := strings.TrimSpace(m.gitEmailInput.Value())
+			if email == "" {
+				m.inputError = "Git user.email is required."
+				return m, nil
+			}
+			m.inputError = ""
+			m.gitEmailInput.SetValue(email)
+			m.gitEmailInput.Blur()
+			m.screen = screenManual
+			m.cursor = 0
+			return m, nil
+		}
+		var cmd tea.Cmd
+		m.gitEmailInput, cmd = m.gitEmailInput.Update(key)
+		return m, cmd
 	case screenManual:
-		return m.updateToggleScreen(key, &m.manualOptions, screenDevTools, screenReview)
+		return m.updateToggleScreen(key, &m.manualOptions, screenGitConfig, screenReview)
 	case screenReview:
 		switch key.String() {
 		case "b":
@@ -413,6 +652,18 @@ func (m model) View() string {
 		return m.viewBrewSelection()
 	case screenDevTools:
 		return m.viewToggleOptions("Phase: Dev Tools Setup", m.devOptions)
+	case screenNodeToolchain:
+		return m.viewSelectOptions("Dev Tools: Node Toolchain", m.nodeOptions, m.nodeSelection)
+	case screenDockerRuntime:
+		return m.viewSelectOptions("Dev Tools: Docker Runtime", m.dockerOptions, m.dockerSelection)
+	case screenShellOptions:
+		return m.viewToggleOptions("Dev Tools: Shell Setup Options", m.shellOptions)
+	case screenGitConfig:
+		return m.viewGitConfigMode()
+	case screenGitName:
+		return m.viewTextInput("Git Identity: user.name", "Enter git user.name, then press Enter.", m.gitNameInput)
+	case screenGitEmail:
+		return m.viewTextInput("Git Identity: user.email", "Enter git user.email, then press Enter.", m.gitEmailInput)
 	case screenManual:
 		return m.viewToggleOptions("Phase: Manual Steps", m.manualOptions)
 	case screenReview:
@@ -462,6 +713,27 @@ func (m model) viewToggleOptions(title string, options []toggleOption) string {
 	return b.String()
 }
 
+func (m model) viewSelectOptions(title string, options []selectOption, selected int) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "%s\n\n", lipgloss.NewStyle().Bold(true).Render(title))
+	fmt.Fprintf(&b, "Select one option with space. Enter to continue, b to go back.\n\n")
+	for index, option := range options {
+		prefix := "  "
+		if m.cursor == index {
+			prefix = "> "
+		}
+		current := " "
+		if selected == index {
+			current = "x"
+		}
+		fmt.Fprintf(&b, "%s[%s] %s\n", prefix, current, option.Title)
+		if option.Description != "" {
+			fmt.Fprintf(&b, "    %s\n", option.Description)
+		}
+	}
+	return b.String()
+}
+
 func (m model) viewBrewSelection() string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s\n\n", lipgloss.NewStyle().Bold(true).Render("Phase: Brew Catalog Selection"))
@@ -487,6 +759,48 @@ func (m model) viewBrewSelection() string {
 	return b.String()
 }
 
+func (m model) viewGitConfigMode() string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "%s\n\n", lipgloss.NewStyle().Bold(true).Render("Dev Tools: Git Configuration"))
+	currentName := strings.TrimSpace(m.gitCurrentName)
+	if currentName == "" {
+		currentName = "(not set)"
+	}
+	currentEmail := strings.TrimSpace(m.gitCurrentEmail)
+	if currentEmail == "" {
+		currentEmail = "(not set)"
+	}
+	fmt.Fprintf(&b, "Current identity: %s <%s>\n", currentName, currentEmail)
+	fmt.Fprintf(&b, "Choose how git config should be handled.\n\n")
+	for index, option := range m.gitModeOptions {
+		prefix := "  "
+		if m.cursor == index {
+			prefix = "> "
+		}
+		selected := " "
+		if m.gitModeSelection == index {
+			selected = "x"
+		}
+		fmt.Fprintf(&b, "%s[%s] %s\n", prefix, selected, option.Title)
+		if option.Description != "" {
+			fmt.Fprintf(&b, "    %s\n", option.Description)
+		}
+	}
+	return b.String()
+}
+
+func (m model) viewTextInput(title string, subtitle string, input textinput.Model) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "%s\n\n", lipgloss.NewStyle().Bold(true).Render(title))
+	fmt.Fprintf(&b, "%s\n\n", subtitle)
+	fmt.Fprintf(&b, "%s\n", input.View())
+	if m.inputError != "" {
+		fmt.Fprintf(&b, "\n%s\n", m.inputError)
+	}
+	fmt.Fprintf(&b, "\nPress Enter to continue, b to go back.")
+	return b.String()
+}
+
 func (m *model) viewReview() string {
 	plan, err := m.resolvePlan()
 	m.plan = plan
@@ -500,6 +814,20 @@ func (m *model) viewReview() string {
 	fmt.Fprintf(&b, "Mode: %s\n", modeName(m.effectiveDryRun()))
 	if !m.resumeRun {
 		fmt.Fprintf(&b, "Selected Brew entries: %d\n", len(m.selectedBrewIDs()))
+	}
+	decisions := m.effectiveDecisions()
+	fmt.Fprintf(&b, "Node toolchain: %s\n", stages.NodeToolchainFromDecisions(decisions))
+	fmt.Fprintf(&b, "Docker runtime: %s\n", stages.DockerRuntimeFromDecisions(decisions))
+	fmt.Fprintf(&b, "Shell: oh-my-zsh=%t, zshrc=%t, starship=%t\n",
+		stages.ShellInstallOhMyZsh(decisions),
+		stages.ShellApplyZshrcTemplate(decisions),
+		stages.ShellApplyStarshipTemplate(decisions),
+	)
+	gitMode := stages.GitConfigModeFromDecisions(decisions)
+	fmt.Fprintf(&b, "Git config mode: %s\n", gitMode)
+	if gitMode == stages.GitConfigModeCustom {
+		name, email := stages.GitIdentityFromDecisions(decisions)
+		fmt.Fprintf(&b, "Git identity: %s <%s>\n", name, email)
 	}
 	fmt.Fprintf(&b, "\nStages:\n")
 	for _, stageID := range m.plan {
@@ -649,20 +977,19 @@ func (m *model) prepareExecutionSetup() (executionSetup, error) {
 			StartAt:      time.Now().UTC(),
 			Mode:         modeName(dryRun),
 			ResolvedPlan: plan,
-			Decisions: map[string]any{
-				"selected_stage_ids": m.selectedStageIDs(),
-			},
-			SelectedIDs: m.selectedBrewIDs(),
-			Stages:      make(map[string]state.StageStatus, len(m.catalog)),
+			Decisions:    m.collectDecisions(),
+			SelectedIDs:  m.selectedBrewIDs(),
+			Stages:       make(map[string]state.StageStatus, len(m.catalog)),
 		}
 	}
 
-	if runState.Decisions == nil {
-		runState.Decisions = make(map[string]any)
-	}
+	runState.Decisions = stages.NormalizeDecisions(runState.Decisions)
 	if !m.resumeRun {
 		runState.SelectedIDs = m.selectedBrewIDs()
 		runState.ResolvedPlan = plan
+		runState.Decisions = m.collectDecisions()
+	} else if _, ok := runState.Decisions[stages.DecisionSelectedStageIDs]; !ok {
+		runState.Decisions[stages.DecisionSelectedStageIDs] = append([]string(nil), runState.ResolvedPlan...)
 	}
 
 	if err = m.store.Save(m.ctx, runState); err != nil {
@@ -731,6 +1058,57 @@ func (m *model) selectedBrewIDs() []string {
 		}
 	}
 	return ids
+}
+
+func (m *model) collectDecisions() map[string]any {
+	decisions := stages.DefaultDecisions()
+	decisions[stages.DecisionSelectedStageIDs] = m.selectedStageIDs()
+	decisions[stages.DecisionNodeToolchain] = m.selectedNodeToolchainID()
+	decisions[stages.DecisionDockerRuntime] = m.selectedDockerRuntimeID()
+	decisions[stages.DecisionShellInstallOhMyZsh] = m.shellOptionEnabled(stages.DecisionShellInstallOhMyZsh)
+	decisions[stages.DecisionShellApplyZshrc] = m.shellOptionEnabled(stages.DecisionShellApplyZshrc)
+	decisions[stages.DecisionShellApplyStarship] = m.shellOptionEnabled(stages.DecisionShellApplyStarship)
+	decisions[stages.DecisionGitConfigMode] = m.selectedGitModeID()
+	decisions[stages.DecisionGitUserName] = strings.TrimSpace(m.gitNameInput.Value())
+	decisions[stages.DecisionGitUserEmail] = strings.TrimSpace(m.gitEmailInput.Value())
+	return stages.NormalizeDecisions(decisions)
+}
+
+func (m *model) effectiveDecisions() map[string]any {
+	if m.resumeRun && m.current != nil {
+		return stages.NormalizeDecisions(m.current.Decisions)
+	}
+	return m.collectDecisions()
+}
+
+func (m *model) selectedNodeToolchainID() string {
+	if m.nodeSelection >= 0 && m.nodeSelection < len(m.nodeOptions) {
+		return m.nodeOptions[m.nodeSelection].ID
+	}
+	return stages.NodeToolchainVitePlus
+}
+
+func (m *model) selectedDockerRuntimeID() string {
+	if m.dockerSelection >= 0 && m.dockerSelection < len(m.dockerOptions) {
+		return m.dockerOptions[m.dockerSelection].ID
+	}
+	return stages.DockerRuntimeColima
+}
+
+func (m *model) selectedGitModeID() string {
+	if m.gitModeSelection >= 0 && m.gitModeSelection < len(m.gitModeOptions) {
+		return m.gitModeOptions[m.gitModeSelection].ID
+	}
+	return stages.GitConfigModeTemplate
+}
+
+func (m *model) shellOptionEnabled(id string) bool {
+	for _, option := range m.shellOptions {
+		if option.ID == id {
+			return option.Selected
+		}
+	}
+	return true
 }
 
 func (m *model) effectiveDryRun() bool {
@@ -861,6 +1239,48 @@ func waitForExecutionUpdate(updates <-chan tea.Msg) tea.Cmd {
 		}
 		return message
 	}
+}
+
+func readGitIdentity(homeDir string) (string, string) {
+	if strings.TrimSpace(homeDir) == "" {
+		return "", ""
+	}
+	payload, err := os.ReadFile(filepath.Join(homeDir, ".gitconfig"))
+	if err != nil {
+		return "", ""
+	}
+	return parseGitIdentity(string(payload))
+}
+
+func parseGitIdentity(content string) (string, string) {
+	inUser := false
+	name := ""
+	email := ""
+	for _, rawLine := range strings.Split(content, "\n") {
+		line := strings.TrimSpace(rawLine)
+		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, ";") {
+			continue
+		}
+		if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") {
+			section := strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(line, "["), "]"))
+			inUser = strings.EqualFold(section, "user")
+			continue
+		}
+		if !inUser {
+			continue
+		}
+		key, value, found := strings.Cut(line, "=")
+		if !found {
+			continue
+		}
+		switch strings.TrimSpace(strings.ToLower(key)) {
+		case "name":
+			name = strings.TrimSpace(value)
+		case "email":
+			email = strings.TrimSpace(value)
+		}
+	}
+	return name, email
 }
 
 func optionsForStageIDs(catalog []stages.Stage, ids []string) []toggleOption {

@@ -134,14 +134,20 @@ func runNonInteractive(
 			StartAt:      time.Now().UTC(),
 			Mode:         modeName(effectiveDryRun),
 			ResolvedPlan: plan,
-			Decisions:    map[string]any{},
-			SelectedIDs:  selectedIDs,
-			Stages:       make(map[string]state.StageStatus, len(catalog)),
+			Decisions: map[string]any{
+				stages.DecisionSelectedStageIDs: append([]string(nil), plan...),
+			},
+			SelectedIDs: selectedIDs,
+			Stages:      make(map[string]state.StageStatus, len(catalog)),
+		}
+		for key, value := range stages.DefaultDecisions() {
+			runState.Decisions[key] = value
 		}
 	}
 
-	if runState.Decisions == nil {
-		runState.Decisions = map[string]any{}
+	runState.Decisions = stages.NormalizeDecisions(runState.Decisions)
+	if _, ok := runState.Decisions[stages.DecisionSelectedStageIDs]; !ok {
+		runState.Decisions[stages.DecisionSelectedStageIDs] = append([]string(nil), runState.ResolvedPlan...)
 	}
 	if len(runState.SelectedIDs) == 0 {
 		selectedIDs, selectErr := stages.ResolveSelectedBrewIDs(repoRoot)

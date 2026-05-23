@@ -149,6 +149,7 @@ func Execute(ctx context.Context, options Options) error {
 				RunDir:                options.RunDir,
 				RepoRoot:              options.RepoRoot,
 				HomeDir:               options.HomeDir,
+				Decisions:             runState.Decisions,
 				SelectedBrewIDs:       runState.SelectedIDs,
 				GeneratedBrewfilePath: runState.GeneratedFile,
 				SetGeneratedBrewfilePath: func(path string) {

@@ -382,3 +382,56 @@ func TestExecuteSkipDeniedForNonSkippableStage(t *testing.T) {
 		t.Fatalf("expected failed status to persist, got %q", status.Status)
 	}
 }
+
+func TestExecutePassesPersistedDecisionsToStageContext(t *testing.T) {
+	store := state.NewStore(filepath.Join(t.TempDir(), "state.json"))
+	runState := &state.RunState{
+		RunID:        state.NewRunID(time.Now()),
+		StartAt:      time.Now().UTC(),
+		Mode:         "normal",
+		ResolvedPlan: []string{"decision_stage"},
+		Decisions: map[string]any{
+			stages.DecisionNodeToolchain: stages.NodeToolchainNvmPnpm,
+		},
+		Stages: map[string]state.StageStatus{},
+	}
+	if err := store.Save(context.Background(), runState); err != nil {
+		t.Fatalf("save initial state: %v", err)
+	}
+
+	seenValue := ""
+	catalog := []stages.Stage{
+		{
+			ID:      "decision_stage",
+			Title:   "Decision Stage",
+			CanSkip: true,
+			Precheck: func(context.Context, stages.ExecutionContext) (stages.CheckResult, error) {
+				return stages.CheckResult{}, nil
+			},
+			Run: func(_ context.Context, execCtx stages.ExecutionContext) error {
+				seenValue = stages.NodeToolchainFromDecisions(execCtx.Decisions)
+				return nil
+			},
+			Simulate: func(context.Context, stages.ExecutionContext) error { return nil },
+		},
+	}
+
+	logger := runner.NewEventLogger(&bytes.Buffer{}, &bytes.Buffer{})
+	err := Execute(context.Background(), Options{
+		Store:         store,
+		RunState:      runState,
+		Catalog:       catalog,
+		DryRun:        false,
+		RepoRoot:      t.TempDir(),
+		HomeDir:       t.TempDir(),
+		RunDir:        t.TempDir(),
+		CommandRunner: runner.NewOSCommandRunner(),
+		Logger:        logger,
+	})
+	if err != nil {
+		t.Fatalf("execute returned error: %v", err)
+	}
+	if seenValue != stages.NodeToolchainNvmPnpm {
+		t.Fatalf("expected decision in stage context, got %q", seenValue)
+	}
+}
