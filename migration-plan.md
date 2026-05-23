@@ -52,16 +52,20 @@ Suggested fields:
 - `Critical`: if true, failed stage blocks later stages unless explicitly overridden
 - `LogTag`: deterministic stage tag used to filter centralized run logs
 
-## Stage Mapping From Current Script
-Map directly to existing sections in `setup.sh`:
-1. `macos_defaults`
-2. `homebrew_install`
-3. `brew_bundle`
-4. `vite_plus_install`
-5. `docker_config`
-6. `shell_setup` (oh-my-zsh + zshrc + starship)
-7. `git_config`
-8. `manual_app_store_apps` (summary/reminder stage, no automation)
+## Stage Mapping From Current Behavior
+Map from existing `bootstrap.sh` + `setup.sh` behavior:
+1. `xcode_clt`
+   - Precheck: `xcode-select -p`
+   - If missing: install Command Line Tools via `softwareupdate`
+   - Mark `already_done` when CLT is already present
+2. `macos_defaults`
+3. `homebrew_install`
+4. `brew_bundle`
+5. `vite_plus_install`
+6. `docker_config`
+7. `shell_setup` (oh-my-zsh + zshrc + starship)
+8. `git_config`
+9. `manual_app_store_apps` (summary/reminder stage, no automation)
 
 ## CLI Contract (Target)
 Support both interactive and automation use cases:
