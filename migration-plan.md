@@ -16,6 +16,7 @@ Replace the current `setup.sh`-driven flow with a robust, resumable, interactive
 4. Every stage is resumable and emits logs into a single per-run log stream (human + structured).
 5. Existing templates remain source-of-truth inputs for generated config files.
 6. User choices are collected up front, rendered as a concrete execution plan, then executed as granular stages.
+7. Brew package/app installation is driven by a generated per-run Brewfile created from the user's confirmed selection.
 
 ## Technical Stack
 - Language: Go (stable modern version, pinned in CI)
@@ -74,7 +75,7 @@ Map from existing `bootstrap.sh` + `setup.sh` behavior:
    - `macos_defaults`
 2. **Phase: `install_apps_packages` (Install apps/packages)**
    - `homebrew_install`
-   - `brew_bundle` (respect selected Brewfile entries)
+   - `brew_bundle` (generate a run-scoped Brewfile from selected package/app entries, then run `brew bundle install --file <generated-brewfile>`)
 3. **Phase: `dev_tools_setup` (Dev tools setup)**
    - `vite_plus_install` (or alternative Node toolchain path per user decision)
    - `docker_config` (e.g., Colima toggle/config)
@@ -89,8 +90,8 @@ Notes:
 
 ## CLI Contract (Target)
 Support both interactive and automation use cases:
-- `-e, --env <home|work>` (required)
 - `-y, --yes` (non-interactive, auto-approve applicable stages)
+- `--brew-selection <entry-id>[,<entry-id>...]` (optional explicit package/app selection; defaults to all catalog entries)
 - `--resume` (continue from last incomplete run)
 - `--from <stage-id>` (start from stage)
 - `--only <stage-id>[,<stage-id>...]`
@@ -101,27 +102,26 @@ Support both interactive and automation use cases:
 ## TUI Experience (Target)
 Primary views:
 1. Welcome/setup summary
-2. Environment selector (`home`/`work`) if not provided
-3. Phase decision wizard:
+2. Phase decision wizard:
    - `MacOS setup`: confirm defaults/skip options where applicable
-   - `Install apps/packages`: list Brewfile entries with check/uncheck selection
+   - `Install apps/packages`: list package/app catalog entries with check/uncheck selection (all checked by default)
    - `Dev tools setup`:
      - Node environment choice (`vite+` vs `nvm + pnpm`)
      - Docker runtime preference (e.g., use Colima)
      - Shell setup options
      - Git identity/config confirmation and edits
    - `Manual App Store apps`: reminder configuration for final checklist
-4. Execution plan review/confirmation:
+3. Execution plan review/confirmation:
    - show selected decisions
    - show resolved stage list and order
-5. Stage checklist with status indicators:
+4. Stage checklist with status indicators:
    - `pending`, `running`, `success`, `skipped`, `failed`, `already_done`
-6. Live execution panel with spinner + tailed logs
-7. Failure dialog with actions:
+5. Live execution panel with spinner + tailed logs
+6. Failure dialog with actions:
    - Retry stage
    - Skip stage (if allowed)
    - Abort run
-8. Final summary with:
+7. Final summary with:
    - Completed/skipped/failed counts
    - Run log paths
    - manual App Store installs reminder
@@ -130,6 +130,7 @@ Primary views:
 - Stage prechecks must mark already-satisfied setup as `already_done` rather than fail.
 - File writes should be deterministic and safe to rerun.
 - Phase decisions are collected before execution and persisted as run configuration.
+- The `brew_bundle` stage should generate a deterministic run-scoped Brewfile (for example under `~/.laptop-setup/runs/<run-id>/`) from confirmed selection IDs and reuse it on resume/retry.
 - Stages must be pure consumers of persisted decisions (no hidden interactive prompts in stage execution).
 - External command failures must capture:
   - exit code
@@ -186,8 +187,8 @@ Logging behavior:
 
 State should include:
 - run id, start/end timestamps
-- env (`home|work`)
 - phase decisions (selected package/app/tooling options)
+- selected package/app entry IDs used to generate the run-scoped Brewfile
 - resolved execution plan (ordered stage IDs derived from decisions)
 - per-stage status + attempts
 - last failure details (if any)
@@ -221,10 +222,12 @@ Artifact strategy:
    - retry path
    - non-interactive path
    - phase prompt flow and execution-plan confirmation flow
+   - generated Brewfile content and `brew bundle` invocation match confirmed selections
    - dry-run path (no mutating command execution)
    - dry-run forced failure path (if `--dry-run-fail-at` is implemented)
 3. Manual smoke tests on clean macOS VM:
-   - interactive run (`home` and `work`)
+   - interactive run with default "all-selected" package/app list
+   - interactive run with custom package/app deselection
    - phase decisions for package selection / Node toolchain / Docker runtime / git config
    - interrupted run + resume
    - stage skip and failure recovery
