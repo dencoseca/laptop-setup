@@ -307,6 +307,10 @@ func TestViewSelectOptionsUsesRadioMarkersAndOmitsDescriptions(t *testing.T) {
 	for _, fragment := range []string{
 		"Install Vite+ toolchain via official installer",
 		"Install nvm and pnpm using official install scripts",
+		"Use Up/Down to choose.",
+		"Filter with /.",
+		"Enter to continue",
+		"Esc to go back",
 		"✓",
 	} {
 		if strings.Contains(view, fragment) {
@@ -826,7 +830,6 @@ func TestViewConfigurationUsesDashboardLayoutWithJourneyPreview(t *testing.T) {
 		"██████╗  ██████╗",
 		"Initiating CHAPEAUX, stand by for awesomeness...",
 		"Dev Tools Setup",
-		"Toggle with Space. Filter with /.",
 		"Xcode Command Line Tools",
 		"Brew Bundle",
 		"Git Configuration",
@@ -838,6 +841,11 @@ func TestViewConfigurationUsesDashboardLayoutWithJourneyPreview(t *testing.T) {
 	for _, fragment := range []string{"CONFIGURATION", "JOURNEY", "STANDARD OUTPUT"} {
 		if strings.Contains(view, fragment) {
 			t.Fatalf("expected configuration view to omit panel title %q, got %q", fragment, view)
+		}
+	}
+	for _, fragment := range []string{"Toggle with Space.", "Filter with /.", "Enter to continue", "Esc to go back"} {
+		if strings.Contains(view, fragment) {
+			t.Fatalf("expected configuration view to omit shortcut hint %q, got %q", fragment, view)
 		}
 	}
 }

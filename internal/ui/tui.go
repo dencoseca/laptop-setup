@@ -806,7 +806,6 @@ func (m model) viewWelcome() string {
 func (m model) viewToggleOptions(title string, options []toggleOption) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s\n\n", lipgloss.NewStyle().Bold(true).Render(title))
-	fmt.Fprintf(&b, "Toggle with Space. Filter with /. Enter to continue, Esc to go back.\n\n")
 	selector := m.optionListForView(m.toggleListItems(options))
 	if selector.SettingFilter() {
 		fmt.Fprintf(&b, "%s\n", selector.FilterInput.View())
@@ -818,7 +817,6 @@ func (m model) viewToggleOptions(title string, options []toggleOption) string {
 func (m model) viewSelectOptions(title string, options []selectOption, selected int) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s\n\n", lipgloss.NewStyle().Bold(true).Render(title))
-	fmt.Fprintf(&b, "Use Up/Down to choose. Filter with /. Enter to continue, Esc to go back.\n\n")
 	selector := m.optionListForView(selectListItems(options, selected))
 	if selector.SettingFilter() {
 		fmt.Fprintf(&b, "%s\n", selector.FilterInput.View())
