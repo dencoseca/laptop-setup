@@ -297,7 +297,7 @@ func TestViewSelectOptionsUsesRadioMarkersAndOmitsDescriptions(t *testing.T) {
 	}, 0)
 
 	for _, fragment := range []string{
-		fmt.Sprintf("> %s vite+", radioMarker(true)),
+		fmt.Sprintf("│ %s vite+", radioMarker(true)),
 		fmt.Sprintf("  %s pnpm + nvm", radioMarker(false)),
 	} {
 		if !strings.Contains(view, fragment) {
@@ -340,7 +340,7 @@ func TestViewToggleOptionsUsesCompletionTickForAlreadyDoneStage(t *testing.T) {
 		{ID: "macos_defaults", Title: "macOS Defaults", Selected: true},
 	}))
 
-	if !strings.Contains(view, "> ✓ Xcode Command Line Tools") {
+	if !strings.Contains(view, "│ ✓ Xcode Command Line Tools") {
 		t.Fatalf("expected already-installed xcode row to use completion tick, got %q", view)
 	}
 	if !strings.Contains(view, "  ● macOS Defaults") {
@@ -826,7 +826,7 @@ func TestViewConfigurationUsesDashboardLayoutWithJourneyPreview(t *testing.T) {
 		"██████╗  ██████╗",
 		"Initiating CHAPEAUX, stand by for awesomeness...",
 		"Dev Tools Setup",
-		"Toggle stages with Space. Enter to continue, Esc to go back.",
+		"Toggle with Space. Filter with /.",
 		"Xcode Command Line Tools",
 		"Brew Bundle",
 		"Git Configuration",
