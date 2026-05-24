@@ -1592,7 +1592,6 @@ type executionProgress struct {
 }
 
 type dashboardStatus struct {
-	Title       string
 	Badge       string
 	BadgeTone   lipgloss.TerminalColor
 	Heading     string
@@ -1720,7 +1719,6 @@ func (m model) renderDashboardStatusPanel(width int, height int, status dashboar
 		badgeLine = lipgloss.JoinHorizontal(lipgloss.Center, statusBadge, " ", lipgloss.NewStyle().Foreground(mutedColor).Render(m.spinner.View()))
 	}
 	lines := []string{
-		lipgloss.NewStyle().Bold(true).Foreground(accentAltColor).Render(status.Title),
 		badgeLine,
 		truncateLine(status.Heading, innerWidth),
 		lipgloss.NewStyle().Foreground(mutedColor).Render(truncateLine(status.Summary, innerWidth)),
@@ -1735,7 +1733,7 @@ func (m model) renderDashboardStatusPanel(width int, height int, status dashboar
 func (m model) renderJourneyPanel(width int, height int, journey dashboardJourney) string {
 	innerWidth := panelInnerWidth(width)
 	lineBudget := panelInnerHeight(height)
-	lines := []string{lipgloss.NewStyle().Bold(true).Foreground(accentColor).Render("JOURNEY")}
+	lines := make([]string, 0, maxInt(1, len(journey.StageOrder)))
 	for _, stageID := range journey.StageOrder {
 		status := normalizedStageStatus(journey.Statuses[stageID])
 		lines = append(lines, m.renderJourneyLine(innerWidth, stageID, journey.CurrentStep, status))
@@ -1777,15 +1775,14 @@ func (m model) renderOutputPanel(width int, height int, content string) string {
 }
 
 func (m model) standardOutputContent(content string) string {
-	lines := []string{lipgloss.NewStyle().Bold(true).Foreground(accentAltColor).Render("STANDARD OUTPUT")}
 	if strings.TrimSpace(content) != "" {
-		lines = append(lines, "", content)
+		return content
 	}
-	return strings.Join(lines, "\n")
+	return ""
 }
 
 func (m model) executionOutput(currentStageID string) string {
-	lines := []string{lipgloss.NewStyle().Bold(true).Foreground(accentAltColor).Render("STANDARD OUTPUT")}
+	lines := []string{}
 	if currentStageID != "" {
 		lines = append(lines, lipgloss.NewStyle().Foreground(mutedColor).Render("Stage: "+m.stageTitle(currentStageID)))
 	} else {
@@ -1904,7 +1901,6 @@ func (m model) executionProgress() executionProgress {
 
 func (m model) executionDashboardStatus(progress executionProgress) dashboardStatus {
 	return dashboardStatus{
-		Title:       "LIVE STATUS",
 		Badge:       humanizeStatus(progress.CurrentStageStatus),
 		BadgeTone:   statusTone(progress.CurrentStageStatus),
 		Heading:     progress.CurrentStageTitle,
@@ -1935,7 +1931,6 @@ func (m model) configurationDashboardStatus() dashboardStatus {
 		hint = "CTRL+C quit  Esc return"
 	}
 	return dashboardStatus{
-		Title:       "CONFIGURATION",
 		Badge:       badge,
 		BadgeTone:   badgeTone,
 		Heading:     screenTitle(m.screen),
@@ -1957,7 +1952,6 @@ func (m model) failureDashboardStatus() dashboardStatus {
 		heading = m.stageTitle(stageID)
 	}
 	return dashboardStatus{
-		Title:       "RUN STATUS",
 		Badge:       "Failed",
 		BadgeTone:   failureColor,
 		Heading:     heading,
@@ -1984,7 +1978,6 @@ func (m model) summaryDashboardStatus() dashboardStatus {
 		}
 	}
 	return dashboardStatus{
-		Title:       "RUN STATUS",
 		Badge:       badge,
 		BadgeTone:   badgeTone,
 		Heading:     heading,
@@ -2245,10 +2238,9 @@ func renderBootstrapTitleArt(lines []string) []string {
 
 func (m model) brewVisibleCount(total int) int {
 	// Line budget in output panel:
-	// - STANDARD OUTPUT heading + spacer = 2
 	// - Brew title + instruction + spacer = 3
 	// - Optional top/bottom overflow markers + trailing spacer = 3
-	const reservedLines = 8
+	const reservedLines = 6
 
 	visible := m.outputPanelLineBudget() - reservedLines
 	if visible < 1 {

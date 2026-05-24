@@ -395,17 +395,19 @@ func TestViewExecutingRendersDashboardLayout(t *testing.T) {
 	for _, fragment := range []string{
 		"██████╗  ██████╗",
 		"Initiating CHAPEAUX, stand by for awesomeness...",
-		"LIVE STATUS",
 		"2 of 3",
 		"Overall Progress",
-		"JOURNEY",
-		"STANDARD OUTPUT",
 		"Stage: Brew Bundle",
 		"Brew Bundle",
 		"installing docker",
 	} {
 		if !strings.Contains(view, fragment) {
 			t.Fatalf("expected execution view to contain %q, got %q", fragment, view)
+		}
+	}
+	for _, fragment := range []string{"LIVE STATUS", "RUN STATUS", "JOURNEY", "STANDARD OUTPUT"} {
+		if strings.Contains(view, fragment) {
+			t.Fatalf("expected execution view to omit panel title %q, got %q", fragment, view)
 		}
 	}
 	if strings.Contains(view, "brew_bundle") {
@@ -517,9 +519,6 @@ func TestViewConfigurationUsesDashboardLayoutWithJourneyPreview(t *testing.T) {
 	for _, fragment := range []string{
 		"██████╗  ██████╗",
 		"Initiating CHAPEAUX, stand by for awesomeness...",
-		"CONFIGURATION",
-		"JOURNEY",
-		"STANDARD OUTPUT",
 		"Dev Tools: Git Configuration",
 		"Choose how git config should be handled.",
 		"Xcode Command Line Tools",
@@ -528,6 +527,11 @@ func TestViewConfigurationUsesDashboardLayoutWithJourneyPreview(t *testing.T) {
 	} {
 		if !strings.Contains(view, fragment) {
 			t.Fatalf("expected configuration view to contain %q, got %q", fragment, view)
+		}
+	}
+	for _, fragment := range []string{"CONFIGURATION", "JOURNEY", "STANDARD OUTPUT"} {
+		if strings.Contains(view, fragment) {
+			t.Fatalf("expected configuration view to omit panel title %q, got %q", fragment, view)
 		}
 	}
 }
