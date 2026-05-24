@@ -293,6 +293,32 @@ func TestViewBrewSelectionRendersViewportInsteadOfFullList(t *testing.T) {
 	}
 }
 
+func TestViewSelectOptionsUsesRadioMarkersAndOmitsDescriptions(t *testing.T) {
+	m := model{cursor: 0}
+	view := m.viewSelectOptions("Dev Tools: Node Toolchain", []selectOption{
+		{ID: stages.NodeToolchainVitePlus, Title: "vite+", Description: "Install Vite+ toolchain via official installer"},
+		{ID: stages.NodeToolchainNvmPnpm, Title: "pnpm + nvm", Description: "Install nvm and pnpm using official install scripts"},
+	}, 0)
+
+	for _, fragment := range []string{
+		fmt.Sprintf("> %s vite+", radioMarker(true)),
+		fmt.Sprintf("  %s pnpm + nvm", radioMarker(false)),
+	} {
+		if !strings.Contains(view, fragment) {
+			t.Fatalf("expected select view to contain %q, got %q", fragment, view)
+		}
+	}
+	for _, fragment := range []string{
+		"Install Vite+ toolchain via official installer",
+		"Install nvm and pnpm using official install scripts",
+		"✓",
+	} {
+		if strings.Contains(view, fragment) {
+			t.Fatalf("expected select view to omit %q, got %q", fragment, view)
+		}
+	}
+}
+
 func TestViewBrewSelectionHidesEllipsisAtEndOfList(t *testing.T) {
 	entries := make([]stages.BrewEntry, 0, 24)
 	selected := map[string]bool{}

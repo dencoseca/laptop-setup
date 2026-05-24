@@ -264,11 +264,11 @@ func Run(ctx context.Context, options Options) error {
 		installOptions: optionsForStageIDs(options.Catalog, phaseInstallStages),
 		devOptions:     optionsForStageIDs(options.Catalog, phaseDevStages),
 		nodeOptions: []selectOption{
-			{ID: stages.NodeToolchainVitePlus, Title: "vite+", Description: "Install Vite+ toolchain via official installer"},
-			{ID: stages.NodeToolchainNvmPnpm, Title: "pnpm + nvm", Description: "Install nvm and pnpm using official install scripts"},
+			{ID: stages.NodeToolchainVitePlus, Title: "vite+"},
+			{ID: stages.NodeToolchainNvmPnpm, Title: "pnpm + nvm"},
 		},
 		dockerOptions: []selectOption{
-			{ID: stages.DockerRuntimeColima, Title: "colima", Description: "Configure Docker client context for Colima"},
+			{ID: stages.DockerRuntimeColima, Title: "colima"},
 		},
 		shellOptions: []toggleOption{
 			{ID: stages.DecisionShellInstallOhMyZsh, Title: "Install oh-my-zsh", Selected: true},
@@ -773,10 +773,7 @@ func (m model) viewSelectOptions(title string, options []selectOption, selected 
 		if m.cursor == index {
 			prefix = "> "
 		}
-		fmt.Fprintf(&b, "%s%s %s\n", prefix, selectionMarker(selected == index), option.Title)
-		if option.Description != "" {
-			fmt.Fprintf(&b, "    %s\n", option.Description)
-		}
+		fmt.Fprintf(&b, "%s%s %s\n", prefix, radioMarker(selected == index), option.Title)
 	}
 	return b.String()
 }
@@ -832,7 +829,7 @@ func (m model) viewGitConfigMode() string {
 		if m.cursor == index {
 			prefix = "> "
 		}
-		fmt.Fprintf(&b, "%s%s %s\n", prefix, selectionMarker(m.gitModeSelection == index), option.Title)
+		fmt.Fprintf(&b, "%s%s %s\n", prefix, radioMarker(m.gitModeSelection == index), option.Title)
 		if option.Description != "" {
 			fmt.Fprintf(&b, "    %s\n", option.Description)
 		}
@@ -857,6 +854,13 @@ func selectionMarker(selected bool) string {
 		return lipgloss.NewStyle().Bold(true).Foreground(successColor).Render("✓")
 	}
 	return " "
+}
+
+func radioMarker(selected bool) string {
+	if selected {
+		return lipgloss.NewStyle().Bold(true).Foreground(successColor).Render("●")
+	}
+	return lipgloss.NewStyle().Foreground(mutedColor).Render("○")
 }
 
 func (m *model) viewReview() string {
