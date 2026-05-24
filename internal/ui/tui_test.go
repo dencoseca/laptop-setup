@@ -264,24 +264,18 @@ func TestViewBrewSelectionRendersViewportInsteadOfFullList(t *testing.T) {
 		brewSelected: selected,
 	}
 
-	view := m.viewBrewSelection()
-	if !strings.Contains(view, fmt.Sprintf("> %s pkg-15 (brew)", selectionMarker(true))) {
+	view := ansi.Strip(m.viewBrewSelection())
+	if !strings.Contains(view, "Brew entries") || !strings.Contains(view, "30 entries") {
+		t.Fatalf("expected styled Bubbles list chrome, got %q", view)
+	}
+	if !strings.Contains(view, "│ ● pkg-15") {
 		t.Fatalf("expected current cursor row to be visible, got %q", view)
 	}
-	if strings.Contains(view, "pkg-00 (brew)") {
+	if strings.Contains(view, "pkg-00") {
 		t.Fatalf("expected early rows to be outside viewport, got %q", view)
 	}
-	if strings.Contains(view, "pkg-29 (brew)") {
+	if strings.Contains(view, "pkg-29") {
 		t.Fatalf("expected trailing rows to be outside viewport, got %q", view)
-	}
-	if strings.Contains(view, "More: ^") {
-		t.Fatalf("expected verbose offscreen indicator to be removed, got %q", view)
-	}
-	if !strings.Contains(view, "Space toggles. Enter continues, Esc goes back.\n\n  ...\n") {
-		t.Fatalf("expected top ellipsis when rows are hidden above, got %q", view)
-	}
-	if strings.Count(view, "  ...") < 2 {
-		t.Fatalf("expected top and bottom ellipsis when viewport is in the middle, got %q", view)
 	}
 	if strings.Contains(view, "Showing ") || strings.Contains(view, "Selected: ") {
 		t.Fatalf("expected summary footer to be removed, got %q", view)
@@ -364,12 +358,12 @@ func TestViewBrewSelectionHidesEllipsisAtEndOfList(t *testing.T) {
 		brewSelected: selected,
 	}
 
-	view := m.viewBrewSelection()
-	if !strings.Contains(view, "Space toggles. Enter continues, Esc goes back.\n\n  ...\n") {
-		t.Fatalf("expected top ellipsis when rows are hidden above, got %q", view)
+	view := ansi.Strip(m.viewBrewSelection())
+	if !strings.Contains(view, "│ ● pkg-23") {
+		t.Fatalf("expected last row to be visible and selected, got %q", view)
 	}
-	if strings.Contains(view, "pkg-23 (brew)\n  ...\n\n") {
-		t.Fatalf("expected no bottom ellipsis when at list end, got %q", view)
+	if strings.Contains(view, "...") {
+		t.Fatalf("expected Bubbles pagination instead of manual ellipsis rows, got %q", view)
 	}
 	if strings.Contains(view, "Showing ") || strings.Contains(view, "Selected: ") {
 		t.Fatalf("expected end-of-list summary footer removed, got %q", view)
@@ -626,19 +620,17 @@ func TestRenderProgressBarUsesSuccessColorAtComplete(t *testing.T) {
 	inProgress := renderProgressBar(10, 90)
 	complete := renderProgressBar(10, 100)
 
-	expectedInProgress := "[" +
-		lipgloss.NewStyle().Foreground(accentColor).Render("=========") +
-		lipgloss.NewStyle().Foreground(dimColor).Render(".") +
-		"]"
-	expectedComplete := "[" +
-		lipgloss.NewStyle().Foreground(successColor).Render("==========") +
-		"]"
-
-	if inProgress != expectedInProgress {
-		t.Fatalf("expected in-progress bar to use accent color, got %q", inProgress)
+	if got, want := lipgloss.Width(inProgress), 10; got != want {
+		t.Fatalf("expected in-progress bar width=%d, got %d rendered=%q", want, got, inProgress)
 	}
-	if complete != expectedComplete {
-		t.Fatalf("expected complete bar to use success color, got %q", complete)
+	if got, want := lipgloss.Width(complete), 10; got != want {
+		t.Fatalf("expected complete bar width=%d, got %d rendered=%q", want, got, complete)
+	}
+	if stripped := ansi.Strip(inProgress); strings.ContainsAny(stripped, "[]=") || !strings.Contains(stripped, "90%") {
+		t.Fatalf("expected Bubbles progress output with percent and no bracket bar, got %q", stripped)
+	}
+	if stripped := ansi.Strip(complete); strings.ContainsAny(stripped, "[]=") || !strings.Contains(stripped, "100%") {
+		t.Fatalf("expected complete Bubbles progress output with percent and no bracket bar, got %q", stripped)
 	}
 }
 
@@ -696,7 +688,7 @@ func TestRenderDashboardPlacesShortcutHintBelowBody(t *testing.T) {
 		if strings.Contains(line, "└") {
 			lastPanelBorderIndex = index
 		}
-		if strings.Contains(line, hint) {
+		if strings.Contains(line, "Elapsed: 0s") && strings.Contains(line, "enter continue") {
 			hintLineIndex = index
 		}
 	}
@@ -716,7 +708,10 @@ func TestRenderDashboardPlacesShortcutHintBelowBody(t *testing.T) {
 	if strings.ContainsAny(lines[hintLineIndex], "│┌┐└┘─") {
 		t.Fatalf("expected shortcut hint without a border, got %q", lines[hintLineIndex])
 	}
-	if got := strings.Index(lines[hintLineIndex], hint); got <= 2 {
+	if !strings.Contains(lines[hintLineIndex], "esc back") || !strings.Contains(lines[hintLineIndex], "ctrl+c quit") {
+		t.Fatalf("expected Bubbles help bindings in footer, got line %q", lines[hintLineIndex])
+	}
+	if got := strings.Index(lines[hintLineIndex], "Elapsed: 0s"); got <= 2 {
 		t.Fatalf("expected shortcut hint to be centered, got line %q", lines[hintLineIndex])
 	}
 }

@@ -11,7 +11,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/bubbles/help"
+	"github.com/charmbracelet/bubbles/key"
+	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/progress"
 	"github.com/charmbracelet/bubbles/spinner"
+	"github.com/charmbracelet/bubbles/stopwatch"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -78,6 +83,24 @@ type selectOption struct {
 	ID          string
 	Title       string
 	Description string
+}
+
+type brewListItem struct {
+	ID       string
+	Kind     string
+	Selected bool
+}
+
+func (i brewListItem) Title() string {
+	return fmt.Sprintf("%s %s", selectionMarker(i.Selected), i.ID)
+}
+
+func (i brewListItem) Description() string {
+	return i.Kind
+}
+
+func (i brewListItem) FilterValue() string {
+	return strings.Join([]string{i.ID, i.Kind}, " ")
 }
 
 type stageStatusMsg struct {
@@ -149,6 +172,7 @@ type model struct {
 
 	brewEntries  []stages.BrewEntry
 	brewSelected map[string]bool
+	brewList     list.Model
 
 	nodeSelection   int
 	dockerSelection int
@@ -171,6 +195,8 @@ type model struct {
 	runErr        error
 	executing     bool
 	spinner       spinner.Model
+	help          help.Model
+	stopwatch     stopwatch.Model
 }
 
 const (
@@ -231,6 +257,8 @@ func Run(ctx context.Context, options Options) error {
 
 	spin := spinner.New()
 	spin.Spinner = spinner.Dot
+	shortcutHelp := newShortcutHelp()
+	elapsed := stopwatch.New()
 	currentGitName, currentGitEmail := readGitIdentity(options.HomeDir)
 	gitNameInput := textinput.New()
 	gitNameInput.Placeholder = "Git user.name"
@@ -278,6 +306,8 @@ func Run(ctx context.Context, options Options) error {
 		gitEmailInput: gitEmailInput,
 		stageStatuses: detectAlreadyDoneStages(runCtx, options.Catalog, options.Commander, options.RepoRoot, options.HomeDir),
 		spinner:       spin,
+		help:          shortcutHelp,
+		stopwatch:     elapsed,
 	}
 
 	if err := m.reloadBrewEntries(); err != nil && !m.resumeRun {
@@ -308,7 +338,7 @@ func (m model) Init() tea.Cmd {
 	if m.resumeRun {
 		m.plan = slices.Clone(m.current.ResolvedPlan)
 	}
-	return nil
+	return m.stopwatch.Init()
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -319,6 +349,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = message.Width
 		m.height = message.Height
 		m.syncInputWidths()
+		m.syncBrewListSize()
 		return m, nil
 	case spinner.TickMsg:
 		if m.executing {
@@ -326,6 +357,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.spinner, cmd = m.spinner.Update(message)
 			return m, cmd
 		}
+	case stopwatch.StartStopMsg:
+		var cmd tea.Cmd
+		m.stopwatch, cmd = m.stopwatch.Update(message)
+		return m, cmd
+	case stopwatch.ResetMsg:
+		var cmd tea.Cmd
+		m.stopwatch, cmd = m.stopwatch.Update(message)
+		return m, cmd
+	case stopwatch.TickMsg:
+		var cmd tea.Cmd
+		m.stopwatch, cmd = m.stopwatch.Update(message)
+		return m, cmd
 	case logTailTickMsg:
 		if m.executing {
 			m.pollRunLog()
@@ -381,26 +424,41 @@ func (m model) updateKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case screenInstall:
 		return m.updateToggleScreen(key, &m.installOptions, screenMacOS, screenBrew)
 	case screenBrew:
+		m.ensureBrewList()
+		if m.brewList.SettingFilter() || m.brewList.IsFiltered() {
+			switch key.String() {
+			case "enter":
+				if m.brewList.SettingFilter() {
+					var cmd tea.Cmd
+					m.brewList, cmd = m.brewList.Update(key)
+					return m, cmd
+				}
+			case "esc":
+				var cmd tea.Cmd
+				m.brewList, cmd = m.brewList.Update(key)
+				m.cursor = m.brewList.GlobalIndex()
+				return m, cmd
+			}
+		}
+
 		switch key.String() {
 		case "esc":
 			m.screen = screenInstall
 			m.cursor = 0
-		case "up":
-			if m.cursor > 0 {
-				m.cursor--
-			}
-		case "down":
-			if m.cursor < len(m.brewEntries)-1 {
-				m.cursor++
-			}
 		case " ":
-			if len(m.brewEntries) > 0 {
-				id := m.brewEntries[m.cursor].ID
-				m.brewSelected[id] = !m.brewSelected[id]
+			selected := m.brewList.SelectedItem()
+			if item, ok := selected.(brewListItem); ok {
+				m.brewSelected[item.ID] = !m.brewSelected[item.ID]
+				m.refreshBrewListItems()
 			}
 		case "enter":
 			m.screen = screenDevTools
 			m.cursor = 0
+		default:
+			var cmd tea.Cmd
+			m.brewList, cmd = m.brewList.Update(key)
+			m.cursor = m.brewList.GlobalIndex()
+			return m, cmd
 		}
 	case screenDevTools:
 		switch key.String() {
@@ -728,34 +786,15 @@ func (m model) viewSelectOptions(title string, options []selectOption, selected 
 
 func (m model) viewBrewSelection() string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "%s\n", lipgloss.NewStyle().Bold(true).Render("Brew Catalog Selection"))
-	fmt.Fprintf(&b, "Space toggles. Enter continues, Esc goes back.\n\n")
+	fmt.Fprintf(&b, "%s\n\n", lipgloss.NewStyle().Bold(true).Render("Brew Catalog Selection"))
 
 	if len(m.brewEntries) == 0 {
 		fmt.Fprintf(&b, "No Brew entries found in templates/Brewfile.\n")
 		return b.String()
 	}
 
-	visibleCount := m.brewVisibleCount(len(m.brewEntries))
-	start, end := brewViewportRange(len(m.brewEntries), m.cursor, visibleCount)
-	hasMoreAbove := start > 0
-	hasMoreBelow := end < len(m.brewEntries)
-	if hasMoreAbove {
-		fmt.Fprintln(&b, "  ...")
-	}
-	for index := start; index < end; index++ {
-		entry := m.brewEntries[index]
-		prefix := "  "
-		if m.cursor == index {
-			prefix = "> "
-		}
-		fmt.Fprintf(&b, "%s%s %s (%s)\n", prefix, selectionMarker(m.brewSelected[entry.ID]), entry.ID, entry.Kind)
-	}
-
-	if hasMoreBelow {
-		fmt.Fprintln(&b, "  ...")
-	}
-	fmt.Fprintln(&b)
+	selector := m.brewListForView()
+	fmt.Fprintf(&b, "%s", selector.View())
 	return b.String()
 }
 
@@ -939,7 +978,99 @@ func (m *model) reloadBrewEntries() error {
 			m.brewSelected[entry.ID] = true
 		}
 	}
+	m.brewList = newBrewList(m.brewListItems(), m.brewListWidth(), m.brewListHeight())
 	return nil
+}
+
+func newBrewList(items []list.Item, width int, height int) list.Model {
+	delegate := list.NewDefaultDelegate()
+	delegate.SetSpacing(0)
+	delegate.Styles.NormalTitle = delegate.Styles.NormalTitle.Foreground(textColor)
+	delegate.Styles.NormalDesc = delegate.Styles.NormalDesc.Foreground(mutedColor)
+	delegate.Styles.SelectedTitle = delegate.Styles.SelectedTitle.
+		BorderForeground(accentColor).
+		Foreground(accentColor)
+	delegate.Styles.SelectedDesc = delegate.Styles.SelectedDesc.
+		BorderForeground(accentColor).
+		Foreground(mutedColor)
+	delegate.Styles.FilterMatch = delegate.Styles.FilterMatch.
+		Foreground(accentAltColor).
+		Underline(true)
+
+	selector := list.New(items, delegate, maxInt(1, width), maxInt(1, height))
+	selector.Title = "Brew entries"
+	selector.SetStatusBarItemName("entry", "entries")
+	selector.SetShowHelp(false)
+	selector.DisableQuitKeybindings()
+	selector.Styles.Title = selector.Styles.Title.
+		Background(successColor).
+		Foreground(lipgloss.AdaptiveColor{Light: "#FFFFFF", Dark: "#FFFFFF"}).
+		Bold(true)
+	selector.Styles.TitleBar = selector.Styles.TitleBar.PaddingLeft(0)
+	selector.Styles.StatusBar = selector.Styles.StatusBar.Foreground(mutedColor)
+	selector.Styles.PaginationStyle = selector.Styles.PaginationStyle.Foreground(mutedColor)
+	selector.Styles.ActivePaginationDot = selector.Styles.ActivePaginationDot.Foreground(accentColor)
+	selector.Styles.InactivePaginationDot = selector.Styles.InactivePaginationDot.Foreground(dimColor)
+	return selector
+}
+
+func (m model) brewListItems() []list.Item {
+	items := make([]list.Item, 0, len(m.brewEntries))
+	for _, entry := range m.brewEntries {
+		items = append(items, brewListItem{
+			ID:       entry.ID,
+			Kind:     entry.Kind,
+			Selected: m.brewSelected[entry.ID],
+		})
+	}
+	return items
+}
+
+func (m *model) refreshBrewListItems() {
+	m.ensureBrewList()
+	index := m.brewList.GlobalIndex()
+	_ = m.brewList.SetItems(m.brewListItems())
+	if len(m.brewEntries) > 0 {
+		m.brewList.Select(minInt(index, len(m.brewEntries)-1))
+		m.cursor = m.brewList.GlobalIndex()
+	}
+}
+
+func (m *model) ensureBrewList() {
+	if m.brewList.Width() > 0 || m.brewList.Height() > 0 || len(m.brewList.Items()) > 0 {
+		return
+	}
+	m.brewList = newBrewList(m.brewListItems(), m.brewListWidth(), m.brewListHeight())
+	if len(m.brewEntries) > 0 {
+		m.brewList.Select(minInt(maxInt(0, m.cursor), len(m.brewEntries)-1))
+	}
+}
+
+func (m model) brewListForView() list.Model {
+	selector := m.brewList
+	if selector.Width() <= 0 && selector.Height() <= 0 && len(selector.Items()) == 0 {
+		selector = newBrewList(m.brewListItems(), m.brewListWidth(), m.brewListHeight())
+		if len(m.brewEntries) > 0 {
+			selector.Select(minInt(maxInt(0, m.cursor), len(m.brewEntries)-1))
+		}
+	}
+	selector.SetSize(m.brewListWidth(), m.brewListHeight())
+	return selector
+}
+
+func (m *model) syncBrewListSize() {
+	m.ensureBrewList()
+	m.brewList.SetSize(m.brewListWidth(), m.brewListHeight())
+}
+
+func (m model) brewListWidth() int {
+	width, _ := m.outputPanelInnerSize()
+	return width
+}
+
+func (m model) brewListHeight() int {
+	_, height := m.outputPanelInnerSize()
+	return maxInt(1, height-2)
 }
 
 func (m *model) resolvePlan() ([]string, error) {
@@ -1728,12 +1859,127 @@ func (m model) renderDashboardShortcutHint(width int, hint string) string {
 	if hint == "" {
 		return ""
 	}
+	bindings := shortcutBindingsForHint(hint)
+	if len(bindings) == 0 {
+		return ""
+	}
+	elapsed := lipgloss.NewStyle().
+		Foreground(mutedColor).
+		Render("Elapsed: " + formatElapsed(m.stopwatch.Elapsed()))
+
+	shortcutHelp := m.help
+	if shortcutHelp.ShortSeparator == "" {
+		shortcutHelp = newShortcutHelp()
+	}
+	helpWidth := maxInt(1, width-lipgloss.Width(elapsed)-3)
+	shortcutHelp.Width = helpWidth
+	helpLine := shortcutHelp.ShortHelpView(bindings)
+	line := lipgloss.JoinHorizontal(lipgloss.Center, elapsed, "   ", helpLine)
 	return lipgloss.NewStyle().
 		Width(maxInt(1, width)).
 		MaxWidth(maxInt(1, width)).
 		Align(lipgloss.Center).
 		Foreground(mutedColor).
-		Render(hint)
+		Render(line)
+}
+
+func newShortcutHelp() help.Model {
+	h := help.New()
+	h.Styles.ShortKey = h.Styles.ShortKey.Foreground(pendingToneColor)
+	h.Styles.ShortDesc = h.Styles.ShortDesc.Foreground(dimColor)
+	h.Styles.ShortSeparator = h.Styles.ShortSeparator.Foreground(dimColor)
+	h.Styles.Ellipsis = h.Styles.Ellipsis.Foreground(dimColor)
+	return h
+}
+
+func shortcutBindingsForHint(hint string) []key.Binding {
+	switch hint {
+	case "Enter execute  Esc back  CTRL+C quit":
+		return []key.Binding{
+			shortcutBinding("enter", "execute"),
+			shortcutBinding("esc", "back"),
+			shortcutBinding("ctrl+c", "quit"),
+		}
+	case "Enter continue  CTRL+C quit":
+		return []key.Binding{
+			shortcutBinding("enter", "continue"),
+			shortcutBinding("ctrl+c", "quit"),
+		}
+	case "Up/down move  Space toggle  / filter  Enter continue  Esc back  CTRL+C quit":
+		return []key.Binding{
+			shortcutBinding("↑/k", "move"),
+			shortcutBinding("space", "toggle"),
+			shortcutBinding("/", "filter"),
+			shortcutBinding("enter", "continue"),
+			shortcutBinding("esc", "back"),
+			shortcutBinding("ctrl+c", "quit"),
+		}
+	case "Up/down choose  Enter continue  Esc back  CTRL+C quit":
+		return []key.Binding{
+			shortcutBinding("↑/↓", "choose"),
+			shortcutBinding("enter", "continue"),
+			shortcutBinding("esc", "back"),
+			shortcutBinding("ctrl+c", "quit"),
+		}
+	case "CTRL+C quit  Esc return":
+		return []key.Binding{
+			shortcutBinding("ctrl+c", "quit"),
+			shortcutBinding("esc", "return"),
+		}
+	case "CTRL+C abort":
+		return []key.Binding{
+			shortcutBinding("ctrl+c", "abort"),
+		}
+	case "Enter retry  Space skip  CTRL+C abort":
+		return []key.Binding{
+			shortcutBinding("enter", "retry"),
+			shortcutBinding("space", "skip"),
+			shortcutBinding("ctrl+c", "abort"),
+		}
+	case "Enter exit  CTRL+C quit":
+		return []key.Binding{
+			shortcutBinding("enter", "exit"),
+			shortcutBinding("ctrl+c", "quit"),
+		}
+	default:
+		if strings.Contains(hint, "Space") {
+			return []key.Binding{
+				shortcutBinding("space", "toggle"),
+				shortcutBinding("enter", "continue"),
+				shortcutBinding("esc", "back"),
+				shortcutBinding("ctrl+c", "quit"),
+			}
+		}
+		return []key.Binding{
+			shortcutBinding("enter", "continue"),
+			shortcutBinding("esc", "back"),
+			shortcutBinding("ctrl+c", "quit"),
+		}
+	}
+}
+
+func shortcutBinding(keyText string, helpText string) key.Binding {
+	return key.NewBinding(
+		key.WithKeys(keyText),
+		key.WithHelp(keyText, helpText),
+	)
+}
+
+func formatElapsed(elapsed time.Duration) string {
+	if elapsed < time.Second {
+		return "0s"
+	}
+	elapsed = elapsed.Round(time.Second)
+	hours := int(elapsed.Hours())
+	minutes := int(elapsed.Minutes()) % 60
+	seconds := int(elapsed.Seconds()) % 60
+	if hours > 0 {
+		return fmt.Sprintf("%dh%02dm%02ds", hours, minutes, seconds)
+	}
+	if minutes > 0 {
+		return fmt.Sprintf("%dm%02ds", minutes, seconds)
+	}
+	return fmt.Sprintf("%ds", seconds)
 }
 
 func (m model) renderJourneyPanel(width int, height int, journey dashboardJourney) string {
@@ -1938,19 +2184,16 @@ func (m model) configurationDashboardStatus() dashboardStatus {
 	stepIndex, totalSteps := configurationStepPosition(m.screen)
 	badge := "Configuring"
 	badgeTone := accentAltColor
-	hint := "Enter continue  Esc back  CTRL+C quit"
+	hint := configurationShortcutHint(m.screen)
 	if m.screen == screenReview {
 		badge = "Ready"
 		badgeTone = successColor
-		hint = "Enter execute  Esc back  CTRL+C quit"
 	} else if m.screen == screenWelcome {
 		badge = "Ready"
 		badgeTone = accentColor
-		hint = "Enter continue  CTRL+C quit"
 	} else if m.screen == screenQuitConfirm {
 		badge = "Confirm"
 		badgeTone = warningColor
-		hint = "CTRL+C quit  Esc return"
 	}
 	return dashboardStatus{
 		Badge:                    badge,
@@ -1960,6 +2203,25 @@ func (m model) configurationDashboardStatus() dashboardStatus {
 		ConfigurationProgressPct: stepIndex * 100 / maxInt(1, totalSteps),
 		ExecutionProgressPct:     m.executionProgress().PercentComplete,
 		Hint:                     hint,
+	}
+}
+
+func configurationShortcutHint(current screen) string {
+	switch current {
+	case screenWelcome:
+		return "Enter continue  CTRL+C quit"
+	case screenMacOS, screenInstall, screenDevTools, screenShellOptions, screenManual:
+		return "Space toggle  Enter continue  Esc back  CTRL+C quit"
+	case screenBrew:
+		return "Up/down move  Space toggle  / filter  Enter continue  Esc back  CTRL+C quit"
+	case screenNodeToolchain, screenDockerRuntime:
+		return "Up/down choose  Enter continue  Esc back  CTRL+C quit"
+	case screenReview:
+		return "Enter execute  Esc back  CTRL+C quit"
+	case screenQuitConfirm:
+		return "CTRL+C quit  Esc return"
+	default:
+		return "Enter continue  Esc back  CTRL+C quit"
 	}
 }
 
@@ -2229,18 +2491,22 @@ func statusLabel(status string) string {
 func renderProgressBar(width int, percent int) string {
 	width = maxInt(10, width)
 	percent = maxInt(0, minInt(100, percent))
-	filled := width * percent / 100
-	if percent > 0 && filled == 0 {
-		filled = 1
-	}
-	fillColor := accentColor
+	bar := progress.New(
+		progress.WithWidth(width),
+		progress.WithDefaultGradient(),
+	)
+	bar.EmptyColor = "#30303A"
+	bar.PercentageStyle = lipgloss.NewStyle().Foreground(mutedColor)
 	if percent == 100 {
-		fillColor = successColor
+		bar.FullColor = "#34D399"
+		bar = progress.New(
+			progress.WithWidth(width),
+			progress.WithSolidFill("#34D399"),
+		)
+		bar.EmptyColor = "#30303A"
+		bar.PercentageStyle = lipgloss.NewStyle().Foreground(mutedColor)
 	}
-	return "[" +
-		lipgloss.NewStyle().Foreground(fillColor).Render(strings.Repeat("=", filled)) +
-		lipgloss.NewStyle().Foreground(dimColor).Render(strings.Repeat(".", width-filled)) +
-		"]"
+	return bar.ViewAs(float64(percent) / 100)
 }
 
 func limitLines(lines []string, maxLines int) []string {
@@ -2311,14 +2577,24 @@ func (m model) brewVisibleCount(total int) int {
 }
 
 func (m model) outputPanelLineBudget() int {
-	_, height := m.viewDimensions()
+	_, height := m.outputPanelInnerSize()
+	return height
+}
+
+func (m model) outputPanelInnerSize() (int, int) {
+	width, height := m.viewDimensions()
+	contentWidth := maxInt(20, width-4)
 	contentHeight := maxInt(12, height-2)
-	headerHeight := maxInt(12, contentHeight/3)
-	if headerHeight > contentHeight-6 {
-		headerHeight = maxInt(6, contentHeight-6)
+	columnGap := 2
+	shortcutHintHeight := 1
+	shortcutGapHeight := 1
+	headerHeight := maxInt(13, contentHeight/3)
+	if headerHeight > contentHeight-6-shortcutHintHeight-shortcutGapHeight {
+		headerHeight = maxInt(6, contentHeight-6-shortcutHintHeight-shortcutGapHeight)
 	}
-	bodyHeight := maxInt(6, contentHeight-headerHeight-1)
-	return panelInnerHeight(bodyHeight)
+	bodyHeight := maxInt(6, contentHeight-headerHeight-1-shortcutHintHeight-shortcutGapHeight)
+	_, outputWidth := dashboardBodyWidths(contentWidth, columnGap)
+	return panelInnerWidth(outputWidth), panelInnerHeight(bodyHeight)
 }
 
 func brewViewportRange(total int, cursor int, visible int) (int, int) {
