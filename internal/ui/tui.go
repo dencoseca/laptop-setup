@@ -759,7 +759,7 @@ func (m model) viewToggleOptions(title string, options []toggleOption) string {
 		if m.cursor == index {
 			prefix = "> "
 		}
-		fmt.Fprintf(&b, "%s%s %s (%s)\n", prefix, selectionMarker(option.Selected), option.Title, option.ID)
+		fmt.Fprintf(&b, "%s%s %s\n", prefix, selectionMarker(option.Selected), option.Title)
 	}
 	return b.String()
 }
@@ -874,28 +874,37 @@ func (m *model) viewReview() string {
 		fmt.Fprintf(&b, "Selected Brew entries: %d\n", len(m.selectedBrewIDs()))
 	}
 	decisions := m.effectiveDecisions()
-	fmt.Fprintf(&b, "Node toolchain: %s\n", stages.NodeToolchainFromDecisions(decisions))
-	fmt.Fprintf(&b, "Docker runtime: %s\n", stages.DockerRuntimeFromDecisions(decisions))
+	fmt.Fprintf(&b, "Node toolchain: %s\n", selectOptionTitle(m.nodeOptions, stages.NodeToolchainFromDecisions(decisions)))
+	fmt.Fprintf(&b, "Docker runtime: %s\n", selectOptionTitle(m.dockerOptions, stages.DockerRuntimeFromDecisions(decisions)))
 	fmt.Fprintf(&b, "Shell: oh-my-zsh=%t, zshrc=%t, starship=%t\n",
 		stages.ShellInstallOhMyZsh(decisions),
 		stages.ShellApplyZshrcTemplate(decisions),
 		stages.ShellApplyStarshipTemplate(decisions),
 	)
 	gitMode := stages.GitConfigModeFromDecisions(decisions)
-	fmt.Fprintf(&b, "Git config mode: %s\n", gitMode)
+	fmt.Fprintf(&b, "Git config mode: %s\n", selectOptionTitle(m.gitModeOptions, gitMode))
 	if gitMode == stages.GitConfigModeCustom {
 		name, email := stages.GitIdentityFromDecisions(decisions)
 		fmt.Fprintf(&b, "Git identity: %s <%s>\n", name, email)
 	}
 	fmt.Fprintf(&b, "\nStages:\n")
 	for _, stageID := range m.plan {
-		fmt.Fprintf(&b, "- %s (%s)\n", m.stageTitle(stageID), stageID)
+		fmt.Fprintf(&b, "- %s\n", m.stageTitle(stageID))
 	}
 	if m.planError != "" {
 		fmt.Fprintf(&b, "\nPlan error: %s\n", m.planError)
 	}
 	fmt.Fprintf(&b, "\nPress Enter to execute, b to go back.")
 	return b.String()
+}
+
+func selectOptionTitle(options []selectOption, id string) string {
+	for _, option := range options {
+		if option.ID == id && strings.TrimSpace(option.Title) != "" {
+			return option.Title
+		}
+	}
+	return id
 }
 
 func (m model) viewExecuting() string {
@@ -927,7 +936,7 @@ func (m model) viewFailure() string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s\n\n", lipgloss.NewStyle().Bold(true).Render("Stage Failure"))
 	if m.failurePrompt != nil {
-		fmt.Fprintf(&b, "Stage: %s (%s)\n", m.failurePrompt.Title, m.failurePrompt.StageID)
+		fmt.Fprintf(&b, "Stage: %s\n", m.failurePrompt.Title)
 		fmt.Fprintf(&b, "Attempt: %d\n", m.failurePrompt.Attempt)
 		fmt.Fprintf(&b, "Error: %s\n\n", m.failurePrompt.Message)
 	}
@@ -1008,7 +1017,10 @@ func (m *model) resolvePlan() ([]string, error) {
 	}
 
 	if slices.Contains(onlyIDs, "brew_bundle") && len(m.selectedBrewIDs()) == 0 {
-		return nil, errors.New("brew_bundle selected with no Brew entries; select at least one entry or deselect brew_bundle")
+		return nil, fmt.Errorf("%s selected with no Brew entries; select at least one entry or deselect %s",
+			m.stageTitle("brew_bundle"),
+			m.stageTitle("brew_bundle"),
+		)
 	}
 
 	return stages.ResolvePlan(m.catalog, stages.PlanOptions{
@@ -1766,12 +1778,12 @@ func (m model) standardOutputContent(content string) string {
 func (m model) executionOutput(currentStageID string) string {
 	lines := []string{lipgloss.NewStyle().Bold(true).Foreground(accentAltColor).Render("STANDARD OUTPUT")}
 	if currentStageID != "" {
-		lines = append(lines, lipgloss.NewStyle().Foreground(mutedColor).Render("Stage "+currentStageID))
+		lines = append(lines, lipgloss.NewStyle().Foreground(mutedColor).Render("Stage: "+m.stageTitle(currentStageID)))
 	} else {
 		lines = append(lines, lipgloss.NewStyle().Foreground(mutedColor).Render("Stage waiting"))
 	}
 
-	logLines := filteredLogLines(m.tailedLogs, currentStageID, displayedLogLineLimit)
+	logLines := m.filteredDisplayLogLines(currentStageID, displayedLogLineLimit)
 	if len(logLines) == 0 {
 		lines = append(lines, lipgloss.NewStyle().Foreground(mutedColor).Render("(waiting for events)"))
 	} else {
@@ -1780,6 +1792,37 @@ func (m model) executionOutput(currentStageID string) string {
 		}
 	}
 	return strings.Join(lines, "\n")
+}
+
+func (m model) filteredDisplayLogLines(stageID string, limit int) []string {
+	if limit <= 0 {
+		return nil
+	}
+
+	displayLines := make([]string, 0, limit)
+	for _, line := range m.tailedLogs {
+		if stageID != "" && line.StageID != stageID {
+			continue
+		}
+		displayLines = append(displayLines, m.displayLogLine(line))
+	}
+	if len(displayLines) <= limit {
+		return displayLines
+	}
+	return append([]string(nil), displayLines[len(displayLines)-limit:]...)
+}
+
+func (m model) displayLogLine(line tailedLogLine) string {
+	if line.StageID == "" {
+		return line.Line
+	}
+	title := m.stageTitle(line.StageID)
+	parts := strings.Split(line.Line, " | ")
+	if len(parts) >= 4 && strings.TrimSpace(parts[2]) == line.StageID {
+		parts[2] = title
+		return strings.Join(parts, " | ")
+	}
+	return strings.ReplaceAll(line.Line, line.StageID, title)
 }
 
 func (m model) panelStyle(width int, height int) lipgloss.Style {

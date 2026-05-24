@@ -358,7 +358,7 @@ func TestViewExecutingRendersDashboardLayout(t *testing.T) {
 		},
 		tailedLogs: []tailedLogLine{
 			{StageID: "xcode_clt", Line: "completed xcode"},
-			{StageID: "brew_bundle", Line: "installing go"},
+			{StageID: "brew_bundle", Line: "2026-05-23T12:30:00Z | INFO | brew_bundle | stage_started | Brew Bundle"},
 			{StageID: "brew_bundle", Line: "installing docker"},
 		},
 	}
@@ -373,13 +373,16 @@ func TestViewExecutingRendersDashboardLayout(t *testing.T) {
 		"Overall Progress",
 		"JOURNEY",
 		"STANDARD OUTPUT",
-		"Stage brew_bundle",
+		"Stage: Brew Bundle",
 		"Brew Bundle",
-		"installing go",
+		"installing docker",
 	} {
 		if !strings.Contains(view, fragment) {
 			t.Fatalf("expected execution view to contain %q, got %q", fragment, view)
 		}
+	}
+	if strings.Contains(view, "brew_bundle") {
+		t.Fatalf("expected execution view to hide internal stage id, got %q", view)
 	}
 	if !strings.Contains(view, "┌") {
 		t.Fatalf("expected bordered execution view, got %q", view)
@@ -501,6 +504,50 @@ func TestViewPhaseConfigurationOmitsPhasePrefix(t *testing.T) {
 	}
 	if got := strings.Count(view, "Dev Tools Setup"); got < 2 {
 		t.Fatalf("expected status and output panels to show Dev Tools Setup, count=%d view=%q", got, view)
+	}
+	if strings.Contains(view, "vite_plus_install") {
+		t.Fatalf("expected internal stage id to be hidden, got %q", view)
+	}
+}
+
+func TestViewReviewHidesInternalStageIDs(t *testing.T) {
+	m := model{
+		screen: screenReview,
+		width:  120,
+		height: 36,
+		catalog: []stages.Stage{
+			{ID: "vite_plus_install", Title: "Vite+ Install"},
+			{ID: "docker_config", Title: "Docker Configuration"},
+		},
+		stageMap: map[string]stages.Stage{
+			"vite_plus_install": {ID: "vite_plus_install", Title: "Vite+ Install"},
+			"docker_config":     {ID: "docker_config", Title: "Docker Configuration"},
+		},
+		devOptions: []toggleOption{
+			{ID: "vite_plus_install", Title: "Vite+ Install", Selected: true},
+			{ID: "docker_config", Title: "Docker Configuration", Selected: true},
+		},
+		nodeOptions: []selectOption{
+			{ID: stages.NodeToolchainVitePlus, Title: "vite+"},
+		},
+		dockerOptions: []selectOption{
+			{ID: stages.DockerRuntimeColima, Title: "colima"},
+		},
+		gitModeOptions: []selectOption{
+			{ID: stages.GitConfigModeTemplate, Title: "template"},
+		},
+	}
+
+	view := m.View()
+	for _, fragment := range []string{"Vite+ Install", "Docker Configuration"} {
+		if !strings.Contains(view, fragment) {
+			t.Fatalf("expected review to contain %q, got %q", fragment, view)
+		}
+	}
+	for _, internalID := range []string{"vite_plus_install", "docker_config"} {
+		if strings.Contains(view, internalID) {
+			t.Fatalf("expected review to hide internal stage id %q, got %q", internalID, view)
+		}
 	}
 }
 
@@ -672,7 +719,7 @@ func TestReviewEnterBlocksExecutionWhenPlanInvalid(t *testing.T) {
 	if m.executing {
 		t.Fatalf("expected execution not to start")
 	}
-	if !strings.Contains(m.planError, "brew_bundle selected with no Brew entries") {
+	if !strings.Contains(m.planError, "Brew Bundle selected with no Brew entries") {
 		t.Fatalf("expected plan validation error, got %q", m.planError)
 	}
 }
