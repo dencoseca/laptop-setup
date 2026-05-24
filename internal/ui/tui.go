@@ -1736,23 +1736,38 @@ func (m model) renderJourneyPanel(width int, height int, journey dashboardJourne
 	innerWidth := panelInnerWidth(width)
 	lineBudget := panelInnerHeight(height)
 	lines := []string{lipgloss.NewStyle().Bold(true).Foreground(accentColor).Render("JOURNEY")}
-	for index, stageID := range journey.StageOrder {
+	for _, stageID := range journey.StageOrder {
 		status := normalizedStageStatus(journey.Statuses[stageID])
-		prefix := lipgloss.NewStyle().Foreground(statusTone(status)).Render("•")
-		if stageID == journey.CurrentStep {
-			prefix = lipgloss.NewStyle().Bold(true).Foreground(accentAltColor).Render(">")
-		}
-		sequence := lipgloss.NewStyle().Foreground(mutedColor).Render(fmt.Sprintf("%02d", index+1))
-		state := lipgloss.NewStyle().Foreground(statusTone(status)).Render(statusLabel(status))
-		title := lipgloss.NewStyle().Foreground(textColor).Render(m.stageTitle(stageID))
-		line := lipgloss.JoinHorizontal(lipgloss.Center, prefix, " ", sequence, " ", state, " ", title)
-		lines = append(lines, truncateLine(line, innerWidth))
+		lines = append(lines, m.renderJourneyLine(innerWidth, stageID, journey.CurrentStep, status))
 	}
 	if len(journey.StageOrder) == 0 {
 		lines = append(lines, lipgloss.NewStyle().Foreground(mutedColor).Render("No stages selected yet"))
 	}
 	lines = limitLines(lines, lineBudget)
 	return m.panelStyle(width, height).Render(strings.Join(lines, "\n"))
+}
+
+func (m model) renderJourneyLine(width int, stageID string, currentStep string, status string) string {
+	if width <= 0 {
+		return ""
+	}
+
+	prefix := lipgloss.NewStyle().Foreground(statusTone(status)).Render("•")
+	if stageID == currentStep {
+		prefix = lipgloss.NewStyle().Bold(true).Foreground(accentAltColor).Render(">")
+	}
+	state := lipgloss.NewStyle().Foreground(statusTone(status)).Render(statusLabel(status))
+	stateWidth := lipgloss.Width(state)
+	if width <= stateWidth+1 {
+		return truncateLine(statusLabel(status), width)
+	}
+
+	leftFixedWidth := lipgloss.Width(prefix) + 1
+	titleWidth := maxInt(1, width-leftFixedWidth-stateWidth-1)
+	title := lipgloss.NewStyle().Foreground(textColor).Render(truncateLine(m.stageTitle(stageID), titleWidth))
+	left := lipgloss.JoinHorizontal(lipgloss.Center, prefix, " ", title)
+	gap := maxInt(1, width-lipgloss.Width(left)-stateWidth)
+	return lipgloss.JoinHorizontal(lipgloss.Center, left, strings.Repeat(" ", gap), state)
 }
 
 func (m model) renderOutputPanel(width int, height int, content string) string {

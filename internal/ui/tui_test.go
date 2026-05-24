@@ -12,6 +12,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/dencoseca/laptop-setup/internal/runner"
 	"github.com/dencoseca/laptop-setup/internal/stages"
 	"github.com/dencoseca/laptop-setup/internal/state"
@@ -429,6 +430,29 @@ func TestDashboardBodyWidthsUseFortySixtySplit(t *testing.T) {
 	}
 	if got, want := journeyWidth+2+outputWidth, 116; got != want {
 		t.Fatalf("expected widths plus gap=%d, got=%d", want, got)
+	}
+}
+
+func TestRenderJourneyLineLeftAlignsNameAndRightAlignsStatus(t *testing.T) {
+	m := model{
+		stageMap: map[string]stages.Stage{
+			"xcode_clt": {ID: "xcode_clt", Title: "Xcode Command Line Tools"},
+		},
+	}
+
+	line := ansi.Strip(m.renderJourneyLine(36, "xcode_clt", "xcode_clt", string(stages.StatusRunning)))
+
+	if !strings.HasPrefix(line, "> Xcode Command Line Tools") {
+		t.Fatalf("expected stage title to be left-aligned without a number, got %q", line)
+	}
+	if strings.Contains(line, "01") {
+		t.Fatalf("expected journey line to omit sequence number, got %q", line)
+	}
+	if !strings.HasSuffix(line, "live") {
+		t.Fatalf("expected status to be right-aligned at row end, got %q", line)
+	}
+	if got, want := lipgloss.Width(line), 36; got != want {
+		t.Fatalf("expected rendered line width=%d, got=%d line=%q", want, got, line)
 	}
 }
 
