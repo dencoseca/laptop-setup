@@ -389,6 +389,26 @@ func TestViewExecutingRendersDashboardLayout(t *testing.T) {
 	}
 }
 
+func TestRenderTitlePanelUsesCompactFallback(t *testing.T) {
+	var m model
+	width := maxInt(
+		titleArtWidth(bootstrapCompactTitleArtLines),
+		lipgloss.Width("Initiating CHAPEAUX, stand by for awesomeness..."),
+	) + 6
+
+	view := m.renderTitlePanel(width, len(bootstrapCompactTitleArtLines)+6)
+
+	if !strings.Contains(view, "▗▄▄▖  ▗▄▖") {
+		t.Fatalf("expected compact fallback title art, got %q", view)
+	}
+	if strings.Contains(view, "██████╗") {
+		t.Fatalf("expected compact fallback instead of large title art, got %q", view)
+	}
+	if !strings.Contains(view, "Initiating CHAPEAUX, stand by for awesomeness...") {
+		t.Fatalf("expected tagline in compact fallback, got %q", view)
+	}
+}
+
 func TestViewConfigurationUsesDashboardLayoutWithJourneyPreview(t *testing.T) {
 	m := model{
 		screen: screenGitConfig,

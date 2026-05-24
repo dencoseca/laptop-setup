@@ -193,6 +193,13 @@ var bootstrapTitleArtLines = []string{
 	"╚═════╝  ╚═════╝  ╚═════╝    ╚═╝   ╚══════╝   ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝",
 }
 
+var bootstrapCompactTitleArtLines = []string{
+	"▗▄▄▖  ▗▄▖  ▗▄▖▗▄▄▄▖▗▄▄▖▗▄▄▄▖▗▄▄▖  ▗▄▖ ▗▄▄▖",
+	"▐▌ ▐▌▐▌ ▐▌▐▌ ▐▌ █ ▐▌     █  ▐▌ ▐▌▐▌ ▐▌▐▌ ▐▌",
+	"▐▛▀▚▖▐▌ ▐▌▐▌ ▐▌ █  ▝▀▚▖  █  ▐▛▀▚▖▐▛▀▜▌▐▛▀▘",
+	"▐▙▄▞▘▝▚▄▞▘▝▚▄▞▘ █ ▗▄▄▞▘  █  ▐▌ ▐▌▐▌ ▐▌▐▌",
+}
+
 var (
 	textColor        = lipgloss.AdaptiveColor{Light: "#0F172A", Dark: "#E5E7EB"}
 	mutedColor       = lipgloss.AdaptiveColor{Light: "#475569", Dark: "#A1A1AA"}
@@ -1683,22 +1690,11 @@ func (m model) renderTitlePanel(width int, height int) string {
 		Render(truncateLine("Initiating CHAPEAUX, stand by for awesomeness...", innerWidth))
 
 	lines := []string{lipgloss.NewStyle().Bold(true).Foreground(accentColor).Render("BOOTSTRAP")}
-	if innerWidth >= bootstrapTitleArtWidth() && innerHeight >= len(bootstrapTitleArtLines)+2 {
-		lines = make([]string, 0, len(bootstrapTitleArtLines)+2)
-		palette := []lipgloss.TerminalColor{
-			accentColor,
-			accentAltColor,
-			successColor,
-			warningColor,
-			failureColor,
-			accentAltColor,
-		}
-		for index, line := range bootstrapTitleArtLines {
-			lines = append(lines, lipgloss.NewStyle().
-				Bold(true).
-				Foreground(palette[index%len(palette)]).
-				Render(line))
-		}
+	switch {
+	case innerWidth >= bootstrapTitleArtWidth() && innerHeight >= len(bootstrapTitleArtLines)+2:
+		lines = renderBootstrapTitleArt(bootstrapTitleArtLines)
+	case innerWidth >= titleArtWidth(bootstrapCompactTitleArtLines) && innerHeight >= len(bootstrapCompactTitleArtLines)+2:
+		lines = renderBootstrapTitleArt(bootstrapCompactTitleArtLines)
 	}
 	lines = append(lines, "", tagline)
 	content := lipgloss.JoinVertical(lipgloss.Left, lines...)
@@ -2162,11 +2158,34 @@ func truncateLine(value string, width int) string {
 }
 
 func bootstrapTitleArtWidth() int {
+	return titleArtWidth(bootstrapTitleArtLines)
+}
+
+func titleArtWidth(lines []string) int {
 	width := 0
-	for _, line := range bootstrapTitleArtLines {
+	for _, line := range lines {
 		width = maxInt(width, lipgloss.Width(line))
 	}
 	return width
+}
+
+func renderBootstrapTitleArt(lines []string) []string {
+	palette := []lipgloss.TerminalColor{
+		accentColor,
+		accentAltColor,
+		successColor,
+		warningColor,
+		failureColor,
+		accentAltColor,
+	}
+	rendered := make([]string, 0, len(lines))
+	for index, line := range lines {
+		rendered = append(rendered, lipgloss.NewStyle().
+			Bold(true).
+			Foreground(palette[index%len(palette)]).
+			Render(line))
+	}
+	return rendered
 }
 
 func (m model) brewVisibleCount(total int) int {
