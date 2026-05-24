@@ -1613,8 +1613,11 @@ var configurationScreenOrder = []screen{
 
 func (m model) renderDocument(content string) string {
 	width, height := m.viewDimensions()
-	panel := m.panelStyle(maxInt(20, width-4), maxInt(8, height-2)).Render(content)
-	return m.screenStyle(width, height).Render(panel)
+	canvasWidth := maxInt(20, width-4)
+	canvasHeight := maxInt(8, height-2)
+	panel := m.panelStyle(canvasWidth, canvasHeight).Render(content)
+	framed := lipgloss.Place(canvasWidth, canvasHeight, lipgloss.Left, lipgloss.Top, panel)
+	return m.screenStyle(width, height).Render(framed)
 }
 
 func (m model) renderDashboard(status dashboardStatus, journey dashboardJourney, output string) string {
@@ -1654,7 +1657,8 @@ func (m model) renderDashboard(status dashboardStatus, journey dashboardJourney,
 	)
 
 	layout := lipgloss.JoinVertical(lipgloss.Left, header, "", body)
-	return m.screenStyle(width, height).Render(layout)
+	framed := lipgloss.Place(contentWidth, contentHeight, lipgloss.Left, lipgloss.Top, layout)
+	return m.screenStyle(width, height).Render(framed)
 }
 
 func (m model) renderTitlePanel(width int, height int) string {
@@ -1703,7 +1707,7 @@ func (m model) renderDashboardStatusPanel(width int, height int, status dashboar
 
 func (m model) renderJourneyPanel(width int, height int, journey dashboardJourney) string {
 	innerWidth := panelInnerWidth(width)
-	lineBudget := maxInt(1, panelInnerHeight(height)-2)
+	lineBudget := panelInnerHeight(height)
 	lines := []string{lipgloss.NewStyle().Bold(true).Foreground(accentColor).Render("JOURNEY")}
 	for index, stageID := range journey.StageOrder {
 		status := normalizedStageStatus(journey.Statuses[stageID])
@@ -1720,12 +1724,14 @@ func (m model) renderJourneyPanel(width int, height int, journey dashboardJourne
 	if len(journey.StageOrder) == 0 {
 		lines = append(lines, lipgloss.NewStyle().Foreground(mutedColor).Render("No stages selected yet"))
 	}
-	lines = limitLines(lines, lineBudget+1)
+	lines = limitLines(lines, lineBudget)
 	return m.panelStyle(width, height).Render(strings.Join(lines, "\n"))
 }
 
 func (m model) renderOutputPanel(width int, height int, content string) string {
-	return m.panelStyle(width, height).Render(content)
+	lines := strings.Split(content, "\n")
+	visible := limitLines(lines, panelInnerHeight(height))
+	return m.panelStyle(width, height).Render(strings.Join(visible, "\n"))
 }
 
 func (m model) standardOutputContent(content string) string {
@@ -1756,17 +1762,14 @@ func (m model) executionOutput(currentStageID string) string {
 }
 
 func (m model) panelStyle(width int, height int) lipgloss.Style {
-	innerWidth := panelInnerWidth(width)
-	innerHeight := panelInnerHeight(height)
-	return lipgloss.NewStyle().
-		Width(innerWidth).
-		MaxWidth(width).
-		Height(innerHeight).
-		MaxHeight(height).
+	style := lipgloss.NewStyle().
 		Padding(1, 2).
 		Border(lipgloss.NormalBorder()).
 		BorderForeground(borderColor).
 		Foreground(textColor)
+	return style.
+		Width(maxInt(1, width-2)).
+		Height(maxInt(1, height-2))
 }
 
 func (m model) executionProgress() executionProgress {
@@ -2013,8 +2016,6 @@ func (m model) stageTitle(stageID string) string {
 
 func (m model) screenStyle(width int, height int) lipgloss.Style {
 	return lipgloss.NewStyle().
-		Width(maxInt(20, width-4)).
-		Height(maxInt(8, height-2)).
 		Padding(1, 2).
 		Foreground(textColor)
 }
