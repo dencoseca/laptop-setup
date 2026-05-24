@@ -258,7 +258,7 @@ func Run(ctx context.Context, options Options) error {
 	spin := spinner.New()
 	spin.Spinner = spinner.Dot
 	shortcutHelp := newShortcutHelp()
-	elapsed := stopwatch.New()
+	elapsed := stopwatch.NewWithInterval(time.Millisecond)
 	currentGitName, currentGitEmail := readGitIdentity(options.HomeDir)
 	gitNameInput := textinput.New()
 	gitNameInput.Placeholder = "Git user.name"
@@ -338,7 +338,7 @@ func (m model) Init() tea.Cmd {
 	if m.resumeRun {
 		m.plan = slices.Clone(m.current.ResolvedPlan)
 	}
-	return m.stopwatch.Init()
+	return nil
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -387,7 +387,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.runErr = message.Err
 		m.failurePrompt = nil
 		m.screen = screenSummary
-		return m, nil
+		return m, m.stopwatch.Stop()
 	}
 	return m, nil
 }
@@ -632,6 +632,7 @@ func (m model) updateKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 				waitForExecutionUpdate(m.updates),
 				scheduleLogTailTick(),
 				m.spinner.Tick,
+				tea.Sequence(m.stopwatch.Reset(), m.stopwatch.Start()),
 			)
 		}
 	case screenExecuting:
@@ -1840,6 +1841,7 @@ func (m model) renderDashboardStatusPanel(width int, height int, status dashboar
 	if status.Spinner {
 		badgeLine = lipgloss.JoinHorizontal(lipgloss.Center, statusBadge, " ", lipgloss.NewStyle().Foreground(mutedColor).Render(m.spinner.View()))
 	}
+	badgeLine = m.renderStatusPanelTopLine(innerWidth, badgeLine)
 	lines := []string{
 		badgeLine,
 		"",
@@ -1854,6 +1856,34 @@ func (m model) renderDashboardStatusPanel(width int, height int, status dashboar
 	return m.panelStyle(width, height).Render(strings.Join(limitLines(lines, panelInnerHeight(height)), "\n"))
 }
 
+func (m model) renderStatusPanelTopLine(width int, badgeLine string) string {
+	elapsed := m.statusPanelElapsed()
+	if elapsed == "" {
+		return badgeLine
+	}
+	elapsed = lipgloss.NewStyle().Foreground(mutedColor).Render(elapsed)
+	elapsedWidth := lipgloss.Width(elapsed)
+	if width <= elapsedWidth {
+		return truncateLine(elapsed, width)
+	}
+	badgeWidth := maxInt(1, width-elapsedWidth-1)
+	badge := truncateLine(badgeLine, badgeWidth)
+	gap := maxInt(1, width-lipgloss.Width(badge)-elapsedWidth)
+	return lipgloss.JoinHorizontal(lipgloss.Center, badge, strings.Repeat(" ", gap), elapsed)
+}
+
+func (m model) statusPanelElapsed() string {
+	if m.runState == nil {
+		return ""
+	}
+	switch m.screen {
+	case screenExecuting, screenFailure, screenSummary:
+		return formatElapsed(m.stopwatch.Elapsed())
+	default:
+		return ""
+	}
+}
+
 func (m model) renderDashboardShortcutHint(width int, hint string) string {
 	hint = strings.TrimSpace(hint)
 	if hint == "" {
@@ -1863,24 +1893,18 @@ func (m model) renderDashboardShortcutHint(width int, hint string) string {
 	if len(bindings) == 0 {
 		return ""
 	}
-	elapsed := lipgloss.NewStyle().
-		Foreground(mutedColor).
-		Render("Elapsed: " + formatElapsed(m.stopwatch.Elapsed()))
-
 	shortcutHelp := m.help
 	if shortcutHelp.ShortSeparator == "" {
 		shortcutHelp = newShortcutHelp()
 	}
-	helpWidth := maxInt(1, width-lipgloss.Width(elapsed)-3)
-	shortcutHelp.Width = helpWidth
+	shortcutHelp.Width = width
 	helpLine := shortcutHelp.ShortHelpView(bindings)
-	line := lipgloss.JoinHorizontal(lipgloss.Center, elapsed, "   ", helpLine)
 	return lipgloss.NewStyle().
 		Width(maxInt(1, width)).
 		MaxWidth(maxInt(1, width)).
 		Align(lipgloss.Center).
 		Foreground(mutedColor).
-		Render(line)
+		Render(helpLine)
 }
 
 func newShortcutHelp() help.Model {
@@ -1966,20 +1990,7 @@ func shortcutBinding(keyText string, helpText string) key.Binding {
 }
 
 func formatElapsed(elapsed time.Duration) string {
-	if elapsed < time.Second {
-		return "0s"
-	}
-	elapsed = elapsed.Round(time.Second)
-	hours := int(elapsed.Hours())
-	minutes := int(elapsed.Minutes()) % 60
-	seconds := int(elapsed.Seconds()) % 60
-	if hours > 0 {
-		return fmt.Sprintf("%dh%02dm%02ds", hours, minutes, seconds)
-	}
-	if minutes > 0 {
-		return fmt.Sprintf("%dm%02ds", minutes, seconds)
-	}
-	return fmt.Sprintf("%ds", seconds)
+	return fmt.Sprintf("%.3fs", elapsed.Seconds())
 }
 
 func (m model) renderJourneyPanel(width int, height int, journey dashboardJourney) string {

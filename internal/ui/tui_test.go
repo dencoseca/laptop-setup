@@ -688,7 +688,7 @@ func TestRenderDashboardPlacesShortcutHintBelowBody(t *testing.T) {
 		if strings.Contains(line, "└") {
 			lastPanelBorderIndex = index
 		}
-		if strings.Contains(line, "Elapsed: 0s") && strings.Contains(line, "enter continue") {
+		if strings.Contains(line, "enter continue") {
 			hintLineIndex = index
 		}
 	}
@@ -711,8 +711,73 @@ func TestRenderDashboardPlacesShortcutHintBelowBody(t *testing.T) {
 	if !strings.Contains(lines[hintLineIndex], "esc back") || !strings.Contains(lines[hintLineIndex], "ctrl+c quit") {
 		t.Fatalf("expected Bubbles help bindings in footer, got line %q", lines[hintLineIndex])
 	}
-	if got := strings.Index(lines[hintLineIndex], "Elapsed: 0s"); got <= 2 {
+	if strings.Contains(lines[hintLineIndex], "Elapsed") || strings.Contains(lines[hintLineIndex], "0.000s") {
+		t.Fatalf("expected elapsed time to be omitted from footer, got line %q", lines[hintLineIndex])
+	}
+	if got := strings.Index(lines[hintLineIndex], "enter continue"); got <= 2 {
 		t.Fatalf("expected shortcut hint to be centered, got line %q", lines[hintLineIndex])
+	}
+}
+
+func TestRenderDashboardStatusPanelShowsExecutionTimerTopRight(t *testing.T) {
+	m := model{
+		screen:   screenExecuting,
+		runState: &state.RunState{},
+	}
+	view := ansi.Strip(m.renderDashboardStatusPanel(34, 13, dashboardStatus{
+		Badge:                    "Running",
+		BadgeTone:                accentAltColor,
+		Heading:                  "Brew Bundle",
+		ConfigurationProgressPct: 100,
+		ExecutionProgressPct:     30,
+	}))
+	lines := strings.Split(view, "\n")
+
+	for _, line := range lines {
+		if !strings.Contains(line, "RUNNING") {
+			continue
+		}
+		if strings.Contains(line, "Elapsed") {
+			t.Fatalf("expected timer without label, got %q", line)
+		}
+		if !strings.Contains(line, "0.000s") {
+			t.Fatalf("expected timer on badge line, got %q", line)
+		}
+		if !strings.HasSuffix(strings.TrimRight(line, " │"), "0.000s") {
+			t.Fatalf("expected timer right-aligned in status panel, got %q", line)
+		}
+		return
+	}
+	t.Fatalf("expected status panel badge line, got %q", view)
+}
+
+func TestRenderDashboardStatusPanelHidesTimerBeforeExecutionStarts(t *testing.T) {
+	m := model{screen: screenReview}
+	view := ansi.Strip(m.renderDashboardStatusPanel(34, 13, dashboardStatus{
+		Badge:                    "Ready",
+		BadgeTone:                successColor,
+		Heading:                  "Execution Plan Review",
+		ConfigurationProgressPct: 100,
+		ExecutionProgressPct:     0,
+	}))
+
+	if strings.Contains(view, "0.000s") || strings.Contains(view, "Elapsed") {
+		t.Fatalf("expected no timer before apply execution starts, got %q", view)
+	}
+}
+
+func TestFormatElapsedUsesSecondsWithMilliseconds(t *testing.T) {
+	for _, testCase := range []struct {
+		elapsed time.Duration
+		want    string
+	}{
+		{elapsed: 0, want: "0.000s"},
+		{elapsed: 1234 * time.Millisecond, want: "1.234s"},
+		{elapsed: time.Minute + 2345*time.Millisecond, want: "62.345s"},
+	} {
+		if got := formatElapsed(testCase.elapsed); got != testCase.want {
+			t.Fatalf("formatElapsed(%s)=%q want %q", testCase.elapsed, got, testCase.want)
+		}
 	}
 }
 
