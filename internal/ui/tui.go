@@ -66,6 +66,7 @@ const (
 	screenExecuting
 	screenFailure
 	screenSummary
+	screenQuitConfirm
 )
 
 type toggleOption struct {
@@ -134,9 +135,10 @@ type model struct {
 	width    int
 	height   int
 
-	screen    screen
-	cursor    int
-	resumeRun bool
+	screen             screen
+	cursor             int
+	resumeRun          bool
+	quitPreviousScreen screen
 
 	macOSOptions   []toggleOption
 	installOptions []toggleOption
@@ -362,15 +364,22 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m model) updateKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch key.String() {
 	case "ctrl+c":
-		m.abortExecutionIfNeeded(execution.ActionAbort)
-		return m, tea.Quit
+		if m.screen == screenQuitConfirm {
+			m.abortExecutionIfNeeded(execution.ActionAbort)
+			return m, tea.Quit
+		}
+		m.quitPreviousScreen = m.screen
+		m.screen = screenQuitConfirm
+		return m, nil
 	}
 
 	switch m.screen {
+	case screenQuitConfirm:
+		if key.String() == "esc" {
+			m.screen = m.quitPreviousScreen
+		}
 	case screenWelcome:
 		switch key.String() {
-		case "q":
-			return m, tea.Quit
 		case "enter":
 			if m.resumeRun {
 				m.screen = screenReview
@@ -385,14 +394,14 @@ func (m model) updateKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.updateToggleScreen(key, &m.installOptions, screenMacOS, screenBrew)
 	case screenBrew:
 		switch key.String() {
-		case "b":
+		case "esc":
 			m.screen = screenInstall
 			m.cursor = 0
-		case "up", "k":
+		case "up":
 			if m.cursor > 0 {
 				m.cursor--
 			}
-		case "down", "j":
+		case "down":
 			if m.cursor < len(m.brewEntries)-1 {
 				m.cursor++
 			}
@@ -404,21 +413,17 @@ func (m model) updateKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case "enter":
 			m.screen = screenDevTools
 			m.cursor = 0
-		case "q":
-			return m, tea.Quit
 		}
 	case screenDevTools:
 		switch key.String() {
-		case "q":
-			return m, tea.Quit
-		case "b":
+		case "esc":
 			m.screen = screenBrew
 			m.cursor = 0
-		case "up", "k":
+		case "up":
 			if m.cursor > 0 {
 				m.cursor--
 			}
-		case "down", "j":
+		case "down":
 			if m.cursor < len(m.devOptions)-1 {
 				m.cursor++
 			}
@@ -432,16 +437,14 @@ func (m model) updateKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	case screenNodeToolchain:
 		switch key.String() {
-		case "q":
-			return m, tea.Quit
-		case "b":
+		case "esc":
 			m.screen = screenDevTools
 			m.cursor = 0
-		case "up", "k":
+		case "up":
 			if m.cursor > 0 {
 				m.cursor--
 			}
-		case "down", "j":
+		case "down":
 			if m.cursor < len(m.nodeOptions)-1 {
 				m.cursor++
 			}
@@ -458,16 +461,14 @@ func (m model) updateKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	case screenDockerRuntime:
 		switch key.String() {
-		case "q":
-			return m, tea.Quit
-		case "b":
+		case "esc":
 			m.screen = screenNodeToolchain
 			m.cursor = m.nodeSelection
-		case "up", "k":
+		case "up":
 			if m.cursor > 0 {
 				m.cursor--
 			}
-		case "down", "j":
+		case "down":
 			if m.cursor < len(m.dockerOptions)-1 {
 				m.cursor++
 			}
@@ -484,16 +485,14 @@ func (m model) updateKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	case screenShellOptions:
 		switch key.String() {
-		case "q":
-			return m, tea.Quit
-		case "b":
+		case "esc":
 			m.screen = screenDockerRuntime
 			m.cursor = m.dockerSelection
-		case "up", "k":
+		case "up":
 			if m.cursor > 0 {
 				m.cursor--
 			}
-		case "down", "j":
+		case "down":
 			if m.cursor < len(m.shellOptions)-1 {
 				m.cursor++
 			}
@@ -507,16 +506,14 @@ func (m model) updateKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	case screenGitConfig:
 		switch key.String() {
-		case "q":
-			return m, tea.Quit
-		case "b":
+		case "esc":
 			m.screen = screenShellOptions
 			m.cursor = 0
-		case "up", "k":
+		case "up":
 			if m.cursor > 0 {
 				m.cursor--
 			}
-		case "down", "j":
+		case "down":
 			if m.cursor < len(m.gitModeOptions)-1 {
 				m.cursor++
 			}
@@ -539,9 +536,7 @@ func (m model) updateKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	case screenGitName:
 		switch key.String() {
-		case "q":
-			return m, tea.Quit
-		case "b":
+		case "esc":
 			m.inputError = ""
 			m.gitNameInput.Blur()
 			m.screen = screenGitConfig
@@ -565,9 +560,7 @@ func (m model) updateKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	case screenGitEmail:
 		switch key.String() {
-		case "q":
-			return m, tea.Quit
-		case "b":
+		case "esc":
 			m.inputError = ""
 			m.gitEmailInput.Blur()
 			m.gitNameInput.Focus()
@@ -593,15 +586,13 @@ func (m model) updateKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.updateToggleScreen(key, &m.manualOptions, screenGitConfig, screenReview)
 	case screenReview:
 		switch key.String() {
-		case "b":
+		case "esc":
 			if m.resumeRun {
 				m.screen = screenWelcome
 			} else {
 				m.screen = screenManual
 			}
 			m.cursor = 0
-		case "q":
-			return m, tea.Quit
 		case "enter":
 			setup, err := m.prepareExecutionSetup()
 			if err != nil {
@@ -630,31 +621,22 @@ func (m model) updateKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 			)
 		}
 	case screenExecuting:
-		switch key.String() {
-		case "q":
-			m.abortExecutionIfNeeded(execution.ActionAbort)
-			return m, tea.Quit
-		}
 	case screenFailure:
 		switch key.String() {
-		case "r":
+		case "enter":
 			m.resolveFailure(execution.ActionRetry)
 			m.screen = screenExecuting
 			return m, waitForExecutionUpdate(m.updates)
-		case "s":
+		case " ":
 			if m.failurePrompt != nil && m.failurePrompt.CanSkip {
 				m.resolveFailure(execution.ActionSkip)
 				m.screen = screenExecuting
 				return m, waitForExecutionUpdate(m.updates)
 			}
-		case "a", "q":
-			m.resolveFailure(execution.ActionAbort)
-			m.screen = screenExecuting
-			return m, waitForExecutionUpdate(m.updates)
 		}
 	case screenSummary:
 		switch key.String() {
-		case "enter", "q":
+		case "enter":
 			return m, tea.Quit
 		}
 	}
@@ -669,16 +651,14 @@ func (m *model) updateToggleScreen(
 	nextScreen screen,
 ) (tea.Model, tea.Cmd) {
 	switch key.String() {
-	case "q":
-		return m, tea.Quit
-	case "b":
+	case "esc":
 		m.screen = backScreen
 		m.cursor = 0
-	case "up", "k":
+	case "up":
 		if m.cursor > 0 {
 			m.cursor--
 		}
-	case "down", "j":
+	case "down":
 		if m.cursor < len(*options)-1 {
 			m.cursor++
 		}
@@ -728,6 +708,8 @@ func (m model) View() string {
 		return m.viewFailureScreen()
 	case screenSummary:
 		return m.viewSummaryScreen()
+	case screenQuitConfirm:
+		content = m.viewQuitConfirm()
 	default:
 		content = ""
 	}
@@ -746,14 +728,14 @@ func (m model) viewWelcome() string {
 		fmt.Fprintf(&b, "Interactive setup will collect phase decisions, show plan review, and execute stages.\n\n")
 		fmt.Fprintf(&b, "Press Enter to continue.\n")
 	}
-	fmt.Fprintf(&b, "Press q to quit.")
+	fmt.Fprintf(&b, "Press CTRL+C to quit.")
 	return b.String()
 }
 
 func (m model) viewToggleOptions(title string, options []toggleOption) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s\n\n", lipgloss.NewStyle().Bold(true).Render(title))
-	fmt.Fprintf(&b, "Toggle stages with space. Enter to continue, b to go back.\n\n")
+	fmt.Fprintf(&b, "Toggle stages with Space. Enter to continue, Esc to go back.\n\n")
 	for index, option := range options {
 		prefix := "  "
 		if m.cursor == index {
@@ -767,7 +749,7 @@ func (m model) viewToggleOptions(title string, options []toggleOption) string {
 func (m model) viewSelectOptions(title string, options []selectOption, selected int) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s\n\n", lipgloss.NewStyle().Bold(true).Render(title))
-	fmt.Fprintf(&b, "Select one option with space. Enter to continue, b to go back.\n\n")
+	fmt.Fprintf(&b, "Select one option with Space. Enter to continue, Esc to go back.\n\n")
 	for index, option := range options {
 		prefix := "  "
 		if m.cursor == index {
@@ -781,7 +763,7 @@ func (m model) viewSelectOptions(title string, options []selectOption, selected 
 func (m model) viewBrewSelection() string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s\n", lipgloss.NewStyle().Bold(true).Render("Brew Catalog Selection"))
-	fmt.Fprintf(&b, "Space toggles. Enter continues, b goes back.\n\n")
+	fmt.Fprintf(&b, "Space toggles. Enter continues, Esc goes back.\n\n")
 
 	if len(m.brewEntries) == 0 {
 		fmt.Fprintf(&b, "No Brew entries found in templates/Brewfile.\n")
@@ -845,7 +827,15 @@ func (m model) viewTextInput(title string, subtitle string, input textinput.Mode
 	if m.inputError != "" {
 		fmt.Fprintf(&b, "\n%s\n", m.inputError)
 	}
-	fmt.Fprintf(&b, "\nPress Enter to continue, b to go back.")
+	fmt.Fprintf(&b, "\nPress Enter to continue, Esc to go back.")
+	return b.String()
+}
+
+func (m model) viewQuitConfirm() string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "%s\n\n", lipgloss.NewStyle().Bold(true).Render("Quit Laptop Setup"))
+	fmt.Fprintf(&b, "Press `CTRL + C` again to quit.\n\n")
+	fmt.Fprintf(&b, "Press Esc to return.")
 	return b.String()
 }
 
@@ -898,7 +888,7 @@ func (m *model) viewReview() string {
 	if m.planError != "" {
 		fmt.Fprintf(&b, "\nPlan error: %s\n", m.planError)
 	}
-	fmt.Fprintf(&b, "\nPress Enter to execute, b to go back.")
+	fmt.Fprintf(&b, "\nPress Enter to execute, Esc to go back.")
 	return b.String()
 }
 
@@ -945,11 +935,11 @@ func (m model) viewFailure() string {
 		fmt.Fprintf(&b, "Error: %s\n\n", m.failurePrompt.Message)
 	}
 	fmt.Fprintf(&b, "Actions:\n")
-	fmt.Fprintf(&b, "- r: Retry stage\n")
+	fmt.Fprintf(&b, "- Enter: Retry stage\n")
 	if m.failurePrompt != nil && m.failurePrompt.CanSkip {
-		fmt.Fprintf(&b, "- s: Skip stage\n")
+		fmt.Fprintf(&b, "- Space: Skip stage\n")
 	}
-	fmt.Fprintf(&b, "- a: Abort run\n")
+	fmt.Fprintf(&b, "- CTRL+C: Abort run\n")
 	return b.String()
 }
 
@@ -1905,7 +1895,7 @@ func (m model) executionDashboardStatus(progress executionProgress) dashboardSta
 		Heading:     progress.CurrentStageTitle,
 		Summary:     fmt.Sprintf("%d of %d  %d finished", progress.CurrentStageIndex, progress.TotalStages, progress.CompletedStages),
 		ProgressPct: progress.PercentComplete,
-		Hint:        "q abort",
+		Hint:        "CTRL+C abort",
 		Spinner:     true,
 	}
 }
@@ -1915,15 +1905,19 @@ func (m model) configurationDashboardStatus() dashboardStatus {
 	stepIndex, totalSteps := configurationStepPosition(m.screen)
 	badge := "Configuring"
 	badgeTone := accentAltColor
-	hint := "enter continue  b back  q quit"
+	hint := "Enter continue  Esc back  CTRL+C quit"
 	if m.screen == screenReview {
 		badge = "Ready"
 		badgeTone = successColor
-		hint = "enter execute  b back  q quit"
+		hint = "Enter execute  Esc back  CTRL+C quit"
 	} else if m.screen == screenWelcome {
 		badge = "Ready"
 		badgeTone = accentColor
-		hint = "enter continue  q quit"
+		hint = "Enter continue  CTRL+C quit"
+	} else if m.screen == screenQuitConfirm {
+		badge = "Confirm"
+		badgeTone = warningColor
+		hint = "CTRL+C quit  Esc return"
 	}
 	return dashboardStatus{
 		Title:       "CONFIGURATION",
@@ -1954,7 +1948,7 @@ func (m model) failureDashboardStatus() dashboardStatus {
 		Heading:     heading,
 		Summary:     fmt.Sprintf("attempt %d  choose retry, skip, or abort", attempt),
 		ProgressPct: m.executionProgress().PercentComplete,
-		Hint:        "r retry  s skip  a abort",
+		Hint:        "Enter retry  Space skip  CTRL+C abort",
 	}
 }
 
@@ -1981,7 +1975,7 @@ func (m model) summaryDashboardStatus() dashboardStatus {
 		Heading:     heading,
 		Summary:     fmt.Sprintf("%d completed  %d skipped  %d failed", completed, skipped, failed),
 		ProgressPct: m.executionProgress().PercentComplete,
-		Hint:        "enter exit  q quit",
+		Hint:        "Enter exit  CTRL+C quit",
 	}
 }
 
@@ -2070,6 +2064,8 @@ func screenTitle(current screen) string {
 		return "Stage Failure"
 	case screenSummary:
 		return "Run Summary"
+	case screenQuitConfirm:
+		return "Quit Confirmation"
 	default:
 		return "Laptop Setup"
 	}

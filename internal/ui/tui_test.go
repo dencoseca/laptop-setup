@@ -282,7 +282,7 @@ func TestViewBrewSelectionRendersViewportInsteadOfFullList(t *testing.T) {
 	if strings.Contains(view, "More: ^") {
 		t.Fatalf("expected verbose offscreen indicator to be removed, got %q", view)
 	}
-	if !strings.Contains(view, "Space toggles. Enter continues, b goes back.\n\n  ...\n") {
+	if !strings.Contains(view, "Space toggles. Enter continues, Esc goes back.\n\n  ...\n") {
 		t.Fatalf("expected top ellipsis when rows are hidden above, got %q", view)
 	}
 	if strings.Count(view, "  ...") < 2 {
@@ -337,7 +337,7 @@ func TestViewBrewSelectionHidesEllipsisAtEndOfList(t *testing.T) {
 	}
 
 	view := m.viewBrewSelection()
-	if !strings.Contains(view, "Space toggles. Enter continues, b goes back.\n\n  ...\n") {
+	if !strings.Contains(view, "Space toggles. Enter continues, Esc goes back.\n\n  ...\n") {
 		t.Fatalf("expected top ellipsis when rows are hidden above, got %q", view)
 	}
 	if strings.Contains(view, "pkg-23 (brew)\n  ...\n\n") {
@@ -636,6 +636,103 @@ func sendEnter(t *testing.T, m model) model {
 		t.Fatalf("expected model type after update, got %T", next)
 	}
 	return updated
+}
+
+func TestGitIdentityInputsAcceptAlphanumericCharacters(t *testing.T) {
+	t.Run("name", func(t *testing.T) {
+		input := textinput.New()
+		input.Focus()
+
+		m := model{
+			screen:       screenGitName,
+			gitNameInput: input,
+		}
+
+		next, _ := m.updateKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'b'}})
+		updated, ok := next.(model)
+		if !ok {
+			t.Fatalf("expected model type after update, got %T", next)
+		}
+
+		if updated.screen != screenGitName {
+			t.Fatalf("expected to stay on git name input, got %v", updated.screen)
+		}
+		if got := updated.gitNameInput.Value(); got != "b" {
+			t.Fatalf("expected typed character to be inserted, got %q", got)
+		}
+	})
+
+	t.Run("email", func(t *testing.T) {
+		input := textinput.New()
+		input.Focus()
+
+		m := model{
+			screen:        screenGitEmail,
+			gitEmailInput: input,
+		}
+
+		next, _ := m.updateKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'b'}})
+		updated, ok := next.(model)
+		if !ok {
+			t.Fatalf("expected model type after update, got %T", next)
+		}
+
+		if updated.screen != screenGitEmail {
+			t.Fatalf("expected to stay on git email input, got %v", updated.screen)
+		}
+		if got := updated.gitEmailInput.Value(); got != "b" {
+			t.Fatalf("expected typed character to be inserted, got %q", got)
+		}
+	})
+}
+
+func TestCtrlCRequiresConfirmationBeforeQuit(t *testing.T) {
+	m := model{screen: screenGitName}
+
+	next, cmd := m.updateKey(tea.KeyMsg{Type: tea.KeyCtrlC})
+	updated, ok := next.(model)
+	if !ok {
+		t.Fatalf("expected model type after update, got %T", next)
+	}
+	if cmd != nil {
+		t.Fatal("expected first CTRL+C to show confirmation without quitting")
+	}
+	if updated.screen != screenQuitConfirm {
+		t.Fatalf("expected quit confirmation screen, got %v", updated.screen)
+	}
+	if !strings.Contains(updated.View(), "Press `CTRL + C` again to quit.") {
+		t.Fatalf("expected quit confirmation message, got %q", updated.View())
+	}
+
+	next, cmd = updated.updateKey(tea.KeyMsg{Type: tea.KeyCtrlC})
+	if _, ok = next.(model); !ok {
+		t.Fatalf("expected model type after update, got %T", next)
+	}
+	if cmd == nil {
+		t.Fatal("expected second CTRL+C to quit")
+	}
+	if _, ok = cmd().(tea.QuitMsg); !ok {
+		t.Fatalf("expected quit command from second CTRL+C")
+	}
+}
+
+func TestEscapeReturnsFromQuitConfirmation(t *testing.T) {
+	m := model{screen: screenGitName}
+
+	next, _ := m.updateKey(tea.KeyMsg{Type: tea.KeyCtrlC})
+	confirm, ok := next.(model)
+	if !ok {
+		t.Fatalf("expected model type after update, got %T", next)
+	}
+
+	next, _ = confirm.updateKey(tea.KeyMsg{Type: tea.KeyEsc})
+	updated, ok := next.(model)
+	if !ok {
+		t.Fatalf("expected model type after update, got %T", next)
+	}
+	if updated.screen != screenGitName {
+		t.Fatalf("expected Esc to return to previous screen, got %v", updated.screen)
+	}
 }
 
 func TestPromptFlowReachesReviewScreen(t *testing.T) {
