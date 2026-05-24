@@ -551,32 +551,18 @@ func runGitConfig(_ context.Context, execCtx ExecutionContext) error {
 	}
 
 	gitConfigPath := filepath.Join(execCtx.HomeDir, ".gitconfig")
-	switch GitConfigModeFromDecisions(execCtx.Decisions) {
-	case GitConfigModeExisting:
-		if _, err := os.Stat(gitConfigPath); err == nil {
-			return logStageMessage(execCtx, "Keeping existing ~/.gitconfig by decision")
-		} else if !os.IsNotExist(err) {
-			return fmt.Errorf("stat gitconfig: %w", err)
-		}
-	}
 	return writeGitConfigFromTemplate(execCtx, gitConfigPath)
 }
 
 func simulateGitConfig(_ context.Context, execCtx ExecutionContext) error {
-	mode := GitConfigModeFromDecisions(execCtx.Decisions)
 	if err := logSimulation(execCtx, "Would write templates/gitignore to ~/.gitignore"); err != nil {
 		return err
 	}
-	switch mode {
-	case GitConfigModeExisting:
-		return logSimulation(execCtx, "Would keep existing ~/.gitconfig when present, otherwise write templates/gitconfig with the entered git identity")
-	default:
-		name, email := GitIdentityFromDecisions(execCtx.Decisions)
-		if err := validateGitIdentity(name, email); err != nil {
-			return err
-		}
-		return logSimulation(execCtx, fmt.Sprintf("Would write templates/gitconfig and set git identity to %q <%s>", name, email))
+	name, email := GitIdentityFromDecisions(execCtx.Decisions)
+	if err := validateGitIdentity(name, email); err != nil {
+		return err
 	}
+	return logSimulation(execCtx, fmt.Sprintf("Would write templates/gitconfig and set git identity to %q <%s>", name, email))
 }
 
 func writeGitConfigFromTemplate(execCtx ExecutionContext, gitConfigPath string) error {

@@ -416,7 +416,7 @@ func TestRunGitConfigTemplateWritesEnteredIdentity(t *testing.T) {
 	}
 }
 
-func TestRunGitConfigExistingKeepsCurrentGitConfig(t *testing.T) {
+func TestRunGitConfigOverwritesExistingGitConfig(t *testing.T) {
 	repoRoot := t.TempDir()
 	homeDir := t.TempDir()
 	templatesDir := filepath.Join(repoRoot, "templates")
@@ -438,7 +438,9 @@ func TestRunGitConfigExistingKeepsCurrentGitConfig(t *testing.T) {
 		RepoRoot: repoRoot,
 		HomeDir:  homeDir,
 		Decisions: map[string]any{
-			DecisionGitConfigMode: GitConfigModeExisting,
+			DecisionGitConfigMode: "existing",
+			DecisionGitUserName:   "Grace",
+			DecisionGitUserEmail:  "grace@example.com",
 		},
 	})
 	if err != nil {
@@ -449,8 +451,15 @@ func TestRunGitConfigExistingKeepsCurrentGitConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read gitconfig: %v", err)
 	}
-	if string(content) != existing {
-		t.Fatalf("expected existing gitconfig to be unchanged, got %q", string(content))
+	body := string(content)
+	if body == existing {
+		t.Fatal("expected existing gitconfig to be overwritten")
+	}
+	if !strings.Contains(body, "name = Grace") {
+		t.Fatalf("expected entered user.name in gitconfig, got %q", body)
+	}
+	if !strings.Contains(body, "email = grace@example.com") {
+		t.Fatalf("expected entered user.email in gitconfig, got %q", body)
 	}
 }
 

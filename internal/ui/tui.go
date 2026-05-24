@@ -58,7 +58,6 @@ const (
 	screenNodeToolchain
 	screenDockerRuntime
 	screenShellOptions
-	screenGitConfig
 	screenGitName
 	screenGitEmail
 	screenManual
@@ -146,21 +145,16 @@ type model struct {
 	nodeOptions    []selectOption
 	dockerOptions  []selectOption
 	shellOptions   []toggleOption
-	gitModeOptions []selectOption
 	manualOptions  []toggleOption
 
 	brewEntries  []stages.BrewEntry
 	brewSelected map[string]bool
 
-	nodeSelection    int
-	dockerSelection  int
-	gitModeSelection int
-	gitNameInput     textinput.Model
-	gitEmailInput    textinput.Model
-	gitCurrentName   string
-	gitCurrentEmail  string
-	gitConfigExists  bool
-	inputError       string
+	nodeSelection   int
+	dockerSelection int
+	gitNameInput    textinput.Model
+	gitEmailInput   textinput.Model
+	inputError      string
 
 	plan          []string
 	planError     string
@@ -238,7 +232,6 @@ func Run(ctx context.Context, options Options) error {
 	spin := spinner.New()
 	spin.Spinner = spinner.Dot
 	currentGitName, currentGitEmail := readGitIdentity(options.HomeDir)
-	gitConfigExists := hasGitConfig(options.HomeDir)
 	gitNameInput := textinput.New()
 	gitNameInput.Placeholder = "Git user.name"
 	gitNameInput.CharLimit = 128
@@ -279,16 +272,12 @@ func Run(ctx context.Context, options Options) error {
 			{ID: stages.DecisionShellApplyZshrc, Title: "Write ~/.zshrc from template", Selected: true},
 			{ID: stages.DecisionShellApplyStarship, Title: "Write starship.toml from template", Selected: true},
 		},
-		gitModeOptions:  gitConfigModeOptions(gitConfigExists),
-		manualOptions:   optionsForStageIDs(options.Catalog, phaseManualStages),
-		brewSelected:    make(map[string]bool),
-		gitNameInput:    gitNameInput,
-		gitEmailInput:   gitEmailInput,
-		gitCurrentName:  currentGitName,
-		gitCurrentEmail: currentGitEmail,
-		gitConfigExists: gitConfigExists,
-		stageStatuses:   detectAlreadyDoneStages(runCtx, options.Catalog, options.Commander, options.RepoRoot, options.HomeDir),
-		spinner:         spin,
+		manualOptions: optionsForStageIDs(options.Catalog, phaseManualStages),
+		brewSelected:  make(map[string]bool),
+		gitNameInput:  gitNameInput,
+		gitEmailInput: gitEmailInput,
+		stageStatuses: detectAlreadyDoneStages(runCtx, options.Catalog, options.Commander, options.RepoRoot, options.HomeDir),
+		spinner:       spin,
 	}
 
 	if err := m.reloadBrewEntries(); err != nil && !m.resumeRun {
@@ -492,28 +481,8 @@ func (m model) updateKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.shellOptions[m.cursor].Selected = !m.shellOptions[m.cursor].Selected
 			}
 		case "enter":
-			m.screen = screenGitConfig
-			m.cursor = m.gitModeSelection
-		}
-	case screenGitConfig:
-		switch key.String() {
-		case "esc":
-			m.screen = screenShellOptions
-			m.cursor = 0
-		case "up":
-			m.updateRadioSelection(len(m.gitModeOptions), &m.gitModeSelection, -1)
-		case "down":
-			m.updateRadioSelection(len(m.gitModeOptions), &m.gitModeSelection, 1)
-		case " ":
-			if len(m.gitModeOptions) > 0 {
-				m.gitModeSelection = m.cursor
-			}
-		case "enter":
-			if len(m.gitModeOptions) > 0 {
-				m.gitModeSelection = m.cursor
-			}
 			m.inputError = ""
-			if m.selectedGitModeRequiresIdentity() {
+			if m.stageSelected("git_config") {
 				m.screen = screenGitName
 				m.gitNameInput.Focus()
 				return m, textinput.Blink
@@ -526,8 +495,8 @@ func (m model) updateKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case "esc":
 			m.inputError = ""
 			m.gitNameInput.Blur()
-			m.screen = screenGitConfig
-			m.cursor = m.gitModeSelection
+			m.screen = screenShellOptions
+			m.cursor = m.optionCursor(m.shellOptions, "git_config")
 			return m, nil
 		case "enter":
 			name := strings.TrimSpace(m.gitNameInput.Value())
@@ -570,7 +539,7 @@ func (m model) updateKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.gitEmailInput, cmd = m.gitEmailInput.Update(key)
 		return m, cmd
 	case screenManual:
-		return m.updateToggleScreen(key, &m.manualOptions, screenGitConfig, screenReview)
+		return m.updateToggleScreen(key, &m.manualOptions, m.manualBackScreen(), screenReview)
 	case screenReview:
 		switch key.String() {
 		case "esc":
@@ -691,8 +660,6 @@ func (m model) View() string {
 		content = m.viewSelectOptions("Dev Tools: Docker Runtime", m.dockerOptions, m.dockerSelection)
 	case screenShellOptions:
 		content = m.viewToggleOptions("Dev Tools: Shell Setup Options", m.shellOptions)
-	case screenGitConfig:
-		content = m.viewGitConfigMode()
 	case screenGitName:
 		content = m.viewTextInput("Git Identity: user.name", "Enter git user.name, then press Enter.", m.gitNameInput)
 	case screenGitEmail:
@@ -792,36 +759,6 @@ func (m model) viewBrewSelection() string {
 	return b.String()
 }
 
-func (m model) viewGitConfigMode() string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "%s\n\n", lipgloss.NewStyle().Bold(true).Render("Dev Tools: Git Configuration"))
-	if m.gitConfigExists {
-		currentName := strings.TrimSpace(m.gitCurrentName)
-		if currentName == "" {
-			currentName = "(not set)"
-		}
-		currentEmail := strings.TrimSpace(m.gitCurrentEmail)
-		if currentEmail == "" {
-			currentEmail = "(not set)"
-		}
-		fmt.Fprintf(&b, "Existing ~/.gitconfig found. Current identity: %s <%s>\n", currentName, currentEmail)
-	} else {
-		fmt.Fprintf(&b, "No existing ~/.gitconfig found. A new one will be written from the template.\n")
-	}
-	fmt.Fprintf(&b, "Use Up/Down to choose. Enter to continue, Esc to go back.\n\n")
-	for index, option := range m.gitModeOptions {
-		prefix := "  "
-		if m.cursor == index {
-			prefix = "> "
-		}
-		fmt.Fprintf(&b, "%s%s %s\n", prefix, radioMarker(m.gitModeSelection == index), option.Title)
-		if option.Description != "" {
-			fmt.Fprintf(&b, "    %s\n", option.Description)
-		}
-	}
-	return b.String()
-}
-
 func (m model) viewTextInput(title string, subtitle string, input textinput.Model) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s\n\n", lipgloss.NewStyle().Bold(true).Render(title))
@@ -886,9 +823,7 @@ func (m *model) viewReview() string {
 		stages.ShellApplyZshrcTemplate(decisions),
 		stages.ShellApplyStarshipTemplate(decisions),
 	)
-	gitMode := stages.GitConfigModeFromDecisions(decisions)
-	fmt.Fprintf(&b, "Git config mode: %s\n", selectOptionTitle(m.gitModeOptions, gitMode))
-	if gitMode != stages.GitConfigModeExisting {
+	if m.stageSelected("git_config") {
 		name, email := stages.GitIdentityFromDecisions(decisions)
 		fmt.Fprintf(&b, "Git identity: %s <%s>\n", name, email)
 	}
@@ -1150,7 +1085,7 @@ func (m *model) collectDecisions() map[string]any {
 	decisions[stages.DecisionShellInstallOhMyZsh] = m.shellOptionEnabled(stages.DecisionShellInstallOhMyZsh)
 	decisions[stages.DecisionShellApplyZshrc] = m.shellOptionEnabled(stages.DecisionShellApplyZshrc)
 	decisions[stages.DecisionShellApplyStarship] = m.shellOptionEnabled(stages.DecisionShellApplyStarship)
-	decisions[stages.DecisionGitConfigMode] = m.selectedGitModeID()
+	decisions[stages.DecisionGitConfigMode] = stages.GitConfigModeTemplate
 	decisions[stages.DecisionGitUserName] = strings.TrimSpace(m.gitNameInput.Value())
 	decisions[stages.DecisionGitUserEmail] = strings.TrimSpace(m.gitEmailInput.Value())
 	return stages.NormalizeDecisions(decisions)
@@ -1177,17 +1112,6 @@ func (m *model) selectedDockerRuntimeID() string {
 	return stages.DockerRuntimeColima
 }
 
-func (m *model) selectedGitModeID() string {
-	if m.gitModeSelection >= 0 && m.gitModeSelection < len(m.gitModeOptions) {
-		return m.gitModeOptions[m.gitModeSelection].ID
-	}
-	return stages.GitConfigModeTemplate
-}
-
-func (m *model) selectedGitModeRequiresIdentity() bool {
-	return m.selectedGitModeID() != stages.GitConfigModeExisting
-}
-
 func (m *model) shellOptionEnabled(id string) bool {
 	for _, option := range m.shellOptions {
 		if option.ID == id {
@@ -1195,6 +1119,46 @@ func (m *model) shellOptionEnabled(id string) bool {
 		}
 	}
 	return true
+}
+
+func (m *model) stageSelected(id string) bool {
+	for _, option := range m.macOSOptions {
+		if option.ID == id {
+			return option.Selected
+		}
+	}
+	for _, option := range m.installOptions {
+		if option.ID == id {
+			return option.Selected
+		}
+	}
+	for _, option := range m.devOptions {
+		if option.ID == id {
+			return option.Selected
+		}
+	}
+	for _, option := range m.manualOptions {
+		if option.ID == id {
+			return option.Selected
+		}
+	}
+	return false
+}
+
+func (m *model) optionCursor(options []toggleOption, id string) int {
+	for index, option := range options {
+		if option.ID == id {
+			return index
+		}
+	}
+	return 0
+}
+
+func (m *model) manualBackScreen() screen {
+	if m.stageSelected("git_config") {
+		return screenGitEmail
+	}
+	return screenShellOptions
 }
 
 func (m *model) effectiveDryRun() bool {
@@ -1504,14 +1468,6 @@ func readGitIdentity(homeDir string) (string, string) {
 	return parseGitIdentity(string(payload))
 }
 
-func hasGitConfig(homeDir string) bool {
-	if strings.TrimSpace(homeDir) == "" {
-		return false
-	}
-	info, err := os.Stat(filepath.Join(homeDir, ".gitconfig"))
-	return err == nil && !info.IsDir()
-}
-
 func parseGitIdentity(content string) (string, string) {
 	inUser := false
 	name := ""
@@ -1561,18 +1517,6 @@ func optionsForStageIDs(catalog []stages.Stage, ids []string) []toggleOption {
 		})
 	}
 	return options
-}
-
-func gitConfigModeOptions(existingConfig bool) []selectOption {
-	if existingConfig {
-		return []selectOption{
-			{ID: stages.GitConfigModeExisting, Title: "Keep existing git config", Description: "Leave ~/.gitconfig unchanged"},
-			{ID: stages.GitConfigModeTemplate, Title: "Overwrite with template", Description: "Write templates/gitconfig and set user.name/user.email"},
-		}
-	}
-	return []selectOption{
-		{ID: stages.GitConfigModeTemplate, Title: "Write template git config", Description: "Write templates/gitconfig and set user.name/user.email"},
-	}
 }
 
 func modeName(dryRun bool) string {
@@ -1652,7 +1596,6 @@ var configurationScreenOrder = []screen{
 	screenNodeToolchain,
 	screenDockerRuntime,
 	screenShellOptions,
-	screenGitConfig,
 	screenGitName,
 	screenGitEmail,
 	screenManual,
@@ -2169,8 +2112,6 @@ func screenTitle(current screen) string {
 		return "Dev Tools: Docker Runtime"
 	case screenShellOptions:
 		return "Dev Tools: Shell Setup Options"
-	case screenGitConfig:
-		return "Dev Tools: Git Configuration"
 	case screenGitName:
 		return "Git Identity: user.name"
 	case screenGitEmail:

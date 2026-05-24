@@ -18,7 +18,6 @@ const (
 
 	DecisionGitConfigMode = "git.config_mode"
 	GitConfigModeTemplate = "template"
-	GitConfigModeExisting = "existing"
 	GitConfigModeCustom   = "custom"
 
 	DecisionGitUserName  = "git.user_name"
@@ -85,8 +84,6 @@ func ShellApplyStarshipTemplate(decisions map[string]any) bool {
 
 func GitConfigModeFromDecisions(decisions map[string]any) string {
 	switch strings.TrimSpace(stringValue(decisions, DecisionGitConfigMode)) {
-	case GitConfigModeExisting:
-		return GitConfigModeExisting
 	case GitConfigModeCustom:
 		return GitConfigModeCustom
 	default:

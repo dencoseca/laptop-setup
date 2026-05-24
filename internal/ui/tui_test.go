@@ -52,12 +52,8 @@ func TestPrepareExecutionSetupPersistsPhaseDecisions(t *testing.T) {
 			{ID: stages.DecisionShellApplyZshrc, Title: "Write zshrc", Selected: true},
 			{ID: stages.DecisionShellApplyStarship, Title: "Write starship", Selected: false},
 		},
-		gitModeOptions: []selectOption{
-			{ID: stages.GitConfigModeTemplate, Title: "template"},
-		},
-		nodeSelection:    1,
-		dockerSelection:  0,
-		gitModeSelection: 0,
+		nodeSelection:   1,
+		dockerSelection: 0,
 	}
 	m.gitNameInput = textinput.New()
 	m.gitEmailInput = textinput.New()
@@ -109,24 +105,6 @@ func TestParseGitIdentity(t *testing.T) {
 	}
 	if email != "ada@example.com" {
 		t.Fatalf("email mismatch: %q", email)
-	}
-}
-
-func TestGitConfigModeOptionsDependOnExistingConfig(t *testing.T) {
-	withoutExisting := gitConfigModeOptions(false)
-	if len(withoutExisting) != 1 || withoutExisting[0].ID != stages.GitConfigModeTemplate {
-		t.Fatalf("expected only template option without existing config, got %+v", withoutExisting)
-	}
-
-	withExisting := gitConfigModeOptions(true)
-	if len(withExisting) != 2 {
-		t.Fatalf("expected keep and overwrite options with existing config, got %+v", withExisting)
-	}
-	if withExisting[0].ID != stages.GitConfigModeExisting {
-		t.Fatalf("expected keep existing to be default when config exists, got %+v", withExisting)
-	}
-	if withExisting[1].ID != stages.GitConfigModeTemplate {
-		t.Fatalf("expected overwrite template option when config exists, got %+v", withExisting)
 	}
 }
 
@@ -745,7 +723,7 @@ func TestRenderDashboardPlacesShortcutHintBelowBody(t *testing.T) {
 
 func TestViewConfigurationUsesDashboardLayoutWithJourneyPreview(t *testing.T) {
 	m := model{
-		screen: screenGitConfig,
+		screen: screenDevTools,
 		width:  120,
 		height: 36,
 		catalog: []stages.Stage{
@@ -773,7 +751,6 @@ func TestViewConfigurationUsesDashboardLayoutWithJourneyPreview(t *testing.T) {
 		devOptions: []toggleOption{
 			{ID: "git_config", Title: "Git Configuration", Selected: true},
 		},
-		gitModeOptions: gitConfigModeOptions(false),
 	}
 
 	view := m.View()
@@ -781,8 +758,8 @@ func TestViewConfigurationUsesDashboardLayoutWithJourneyPreview(t *testing.T) {
 	for _, fragment := range []string{
 		"██████╗  ██████╗",
 		"Initiating CHAPEAUX, stand by for awesomeness...",
-		"Dev Tools: Git Configuration",
-		"Use Up/Down to choose. Enter to continue, Esc to go back.",
+		"Dev Tools Setup",
+		"Toggle stages with Space. Enter to continue, Esc to go back.",
 		"Xcode Command Line Tools",
 		"Brew Bundle",
 		"Git Configuration",
@@ -849,9 +826,6 @@ func TestViewReviewHidesInternalStageIDs(t *testing.T) {
 		dockerOptions: []selectOption{
 			{ID: stages.DockerRuntimeColima, Title: "colima"},
 		},
-		gitModeOptions: []selectOption{
-			{ID: stages.GitConfigModeTemplate, Title: "template"},
-		},
 	}
 
 	view := m.View()
@@ -869,7 +843,7 @@ func TestViewReviewHidesInternalStageIDs(t *testing.T) {
 
 func TestViewConfigurationMatchesWindowDimensions(t *testing.T) {
 	m := model{
-		screen: screenGitConfig,
+		screen: screenDevTools,
 		width:  117,
 		height: 41,
 		catalog: []stages.Stage{
@@ -897,7 +871,6 @@ func TestViewConfigurationMatchesWindowDimensions(t *testing.T) {
 		devOptions: []toggleOption{
 			{ID: "git_config", Title: "Git Configuration", Selected: true},
 		},
-		gitModeOptions: gitConfigModeOptions(false),
 	}
 
 	view := m.View()
@@ -975,19 +948,6 @@ func TestRadioSelectionFollowsArrowNavigation(t *testing.T) {
 		}
 	})
 
-	t.Run("git config", func(t *testing.T) {
-		m := model{
-			screen:           screenGitConfig,
-			cursor:           0,
-			gitModeSelection: 0,
-			gitModeOptions:   gitConfigModeOptions(true),
-		}
-
-		m = sendKey(t, m, tea.KeyMsg{Type: tea.KeyDown})
-		if m.cursor != 1 || m.gitModeSelection != 1 {
-			t.Fatalf("expected down arrow to select git mode 1, got cursor=%d selection=%d", m.cursor, m.gitModeSelection)
-		}
-	})
 }
 
 func TestGitIdentityInputsAcceptAlphanumericCharacters(t *testing.T) {
@@ -1038,33 +998,33 @@ func TestGitIdentityInputsAcceptAlphanumericCharacters(t *testing.T) {
 	})
 }
 
-func TestGitConfigEnterKeepsExistingOrCollectsIdentity(t *testing.T) {
-	t.Run("keep existing", func(t *testing.T) {
+func TestShellOptionsEnterSkipsOrCollectsGitIdentity(t *testing.T) {
+	t.Run("git stage skipped", func(t *testing.T) {
 		m := model{
-			screen:           screenGitConfig,
-			cursor:           0,
-			gitModeSelection: 0,
-			gitModeOptions:   gitConfigModeOptions(true),
+			screen: screenShellOptions,
+			devOptions: []toggleOption{
+				{ID: "git_config", Title: "Git Configuration", Selected: false},
+			},
 		}
 
 		m = sendEnter(t, m)
 		if m.screen != screenManual {
-			t.Fatalf("expected keep existing choice to continue to manual screen, got %v", m.screen)
+			t.Fatalf("expected skipped git stage to continue to manual screen, got %v", m.screen)
 		}
 	})
 
-	t.Run("write template", func(t *testing.T) {
+	t.Run("git stage selected", func(t *testing.T) {
 		m := model{
-			screen:           screenGitConfig,
-			cursor:           0,
-			gitModeSelection: 0,
-			gitModeOptions:   gitConfigModeOptions(false),
-			gitNameInput:     textinput.New(),
+			screen:       screenShellOptions,
+			gitNameInput: textinput.New(),
+			devOptions: []toggleOption{
+				{ID: "git_config", Title: "Git Configuration", Selected: true},
+			},
 		}
 
 		m = sendEnter(t, m)
 		if m.screen != screenGitName {
-			t.Fatalf("expected template choice to collect git name, got %v", m.screen)
+			t.Fatalf("expected selected git stage to collect git name, got %v", m.screen)
 		}
 	})
 }
@@ -1144,9 +1104,6 @@ func TestPromptFlowReachesReviewScreen(t *testing.T) {
 		shellOptions: []toggleOption{
 			{ID: stages.DecisionShellInstallOhMyZsh, Title: "Install oh-my-zsh", Selected: true},
 		},
-		gitModeOptions: []selectOption{
-			{ID: stages.GitConfigModeTemplate, Title: "template"},
-		},
 		manualOptions: []toggleOption{
 			{ID: "manual_app_store_apps", Title: "Manual", Selected: true},
 		},
@@ -1185,10 +1142,6 @@ func TestPromptFlowReachesReviewScreen(t *testing.T) {
 		t.Fatalf("expected shell options screen, got %v", m.screen)
 	}
 	m = sendEnter(t, m)
-	if m.screen != screenGitConfig {
-		t.Fatalf("expected git config screen, got %v", m.screen)
-	}
-	m = sendEnter(t, m)
 	if m.screen != screenGitName {
 		t.Fatalf("expected git name screen, got %v", m.screen)
 	}
@@ -1223,9 +1176,6 @@ func TestReviewEnterBlocksExecutionWhenPlanInvalid(t *testing.T) {
 		brewSelected:  map[string]bool{},
 		nodeOptions:   []selectOption{{ID: stages.NodeToolchainVitePlus, Title: "vite+"}},
 		dockerOptions: []selectOption{{ID: stages.DockerRuntimeColima, Title: "colima"}},
-		gitModeOptions: []selectOption{
-			{ID: stages.GitConfigModeTemplate, Title: "template"},
-		},
 		stageStatuses: make(map[string]state.StageStatus),
 	}
 
@@ -1301,9 +1251,6 @@ func TestReviewEnterConfirmsPlanAndStartsExecution(t *testing.T) {
 		},
 		shellOptions: []toggleOption{
 			{ID: stages.DecisionShellInstallOhMyZsh, Title: "Install oh-my-zsh", Selected: true},
-		},
-		gitModeOptions: []selectOption{
-			{ID: stages.GitConfigModeTemplate, Title: "template"},
 		},
 		stageStatuses: make(map[string]state.StageStatus),
 	}
