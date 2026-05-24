@@ -185,12 +185,10 @@ const (
 )
 
 var (
-	canvasColor      = lipgloss.AdaptiveColor{Light: "#F8FAFC", Dark: "#0B0B0F"}
-	surfaceColor     = lipgloss.AdaptiveColor{Light: "#FFFFFF", Dark: "#141419"}
-	surfaceAltColor  = lipgloss.AdaptiveColor{Light: "#F1F5F9", Dark: "#171C24"}
 	textColor        = lipgloss.AdaptiveColor{Light: "#0F172A", Dark: "#E5E7EB"}
 	mutedColor       = lipgloss.AdaptiveColor{Light: "#475569", Dark: "#A1A1AA"}
 	dimColor         = lipgloss.AdaptiveColor{Light: "#CBD5E1", Dark: "#30303A"}
+	borderColor      = lipgloss.AdaptiveColor{Light: "#64748B", Dark: "#D1D5DB"}
 	accentColor      = lipgloss.AdaptiveColor{Light: "#7C3AED", Dark: "#A855F7"}
 	accentAltColor   = lipgloss.AdaptiveColor{Light: "#0284C7", Dark: "#22D3EE"}
 	successColor     = lipgloss.AdaptiveColor{Light: "#059669", Dark: "#34D399"}
@@ -1615,7 +1613,7 @@ var configurationScreenOrder = []screen{
 
 func (m model) renderDocument(content string) string {
 	width, height := m.viewDimensions()
-	panel := m.panelStyle(maxInt(20, width-4), maxInt(8, height-2), surfaceColor).Render(content)
+	panel := m.panelStyle(maxInt(20, width-4), maxInt(8, height-2)).Render(content)
 	return m.screenStyle(width, height).Render(panel)
 }
 
@@ -1623,22 +1621,23 @@ func (m model) renderDashboard(status dashboardStatus, journey dashboardJourney,
 	width, height := m.viewDimensions()
 	contentWidth := maxInt(20, width-4)
 	contentHeight := maxInt(12, height-2)
+	columnGap := 2
 	headerHeight := maxInt(8, contentHeight/3)
 	if headerHeight > contentHeight-6 {
 		headerHeight = maxInt(6, contentHeight-6)
 	}
 	bodyHeight := maxInt(6, contentHeight-headerHeight-1)
 
-	titleWidth := maxInt(24, ((contentWidth-1)*2)/3)
-	statusWidth := maxInt(20, contentWidth-titleWidth-1)
-	if titleWidth+1+statusWidth > contentWidth {
-		titleWidth = maxInt(20, contentWidth-statusWidth-1)
+	titleWidth := maxInt(24, ((contentWidth-columnGap)*2)/3)
+	statusWidth := maxInt(20, contentWidth-titleWidth-columnGap)
+	if titleWidth+columnGap+statusWidth > contentWidth {
+		titleWidth = maxInt(20, contentWidth-statusWidth-columnGap)
 	}
 
-	journeyWidth := maxInt(24, (contentWidth-1)/2)
-	outputWidth := maxInt(24, contentWidth-journeyWidth-1)
-	if journeyWidth+1+outputWidth > contentWidth {
-		journeyWidth = maxInt(20, contentWidth-outputWidth-1)
+	journeyWidth := maxInt(24, (contentWidth-columnGap)/2)
+	outputWidth := maxInt(24, contentWidth-journeyWidth-columnGap)
+	if journeyWidth+columnGap+outputWidth > contentWidth {
+		journeyWidth = maxInt(20, contentWidth-outputWidth-columnGap)
 	}
 
 	header := lipgloss.JoinHorizontal(
@@ -1671,7 +1670,7 @@ func (m model) renderTitlePanel(width int, height int) string {
 		"",
 		subtitle,
 	)
-	return m.panelStyle(width, height, surfaceColor).
+	return m.panelStyle(width, height).
 		Align(lipgloss.Left).
 		AlignVertical(lipgloss.Center).
 		Render(content)
@@ -1682,8 +1681,7 @@ func (m model) renderDashboardStatusPanel(width int, height int, status dashboar
 	barWidth := maxInt(10, minInt(24, innerWidth-2))
 	statusBadge := lipgloss.NewStyle().
 		Bold(true).
-		Foreground(canvasColor).
-		Background(status.BadgeTone).
+		Foreground(status.BadgeTone).
 		Padding(0, 1).
 		Render(strings.ToUpper(status.Badge))
 	badgeLine := statusBadge
@@ -1700,7 +1698,7 @@ func (m model) renderDashboardStatusPanel(width int, height int, status dashboar
 		lipgloss.NewStyle().Foreground(mutedColor).Render(fmt.Sprintf("%d%% complete", status.ProgressPct)),
 		lipgloss.NewStyle().Foreground(mutedColor).Render(truncateLine(status.Hint, innerWidth)),
 	}
-	return m.panelStyle(width, height, surfaceAltColor).Render(strings.Join(limitLines(lines, panelInnerHeight(height)), "\n"))
+	return m.panelStyle(width, height).Render(strings.Join(limitLines(lines, panelInnerHeight(height)), "\n"))
 }
 
 func (m model) renderJourneyPanel(width int, height int, journey dashboardJourney) string {
@@ -1723,11 +1721,11 @@ func (m model) renderJourneyPanel(width int, height int, journey dashboardJourne
 		lines = append(lines, lipgloss.NewStyle().Foreground(mutedColor).Render("No stages selected yet"))
 	}
 	lines = limitLines(lines, lineBudget+1)
-	return m.panelStyle(width, height, surfaceColor).Render(strings.Join(lines, "\n"))
+	return m.panelStyle(width, height).Render(strings.Join(lines, "\n"))
 }
 
 func (m model) renderOutputPanel(width int, height int, content string) string {
-	return m.panelStyle(width, height, surfaceAltColor).Render(content)
+	return m.panelStyle(width, height).Render(content)
 }
 
 func (m model) standardOutputContent(content string) string {
@@ -1757,16 +1755,17 @@ func (m model) executionOutput(currentStageID string) string {
 	return strings.Join(lines, "\n")
 }
 
-func (m model) panelStyle(width int, height int, background lipgloss.TerminalColor) lipgloss.Style {
+func (m model) panelStyle(width int, height int) lipgloss.Style {
 	innerWidth := panelInnerWidth(width)
 	innerHeight := panelInnerHeight(height)
 	return lipgloss.NewStyle().
 		Width(innerWidth).
-		MaxWidth(innerWidth).
+		MaxWidth(width).
 		Height(innerHeight).
-		MaxHeight(innerHeight).
+		MaxHeight(height).
 		Padding(1, 2).
-		Background(background).
+		Border(lipgloss.NormalBorder()).
+		BorderForeground(borderColor).
 		Foreground(textColor)
 }
 
@@ -2017,7 +2016,6 @@ func (m model) screenStyle(width int, height int) lipgloss.Style {
 		Width(maxInt(20, width-4)).
 		Height(maxInt(8, height-2)).
 		Padding(1, 2).
-		Background(canvasColor).
 		Foreground(textColor)
 }
 
@@ -2187,11 +2185,11 @@ func brewViewportRange(total int, cursor int, visible int) (int, int) {
 }
 
 func panelInnerWidth(width int) int {
-	return maxInt(1, width-4)
+	return maxInt(1, width-6)
 }
 
 func panelInnerHeight(height int) int {
-	return maxInt(1, height-2)
+	return maxInt(1, height-4)
 }
 
 func maxInt(a int, b int) int {

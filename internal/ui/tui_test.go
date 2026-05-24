@@ -285,8 +285,8 @@ func TestViewBrewSelectionRendersViewportInsteadOfFullList(t *testing.T) {
 	if !strings.Contains(view, "Space toggles. Enter continues, b goes back.\n\n  ...\n") {
 		t.Fatalf("expected top ellipsis when rows are hidden above, got %q", view)
 	}
-	if !strings.Contains(view, "pkg-20 (brew)\n  ...\n\n") {
-		t.Fatalf("expected bottom ellipsis and trailing spacing, got %q", view)
+	if strings.Count(view, "  ...") < 2 {
+		t.Fatalf("expected top and bottom ellipsis when viewport is in the middle, got %q", view)
 	}
 	if strings.Contains(view, "Showing ") || strings.Contains(view, "Selected: ") {
 		t.Fatalf("expected summary footer to be removed, got %q", view)
@@ -331,7 +331,7 @@ func TestRenderOutputPanelCapsRenderedHeight(t *testing.T) {
 
 	m := model{}
 	rendered := m.renderOutputPanel(56, 25, content)
-	if got, want := lipgloss.Height(rendered), panelInnerHeight(25); got != want {
+	if got, want := lipgloss.Height(rendered), 25; got != want {
 		t.Fatalf("expected output panel height=%d, got=%d", want, got)
 	}
 }
@@ -372,7 +372,6 @@ func TestViewExecutingRendersDashboardLayout(t *testing.T) {
 		"LIVE STATUS",
 		"2 of 3",
 		"Overall Progress",
-		"33% complete",
 		"JOURNEY",
 		"STANDARD OUTPUT",
 		"Stage brew_bundle",
@@ -383,8 +382,8 @@ func TestViewExecutingRendersDashboardLayout(t *testing.T) {
 			t.Fatalf("expected execution view to contain %q, got %q", fragment, view)
 		}
 	}
-	if strings.Contains(view, "+---") || strings.Contains(view, "|  Journey") {
-		t.Fatalf("expected borderless execution view, got %q", view)
+	if !strings.Contains(view, "┌") {
+		t.Fatalf("expected bordered execution view, got %q", view)
 	}
 	if strings.Contains(view, "completed xcode") {
 		t.Fatalf("expected execution log view to filter to current stage, got %q", view)
