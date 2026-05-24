@@ -555,29 +555,11 @@ func runGitConfig(_ context.Context, execCtx ExecutionContext) error {
 	case GitConfigModeExisting:
 		if _, err := os.Stat(gitConfigPath); err == nil {
 			return logStageMessage(execCtx, "Keeping existing ~/.gitconfig by decision")
+		} else if !os.IsNotExist(err) {
+			return fmt.Errorf("stat gitconfig: %w", err)
 		}
-		return copyFromTemplates(execCtx, "gitconfig", gitConfigPath)
-	case GitConfigModeCustom:
-		name, email := GitIdentityFromDecisions(execCtx.Decisions)
-		if err := validateGitIdentity(name, email); err != nil {
-			return err
-		}
-		if err := copyFromTemplates(execCtx, "gitconfig", gitConfigPath); err != nil {
-			return err
-		}
-
-		content, err := os.ReadFile(gitConfigPath)
-		if err != nil {
-			return fmt.Errorf("read gitconfig: %w", err)
-		}
-		configBody := strings.TrimRight(string(content), "\n") + "\n\n[user]\n  name = " + name + "\n  email = " + email + "\n"
-		if err = os.WriteFile(gitConfigPath, []byte(configBody), 0o644); err != nil {
-			return fmt.Errorf("write gitconfig identity: %w", err)
-		}
-		return nil
-	default:
-		return copyFromTemplates(execCtx, "gitconfig", gitConfigPath)
 	}
+	return writeGitConfigFromTemplate(execCtx, gitConfigPath)
 }
 
 func simulateGitConfig(_ context.Context, execCtx ExecutionContext) error {
@@ -587,16 +569,34 @@ func simulateGitConfig(_ context.Context, execCtx ExecutionContext) error {
 	}
 	switch mode {
 	case GitConfigModeExisting:
-		return logSimulation(execCtx, "Would keep existing ~/.gitconfig when present, otherwise write templates/gitconfig")
-	case GitConfigModeCustom:
+		return logSimulation(execCtx, "Would keep existing ~/.gitconfig when present, otherwise write templates/gitconfig with the entered git identity")
+	default:
 		name, email := GitIdentityFromDecisions(execCtx.Decisions)
 		if err := validateGitIdentity(name, email); err != nil {
 			return err
 		}
 		return logSimulation(execCtx, fmt.Sprintf("Would write templates/gitconfig and set git identity to %q <%s>", name, email))
-	default:
-		return logSimulation(execCtx, "Would write templates/gitconfig to ~/.gitconfig")
 	}
+}
+
+func writeGitConfigFromTemplate(execCtx ExecutionContext, gitConfigPath string) error {
+	name, email := GitIdentityFromDecisions(execCtx.Decisions)
+	if err := validateGitIdentity(name, email); err != nil {
+		return err
+	}
+	if err := copyFromTemplates(execCtx, "gitconfig", gitConfigPath); err != nil {
+		return err
+	}
+
+	content, err := os.ReadFile(gitConfigPath)
+	if err != nil {
+		return fmt.Errorf("read gitconfig: %w", err)
+	}
+	configBody := strings.TrimRight(string(content), "\n") + "\n\n[user]\n  name = " + name + "\n  email = " + email + "\n"
+	if err = os.WriteFile(gitConfigPath, []byte(configBody), 0o644); err != nil {
+		return fmt.Errorf("write gitconfig identity: %w", err)
+	}
+	return nil
 }
 
 func runManualAppStoreApps(_ context.Context, execCtx ExecutionContext) error {

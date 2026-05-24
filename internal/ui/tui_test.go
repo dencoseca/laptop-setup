@@ -54,12 +54,10 @@ func TestPrepareExecutionSetupPersistsPhaseDecisions(t *testing.T) {
 		},
 		gitModeOptions: []selectOption{
 			{ID: stages.GitConfigModeTemplate, Title: "template"},
-			{ID: stages.GitConfigModeExisting, Title: "existing"},
-			{ID: stages.GitConfigModeCustom, Title: "custom"},
 		},
 		nodeSelection:    1,
 		dockerSelection:  0,
-		gitModeSelection: 2,
+		gitModeSelection: 0,
 	}
 	m.gitNameInput = textinput.New()
 	m.gitEmailInput = textinput.New()
@@ -89,7 +87,7 @@ func TestPrepareExecutionSetupPersistsPhaseDecisions(t *testing.T) {
 	if stages.ShellApplyStarshipTemplate(decisions) {
 		t.Fatalf("expected starship decision=false")
 	}
-	if got := stages.GitConfigModeFromDecisions(decisions); got != stages.GitConfigModeCustom {
+	if got := stages.GitConfigModeFromDecisions(decisions); got != stages.GitConfigModeTemplate {
 		t.Fatalf("git mode mismatch: got=%s", got)
 	}
 	name, email := stages.GitIdentityFromDecisions(decisions)
@@ -111,6 +109,24 @@ func TestParseGitIdentity(t *testing.T) {
 	}
 	if email != "ada@example.com" {
 		t.Fatalf("email mismatch: %q", email)
+	}
+}
+
+func TestGitConfigModeOptionsDependOnExistingConfig(t *testing.T) {
+	withoutExisting := gitConfigModeOptions(false)
+	if len(withoutExisting) != 1 || withoutExisting[0].ID != stages.GitConfigModeTemplate {
+		t.Fatalf("expected only template option without existing config, got %+v", withoutExisting)
+	}
+
+	withExisting := gitConfigModeOptions(true)
+	if len(withExisting) != 2 {
+		t.Fatalf("expected keep and overwrite options with existing config, got %+v", withExisting)
+	}
+	if withExisting[0].ID != stages.GitConfigModeExisting {
+		t.Fatalf("expected keep existing to be default when config exists, got %+v", withExisting)
+	}
+	if withExisting[1].ID != stages.GitConfigModeTemplate {
+		t.Fatalf("expected overwrite template option when config exists, got %+v", withExisting)
 	}
 }
 
@@ -660,10 +676,7 @@ func TestViewConfigurationUsesDashboardLayoutWithJourneyPreview(t *testing.T) {
 		devOptions: []toggleOption{
 			{ID: "git_config", Title: "Git Configuration", Selected: true},
 		},
-		gitModeOptions: []selectOption{
-			{ID: stages.GitConfigModeTemplate, Title: "Use template git config", Description: "Write templates/gitconfig as ~/.gitconfig"},
-			{ID: stages.GitConfigModeCustom, Title: "Set custom identity", Description: "Write template config and override user.name/user.email"},
-		},
+		gitModeOptions: gitConfigModeOptions(false),
 	}
 
 	view := m.View()
@@ -787,10 +800,7 @@ func TestViewConfigurationMatchesWindowDimensions(t *testing.T) {
 		devOptions: []toggleOption{
 			{ID: "git_config", Title: "Git Configuration", Selected: true},
 		},
-		gitModeOptions: []selectOption{
-			{ID: stages.GitConfigModeTemplate, Title: "Use template git config", Description: "Write templates/gitconfig as ~/.gitconfig"},
-			{ID: stages.GitConfigModeCustom, Title: "Set custom identity", Description: "Write template config and override user.name/user.email"},
-		},
+		gitModeOptions: gitConfigModeOptions(false),
 	}
 
 	view := m.View()
@@ -873,17 +883,12 @@ func TestRadioSelectionFollowsArrowNavigation(t *testing.T) {
 			screen:           screenGitConfig,
 			cursor:           0,
 			gitModeSelection: 0,
-			gitModeOptions: []selectOption{
-				{ID: stages.GitConfigModeTemplate, Title: "template"},
-				{ID: stages.GitConfigModeExisting, Title: "existing"},
-				{ID: stages.GitConfigModeCustom, Title: "custom"},
-			},
+			gitModeOptions:   gitConfigModeOptions(true),
 		}
 
 		m = sendKey(t, m, tea.KeyMsg{Type: tea.KeyDown})
-		m = sendKey(t, m, tea.KeyMsg{Type: tea.KeyDown})
-		if m.cursor != 2 || m.gitModeSelection != 2 {
-			t.Fatalf("expected down arrows to select git mode 2, got cursor=%d selection=%d", m.cursor, m.gitModeSelection)
+		if m.cursor != 1 || m.gitModeSelection != 1 {
+			t.Fatalf("expected down arrow to select git mode 1, got cursor=%d selection=%d", m.cursor, m.gitModeSelection)
 		}
 	})
 }
@@ -932,6 +937,37 @@ func TestGitIdentityInputsAcceptAlphanumericCharacters(t *testing.T) {
 		}
 		if got := updated.gitEmailInput.Value(); got != "b" {
 			t.Fatalf("expected typed character to be inserted, got %q", got)
+		}
+	})
+}
+
+func TestGitConfigEnterKeepsExistingOrCollectsIdentity(t *testing.T) {
+	t.Run("keep existing", func(t *testing.T) {
+		m := model{
+			screen:           screenGitConfig,
+			cursor:           0,
+			gitModeSelection: 0,
+			gitModeOptions:   gitConfigModeOptions(true),
+		}
+
+		m = sendEnter(t, m)
+		if m.screen != screenManual {
+			t.Fatalf("expected keep existing choice to continue to manual screen, got %v", m.screen)
+		}
+	})
+
+	t.Run("write template", func(t *testing.T) {
+		m := model{
+			screen:           screenGitConfig,
+			cursor:           0,
+			gitModeSelection: 0,
+			gitModeOptions:   gitConfigModeOptions(false),
+			gitNameInput:     textinput.New(),
+		}
+
+		m = sendEnter(t, m)
+		if m.screen != screenGitName {
+			t.Fatalf("expected template choice to collect git name, got %v", m.screen)
 		}
 	})
 }
@@ -1018,6 +1054,10 @@ func TestPromptFlowReachesReviewScreen(t *testing.T) {
 			{ID: "manual_app_store_apps", Title: "Manual", Selected: true},
 		},
 	}
+	m.gitNameInput = textinput.New()
+	m.gitEmailInput = textinput.New()
+	m.gitNameInput.SetValue("Alice")
+	m.gitEmailInput.SetValue("alice@example.com")
 
 	m = sendEnter(t, m)
 	if m.screen != screenMacOS {
@@ -1050,6 +1090,14 @@ func TestPromptFlowReachesReviewScreen(t *testing.T) {
 	m = sendEnter(t, m)
 	if m.screen != screenGitConfig {
 		t.Fatalf("expected git config screen, got %v", m.screen)
+	}
+	m = sendEnter(t, m)
+	if m.screen != screenGitName {
+		t.Fatalf("expected git name screen, got %v", m.screen)
+	}
+	m = sendEnter(t, m)
+	if m.screen != screenGitEmail {
+		t.Fatalf("expected git email screen, got %v", m.screen)
 	}
 	m = sendEnter(t, m)
 	if m.screen != screenManual {

@@ -376,6 +376,84 @@ func TestRunGitConfigCustomIdentityWritesUserValues(t *testing.T) {
 	}
 }
 
+func TestRunGitConfigTemplateWritesEnteredIdentity(t *testing.T) {
+	repoRoot := t.TempDir()
+	homeDir := t.TempDir()
+	templatesDir := filepath.Join(repoRoot, "templates")
+	if err := os.MkdirAll(templatesDir, 0o755); err != nil {
+		t.Fatalf("create templates dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(templatesDir, "gitignore"), []byte("*.tmp\n"), 0o644); err != nil {
+		t.Fatalf("write gitignore template: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(templatesDir, "gitconfig"), []byte("[core]\n  autocrlf = input\n"), 0o644); err != nil {
+		t.Fatalf("write gitconfig template: %v", err)
+	}
+
+	err := runGitConfig(context.Background(), ExecutionContext{
+		RepoRoot: repoRoot,
+		HomeDir:  homeDir,
+		Decisions: map[string]any{
+			DecisionGitConfigMode: GitConfigModeTemplate,
+			DecisionGitUserName:   "Ada",
+			DecisionGitUserEmail:  "ada@example.com",
+		},
+	})
+	if err != nil {
+		t.Fatalf("runGitConfig returned error: %v", err)
+	}
+
+	content, err := os.ReadFile(filepath.Join(homeDir, ".gitconfig"))
+	if err != nil {
+		t.Fatalf("read generated gitconfig: %v", err)
+	}
+	body := string(content)
+	if !strings.Contains(body, "name = Ada") {
+		t.Fatalf("expected entered user.name in gitconfig, got %q", body)
+	}
+	if !strings.Contains(body, "email = ada@example.com") {
+		t.Fatalf("expected entered user.email in gitconfig, got %q", body)
+	}
+}
+
+func TestRunGitConfigExistingKeepsCurrentGitConfig(t *testing.T) {
+	repoRoot := t.TempDir()
+	homeDir := t.TempDir()
+	templatesDir := filepath.Join(repoRoot, "templates")
+	if err := os.MkdirAll(templatesDir, 0o755); err != nil {
+		t.Fatalf("create templates dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(templatesDir, "gitignore"), []byte("*.tmp\n"), 0o644); err != nil {
+		t.Fatalf("write gitignore template: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(templatesDir, "gitconfig"), []byte("[core]\n  autocrlf = input\n"), 0o644); err != nil {
+		t.Fatalf("write gitconfig template: %v", err)
+	}
+	existing := "[user]\n  name = Existing\n  email = existing@example.com\n"
+	if err := os.WriteFile(filepath.Join(homeDir, ".gitconfig"), []byte(existing), 0o644); err != nil {
+		t.Fatalf("write existing gitconfig: %v", err)
+	}
+
+	err := runGitConfig(context.Background(), ExecutionContext{
+		RepoRoot: repoRoot,
+		HomeDir:  homeDir,
+		Decisions: map[string]any{
+			DecisionGitConfigMode: GitConfigModeExisting,
+		},
+	})
+	if err != nil {
+		t.Fatalf("runGitConfig returned error: %v", err)
+	}
+
+	content, err := os.ReadFile(filepath.Join(homeDir, ".gitconfig"))
+	if err != nil {
+		t.Fatalf("read gitconfig: %v", err)
+	}
+	if string(content) != existing {
+		t.Fatalf("expected existing gitconfig to be unchanged, got %q", string(content))
+	}
+}
+
 func TestRunCommandLogsOutputAndLifecycleOnSuccess(t *testing.T) {
 	command := runner.Command{Name: "echo", Args: []string{"hello"}}
 	run := &scriptedRunner{

@@ -159,6 +159,7 @@ type model struct {
 	gitEmailInput    textinput.Model
 	gitCurrentName   string
 	gitCurrentEmail  string
+	gitConfigExists  bool
 	inputError       string
 
 	plan          []string
@@ -237,6 +238,7 @@ func Run(ctx context.Context, options Options) error {
 	spin := spinner.New()
 	spin.Spinner = spinner.Dot
 	currentGitName, currentGitEmail := readGitIdentity(options.HomeDir)
+	gitConfigExists := hasGitConfig(options.HomeDir)
 	gitNameInput := textinput.New()
 	gitNameInput.Placeholder = "Git user.name"
 	gitNameInput.CharLimit = 128
@@ -277,17 +279,14 @@ func Run(ctx context.Context, options Options) error {
 			{ID: stages.DecisionShellApplyZshrc, Title: "Write ~/.zshrc from template", Selected: true},
 			{ID: stages.DecisionShellApplyStarship, Title: "Write starship.toml from template", Selected: true},
 		},
-		gitModeOptions: []selectOption{
-			{ID: stages.GitConfigModeTemplate, Title: "Use template git config", Description: "Write templates/gitconfig as ~/.gitconfig"},
-			{ID: stages.GitConfigModeExisting, Title: "Keep existing git config", Description: "Keep ~/.gitconfig when present"},
-			{ID: stages.GitConfigModeCustom, Title: "Set custom identity", Description: "Write template config and override user.name/user.email"},
-		},
+		gitModeOptions:  gitConfigModeOptions(gitConfigExists),
 		manualOptions:   optionsForStageIDs(options.Catalog, phaseManualStages),
 		brewSelected:    make(map[string]bool),
 		gitNameInput:    gitNameInput,
 		gitEmailInput:   gitEmailInput,
 		gitCurrentName:  currentGitName,
 		gitCurrentEmail: currentGitEmail,
+		gitConfigExists: gitConfigExists,
 		stageStatuses:   make(map[string]state.StageStatus),
 		spinner:         spin,
 	}
@@ -514,7 +513,7 @@ func (m model) updateKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.gitModeSelection = m.cursor
 			}
 			m.inputError = ""
-			if m.selectedGitModeID() == stages.GitConfigModeCustom {
+			if m.selectedGitModeRequiresIdentity() {
 				m.screen = screenGitName
 				m.gitNameInput.Focus()
 				return m, textinput.Blink
@@ -796,15 +795,19 @@ func (m model) viewBrewSelection() string {
 func (m model) viewGitConfigMode() string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s\n\n", lipgloss.NewStyle().Bold(true).Render("Dev Tools: Git Configuration"))
-	currentName := strings.TrimSpace(m.gitCurrentName)
-	if currentName == "" {
-		currentName = "(not set)"
+	if m.gitConfigExists {
+		currentName := strings.TrimSpace(m.gitCurrentName)
+		if currentName == "" {
+			currentName = "(not set)"
+		}
+		currentEmail := strings.TrimSpace(m.gitCurrentEmail)
+		if currentEmail == "" {
+			currentEmail = "(not set)"
+		}
+		fmt.Fprintf(&b, "Existing ~/.gitconfig found. Current identity: %s <%s>\n", currentName, currentEmail)
+	} else {
+		fmt.Fprintf(&b, "No existing ~/.gitconfig found. A new one will be written from the template.\n")
 	}
-	currentEmail := strings.TrimSpace(m.gitCurrentEmail)
-	if currentEmail == "" {
-		currentEmail = "(not set)"
-	}
-	fmt.Fprintf(&b, "Current identity: %s <%s>\n", currentName, currentEmail)
 	fmt.Fprintf(&b, "Use Up/Down to choose. Enter to continue, Esc to go back.\n\n")
 	for index, option := range m.gitModeOptions {
 		prefix := "  "
@@ -877,7 +880,7 @@ func (m *model) viewReview() string {
 	)
 	gitMode := stages.GitConfigModeFromDecisions(decisions)
 	fmt.Fprintf(&b, "Git config mode: %s\n", selectOptionTitle(m.gitModeOptions, gitMode))
-	if gitMode == stages.GitConfigModeCustom {
+	if gitMode != stages.GitConfigModeExisting {
 		name, email := stages.GitIdentityFromDecisions(decisions)
 		fmt.Fprintf(&b, "Git identity: %s <%s>\n", name, email)
 	}
@@ -1171,6 +1174,10 @@ func (m *model) selectedGitModeID() string {
 		return m.gitModeOptions[m.gitModeSelection].ID
 	}
 	return stages.GitConfigModeTemplate
+}
+
+func (m *model) selectedGitModeRequiresIdentity() bool {
+	return m.selectedGitModeID() != stages.GitConfigModeExisting
 }
 
 func (m *model) shellOptionEnabled(id string) bool {
@@ -1489,6 +1496,14 @@ func readGitIdentity(homeDir string) (string, string) {
 	return parseGitIdentity(string(payload))
 }
 
+func hasGitConfig(homeDir string) bool {
+	if strings.TrimSpace(homeDir) == "" {
+		return false
+	}
+	info, err := os.Stat(filepath.Join(homeDir, ".gitconfig"))
+	return err == nil && !info.IsDir()
+}
+
 func parseGitIdentity(content string) (string, string) {
 	inUser := false
 	name := ""
@@ -1538,6 +1553,18 @@ func optionsForStageIDs(catalog []stages.Stage, ids []string) []toggleOption {
 		})
 	}
 	return options
+}
+
+func gitConfigModeOptions(existingConfig bool) []selectOption {
+	if existingConfig {
+		return []selectOption{
+			{ID: stages.GitConfigModeExisting, Title: "Keep existing git config", Description: "Leave ~/.gitconfig unchanged"},
+			{ID: stages.GitConfigModeTemplate, Title: "Overwrite with template", Description: "Write templates/gitconfig and set user.name/user.email"},
+		}
+	}
+	return []selectOption{
+		{ID: stages.GitConfigModeTemplate, Title: "Write template git config", Description: "Write templates/gitconfig and set user.name/user.email"},
+	}
 }
 
 func modeName(dryRun bool) string {
