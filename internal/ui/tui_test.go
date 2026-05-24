@@ -366,9 +366,8 @@ func TestViewExecutingRendersDashboardLayout(t *testing.T) {
 	view := m.View()
 
 	for _, fragment := range []string{
-		"SETUP JOURNEY",
-		"Laptop",
-		"Setup",
+		"██████╗  ██████╗",
+		"Initiating CHAPEAUX, stand by for awesomeness...",
 		"LIVE STATUS",
 		"2 of 3",
 		"Overall Progress",
@@ -429,7 +428,8 @@ func TestViewConfigurationUsesDashboardLayoutWithJourneyPreview(t *testing.T) {
 	view := m.View()
 
 	for _, fragment := range []string{
-		"SETUP JOURNEY",
+		"██████╗  ██████╗",
+		"Initiating CHAPEAUX, stand by for awesomeness...",
 		"CONFIGURATION",
 		"JOURNEY",
 		"STANDARD OUTPUT",

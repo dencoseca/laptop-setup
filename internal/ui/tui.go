@@ -184,6 +184,15 @@ const (
 	defaultViewHeight     = 40
 )
 
+var bootstrapTitleArtLines = []string{
+	"██████╗  ██████╗  ██████╗ ████████╗███████╗████████╗██████╗  █████╗ ██████╗",
+	"██╔══██╗██╔═══██╗██╔═══██╗╚══██╔══╝██╔════╝╚══██╔══╝██╔══██╗██╔══██╗██╔══██╗",
+	"██████╔╝██║   ██║██║   ██║   ██║   ███████╗   ██║   ██████╔╝███████║██████╔╝",
+	"██╔══██╗██║   ██║██║   ██║   ██║   ╚════██║   ██║   ██╔══██╗██╔══██║██╔═══╝",
+	"██████╔╝╚██████╔╝╚██████╔╝   ██║   ███████║   ██║   ██║  ██║██║  ██║██║",
+	"╚═════╝  ╚═════╝  ╚═════╝    ╚═╝   ╚══════╝   ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝",
+}
+
 var (
 	textColor        = lipgloss.AdaptiveColor{Light: "#0F172A", Dark: "#E5E7EB"}
 	mutedColor       = lipgloss.AdaptiveColor{Light: "#475569", Dark: "#A1A1AA"}
@@ -1625,14 +1634,19 @@ func (m model) renderDashboard(status dashboardStatus, journey dashboardJourney,
 	contentWidth := maxInt(20, width-4)
 	contentHeight := maxInt(12, height-2)
 	columnGap := 2
-	headerHeight := maxInt(8, contentHeight/3)
+	headerHeight := maxInt(12, contentHeight/3)
 	if headerHeight > contentHeight-6 {
 		headerHeight = maxInt(6, contentHeight-6)
 	}
 	bodyHeight := maxInt(6, contentHeight-headerHeight-1)
 
+	titlePanelMinWidth := bootstrapTitleArtWidth() + 6
+	statusMinWidth := 20
 	titleWidth := maxInt(24, ((contentWidth-columnGap)*2)/3)
-	statusWidth := maxInt(20, contentWidth-titleWidth-columnGap)
+	if contentWidth >= titlePanelMinWidth+columnGap+statusMinWidth {
+		titleWidth = maxInt(titlePanelMinWidth, titleWidth)
+	}
+	statusWidth := maxInt(statusMinWidth, contentWidth-titleWidth-columnGap)
 	if titleWidth+columnGap+statusWidth > contentWidth {
 		titleWidth = maxInt(20, contentWidth-statusWidth-columnGap)
 	}
@@ -1662,18 +1676,32 @@ func (m model) renderDashboard(status dashboardStatus, journey dashboardJourney,
 }
 
 func (m model) renderTitlePanel(width int, height int) string {
-	titleA := lipgloss.NewStyle().Bold(true).Foreground(accentColor).Render("Laptop")
-	titleB := lipgloss.NewStyle().Bold(true).Foreground(accentAltColor).Render("Setup")
-	subtitle := lipgloss.NewStyle().Foreground(mutedColor).Render("Provisioning this machine with a staged setup flow.")
-	content := lipgloss.JoinVertical(
-		lipgloss.Left,
-		lipgloss.NewStyle().Bold(true).Foreground(accentColor).Render("SETUP JOURNEY"),
-		"",
-		titleA,
-		titleB,
-		"",
-		subtitle,
-	)
+	innerWidth := panelInnerWidth(width)
+	innerHeight := panelInnerHeight(height)
+	tagline := lipgloss.NewStyle().
+		Foreground(mutedColor).
+		Render(truncateLine("Initiating CHAPEAUX, stand by for awesomeness...", innerWidth))
+
+	lines := []string{lipgloss.NewStyle().Bold(true).Foreground(accentColor).Render("BOOTSTRAP")}
+	if innerWidth >= bootstrapTitleArtWidth() && innerHeight >= len(bootstrapTitleArtLines)+2 {
+		lines = make([]string, 0, len(bootstrapTitleArtLines)+2)
+		palette := []lipgloss.TerminalColor{
+			accentColor,
+			accentAltColor,
+			successColor,
+			warningColor,
+			failureColor,
+			accentAltColor,
+		}
+		for index, line := range bootstrapTitleArtLines {
+			lines = append(lines, lipgloss.NewStyle().
+				Bold(true).
+				Foreground(palette[index%len(palette)]).
+				Render(line))
+		}
+	}
+	lines = append(lines, "", tagline)
+	content := lipgloss.JoinVertical(lipgloss.Left, lines...)
 	return m.panelStyle(width, height).
 		Align(lipgloss.Left).
 		AlignVertical(lipgloss.Center).
@@ -2133,6 +2161,14 @@ func truncateLine(value string, width int) string {
 	return value[:width-3] + "..."
 }
 
+func bootstrapTitleArtWidth() int {
+	width := 0
+	for _, line := range bootstrapTitleArtLines {
+		width = maxInt(width, lipgloss.Width(line))
+	}
+	return width
+}
+
 func (m model) brewVisibleCount(total int) int {
 	// Line budget in output panel:
 	// - STANDARD OUTPUT heading + spacer = 2
@@ -2153,7 +2189,7 @@ func (m model) brewVisibleCount(total int) int {
 func (m model) outputPanelLineBudget() int {
 	_, height := m.viewDimensions()
 	contentHeight := maxInt(12, height-2)
-	headerHeight := maxInt(8, contentHeight/3)
+	headerHeight := maxInt(12, contentHeight/3)
 	if headerHeight > contentHeight-6 {
 		headerHeight = maxInt(6, contentHeight-6)
 	}
