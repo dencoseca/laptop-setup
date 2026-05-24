@@ -287,7 +287,7 @@ func Run(ctx context.Context, options Options) error {
 		gitCurrentName:  currentGitName,
 		gitCurrentEmail: currentGitEmail,
 		gitConfigExists: gitConfigExists,
-		stageStatuses:   make(map[string]state.StageStatus),
+		stageStatuses:   detectAlreadyDoneStages(runCtx, options.Catalog, options.Commander, options.RepoRoot, options.HomeDir),
 		spinner:         spin,
 	}
 
@@ -740,7 +740,7 @@ func (m model) viewToggleOptions(title string, options []toggleOption) string {
 		if m.cursor == index {
 			prefix = "> "
 		}
-		fmt.Fprintf(&b, "%s%s %s\n", prefix, selectionMarker(option.Selected), option.Title)
+		fmt.Fprintf(&b, "%s%s %s\n", prefix, m.toggleOptionMarker(option), option.Title)
 	}
 	return b.String()
 }
@@ -844,9 +844,17 @@ func (m model) viewQuitConfirm() string {
 
 func selectionMarker(selected bool) string {
 	if selected {
+		return lipgloss.NewStyle().Bold(true).Foreground(successColor).Render("●")
+	}
+	return lipgloss.NewStyle().Foreground(mutedColor).Render("○")
+}
+
+func (m model) toggleOptionMarker(option toggleOption) string {
+	status := m.stageStatuses[option.ID].Status
+	if isCompleteStageStatus(status) {
 		return lipgloss.NewStyle().Bold(true).Foreground(successColor).Render("✓")
 	}
-	return " "
+	return selectionMarker(option.Selected)
 }
 
 func radioMarker(selected bool) string {
@@ -1805,8 +1813,8 @@ func (m model) renderJourneyLine(width int, stageID string, currentStep string, 
 		return ""
 	}
 
-	prefix := lipgloss.NewStyle().Foreground(statusTone(status)).Render("•")
-	if stageID == currentStep {
+	prefix := lipgloss.NewStyle().Foreground(statusTone(status)).Render(stageStatusMarker(status))
+	if stageID == currentStep && !isCompleteStageStatus(status) {
 		prefix = lipgloss.NewStyle().Bold(true).Foreground(accentAltColor).Render(">")
 	}
 	state := lipgloss.NewStyle().Foreground(statusTone(status)).Render(statusLabel(status))
@@ -1821,6 +1829,22 @@ func (m model) renderJourneyLine(width int, stageID string, currentStep string, 
 	left := lipgloss.JoinHorizontal(lipgloss.Center, prefix, " ", title)
 	gap := maxInt(1, width-lipgloss.Width(left)-stateWidth)
 	return lipgloss.JoinHorizontal(lipgloss.Center, left, strings.Repeat(" ", gap), state)
+}
+
+func stageStatusMarker(status string) string {
+	if isCompleteStageStatus(status) {
+		return "✓"
+	}
+	return "•"
+}
+
+func isCompleteStageStatus(status string) bool {
+	switch status {
+	case string(stages.StatusSuccess), string(stages.StatusAlreadyDone), string(stages.StatusSimulatedSuccess):
+		return true
+	default:
+		return false
+	}
 }
 
 func (m model) renderOutputPanel(width int, height int, content string) string {
@@ -2071,8 +2095,39 @@ func (m model) previewJourney() dashboardJourney {
 	}
 	return dashboardJourney{
 		StageOrder: plan,
-		Statuses:   map[string]state.StageStatus{},
+		Statuses:   cloneStatuses(m.stageStatuses),
 	}
+}
+
+func detectAlreadyDoneStages(
+	ctx context.Context,
+	catalog []stages.Stage,
+	commandRunner runner.CommandRunner,
+	repoRoot string,
+	homeDir string,
+) map[string]state.StageStatus {
+	statuses := make(map[string]state.StageStatus)
+	if commandRunner == nil {
+		commandRunner = runner.NewOSCommandRunner()
+	}
+	for _, stage := range catalog {
+		if stage.Precheck == nil {
+			continue
+		}
+		result, err := stage.Precheck(ctx, stages.ExecutionContext{
+			Runner:   commandRunner,
+			StageID:  stage.ID,
+			RepoRoot: repoRoot,
+			HomeDir:  homeDir,
+		})
+		if err != nil || !result.Satisfied {
+			continue
+		}
+		statuses[stage.ID] = state.StageStatus{
+			Status: string(stages.StatusAlreadyDone),
+		}
+	}
+	return statuses
 }
 
 func cloneStatuses(statuses map[string]state.StageStatus) map[string]state.StageStatus {

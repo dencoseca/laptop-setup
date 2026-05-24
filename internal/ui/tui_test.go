@@ -336,6 +336,39 @@ func TestViewSelectOptionsUsesRadioMarkersAndOmitsDescriptions(t *testing.T) {
 	}
 }
 
+func TestSelectionMarkerUsesCircleInsteadOfCompletionTick(t *testing.T) {
+	if got, want := ansi.Strip(selectionMarker(true)), "●"; got != want {
+		t.Fatalf("expected selected marker %q, got %q", want, got)
+	}
+	if got, want := ansi.Strip(selectionMarker(false)), "○"; got != want {
+		t.Fatalf("expected unselected marker %q, got %q", want, got)
+	}
+	if strings.Contains(ansi.Strip(selectionMarker(true)), "✓") {
+		t.Fatalf("expected selected marker not to use completion tick")
+	}
+}
+
+func TestViewToggleOptionsUsesCompletionTickForAlreadyDoneStage(t *testing.T) {
+	m := model{
+		cursor: 0,
+		stageStatuses: map[string]state.StageStatus{
+			"xcode_clt": {Status: string(stages.StatusAlreadyDone)},
+		},
+	}
+
+	view := ansi.Strip(m.viewToggleOptions("MacOS Setup", []toggleOption{
+		{ID: "xcode_clt", Title: "Xcode Command Line Tools", Selected: true},
+		{ID: "macos_defaults", Title: "macOS Defaults", Selected: true},
+	}))
+
+	if !strings.Contains(view, "> ✓ Xcode Command Line Tools") {
+		t.Fatalf("expected already-installed xcode row to use completion tick, got %q", view)
+	}
+	if !strings.Contains(view, "  ● macOS Defaults") {
+		t.Fatalf("expected selected unfinished row to use selected circle, got %q", view)
+	}
+}
+
 func TestViewBrewSelectionHidesEllipsisAtEndOfList(t *testing.T) {
 	entries := make([]stages.BrewEntry, 0, 24)
 	selected := map[string]bool{}
@@ -474,6 +507,50 @@ func TestRenderJourneyLineLeftAlignsNameAndRightAlignsStatus(t *testing.T) {
 	}
 	if got, want := lipgloss.Width(line), 36; got != want {
 		t.Fatalf("expected rendered line width=%d, got=%d line=%q", want, got, line)
+	}
+}
+
+func TestRenderJourneyLineUsesCompletionTickForFinishedStages(t *testing.T) {
+	m := model{
+		stageMap: map[string]stages.Stage{
+			"xcode_clt": {ID: "xcode_clt", Title: "Xcode Command Line Tools"},
+		},
+	}
+
+	successLine := ansi.Strip(m.renderJourneyLine(36, "xcode_clt", "brew_bundle", string(stages.StatusSuccess)))
+	if !strings.HasPrefix(successLine, "✓ Xcode Command Line Tools") {
+		t.Fatalf("expected completed stage to use tick prefix, got %q", successLine)
+	}
+
+	alreadyDoneLine := ansi.Strip(m.renderJourneyLine(36, "xcode_clt", "xcode_clt", string(stages.StatusAlreadyDone)))
+	if !strings.HasPrefix(alreadyDoneLine, "✓ Xcode Command Line Tools") {
+		t.Fatalf("expected already-done current stage to keep tick prefix, got %q", alreadyDoneLine)
+	}
+}
+
+func TestPreviewJourneyCarriesPrecheckStatuses(t *testing.T) {
+	m := model{
+		catalog: []stages.Stage{
+			{ID: "xcode_clt", Title: "Xcode Command Line Tools"},
+			{ID: "macos_defaults", Title: "macOS Defaults"},
+		},
+		stageMap: map[string]stages.Stage{
+			"xcode_clt":      {ID: "xcode_clt", Title: "Xcode Command Line Tools"},
+			"macos_defaults": {ID: "macos_defaults", Title: "macOS Defaults"},
+		},
+		macOSOptions: []toggleOption{
+			{ID: "xcode_clt", Title: "Xcode Command Line Tools", Selected: true},
+			{ID: "macos_defaults", Title: "macOS Defaults", Selected: true},
+		},
+		stageStatuses: map[string]state.StageStatus{
+			"xcode_clt": {Status: string(stages.StatusAlreadyDone)},
+		},
+	}
+
+	journey := m.previewJourney()
+
+	if got := journey.Statuses["xcode_clt"].Status; got != string(stages.StatusAlreadyDone) {
+		t.Fatalf("expected preview journey to carry xcode already-done status, got %q", got)
 	}
 }
 
