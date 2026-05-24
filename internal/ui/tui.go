@@ -1658,11 +1658,7 @@ func (m model) renderDashboard(status dashboardStatus, journey dashboardJourney,
 		titleWidth = maxInt(20, contentWidth-statusWidth-columnGap)
 	}
 
-	journeyWidth := maxInt(24, (contentWidth-columnGap)/2)
-	outputWidth := maxInt(24, contentWidth-journeyWidth-columnGap)
-	if journeyWidth+columnGap+outputWidth > contentWidth {
-		journeyWidth = maxInt(20, contentWidth-outputWidth-columnGap)
-	}
+	journeyWidth, outputWidth := dashboardBodyWidths(contentWidth, columnGap)
 
 	header := lipgloss.JoinHorizontal(
 		lipgloss.Top,
@@ -1680,6 +1676,16 @@ func (m model) renderDashboard(status dashboardStatus, journey dashboardJourney,
 	layout := lipgloss.JoinVertical(lipgloss.Left, header, "", body)
 	framed := lipgloss.Place(contentWidth, contentHeight, lipgloss.Left, lipgloss.Top, layout)
 	return m.screenStyle(width, height).Render(framed)
+}
+
+func dashboardBodyWidths(contentWidth int, columnGap int) (int, int) {
+	availableWidth := contentWidth - columnGap
+	journeyWidth := maxInt(24, (availableWidth*2)/5)
+	outputWidth := maxInt(24, contentWidth-journeyWidth-columnGap)
+	if journeyWidth+columnGap+outputWidth > contentWidth {
+		journeyWidth = maxInt(20, contentWidth-outputWidth-columnGap)
+	}
+	return journeyWidth, outputWidth
 }
 
 func (m model) renderTitlePanel(width int, height int) string {

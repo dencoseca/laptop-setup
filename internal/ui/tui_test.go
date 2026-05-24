@@ -389,6 +389,20 @@ func TestViewExecutingRendersDashboardLayout(t *testing.T) {
 	}
 }
 
+func TestDashboardBodyWidthsUseFortySixtySplit(t *testing.T) {
+	journeyWidth, outputWidth := dashboardBodyWidths(116, 2)
+
+	if got, want := journeyWidth, 45; got != want {
+		t.Fatalf("expected journey width=%d, got=%d", want, got)
+	}
+	if got, want := outputWidth, 69; got != want {
+		t.Fatalf("expected output width=%d, got=%d", want, got)
+	}
+	if got, want := journeyWidth+2+outputWidth, 116; got != want {
+		t.Fatalf("expected widths plus gap=%d, got=%d", want, got)
+	}
+}
+
 func TestRenderTitlePanelUsesCompactFallback(t *testing.T) {
 	var m model
 	width := maxInt(
