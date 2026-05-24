@@ -777,15 +777,18 @@ func (m model) viewSelectOptions(title string, options []selectOption, selected 
 
 func (m model) viewBrewSelection() string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "%s\n\n", lipgloss.NewStyle().Bold(true).Render("Phase: Brew Catalog Selection"))
-	fmt.Fprintf(&b, "Toggle entries with space. Enter to continue, b to go back.\n\n")
+	fmt.Fprintf(&b, "%s\n", lipgloss.NewStyle().Bold(true).Render("Phase: Brew Catalog Selection"))
+	fmt.Fprintf(&b, "Space toggles. Enter continues, b goes back.\n\n")
 
 	if len(m.brewEntries) == 0 {
 		fmt.Fprintf(&b, "No Brew entries found in templates/Brewfile.\n")
 		return b.String()
 	}
 
-	for index, entry := range m.brewEntries {
+	visibleCount := m.brewVisibleCount()
+	start, end := brewViewportRange(len(m.brewEntries), m.cursor, visibleCount)
+	for index := start; index < end; index++ {
+		entry := m.brewEntries[index]
 		prefix := "  "
 		if m.cursor == index {
 			prefix = "> "
@@ -796,7 +799,14 @@ func (m model) viewBrewSelection() string {
 		}
 		fmt.Fprintf(&b, "%s[%s] %s (%s)\n", prefix, selected, entry.ID, entry.Kind)
 	}
-	fmt.Fprintf(&b, "\nSelected: %d of %d", len(m.selectedBrewIDs()), len(m.brewEntries))
+	fmt.Fprintf(
+		&b,
+		"\nShowing %d-%d of %d | Selected: %d",
+		start+1,
+		end,
+		len(m.brewEntries),
+		len(m.selectedBrewIDs()),
+	)
 	return b.String()
 }
 
@@ -1746,9 +1756,13 @@ func (m model) executionOutput(currentStageID string) string {
 }
 
 func (m model) panelStyle(width int, height int, background lipgloss.TerminalColor) lipgloss.Style {
+	innerWidth := panelInnerWidth(width)
+	innerHeight := panelInnerHeight(height)
 	return lipgloss.NewStyle().
-		Width(panelInnerWidth(width)).
-		Height(panelInnerHeight(height)).
+		Width(innerWidth).
+		MaxWidth(innerWidth).
+		Height(innerHeight).
+		MaxHeight(innerHeight).
 		Padding(1, 2).
 		Background(background).
 		Foreground(textColor)
@@ -2116,6 +2130,52 @@ func truncateLine(value string, width int) string {
 		return value[:width]
 	}
 	return value[:width-3] + "..."
+}
+
+func (m model) brewVisibleCount() int {
+	// Standard output panel includes a fixed "STANDARD OUTPUT" header line and a blank spacer line.
+	// This screen content then adds title/instructions and one summary line.
+	const reservedLines = 6
+	visible := m.outputPanelLineBudget() - reservedLines
+	if visible < 1 {
+		return 1
+	}
+	return visible
+}
+
+func (m model) outputPanelLineBudget() int {
+	_, height := m.viewDimensions()
+	contentHeight := maxInt(12, height-2)
+	headerHeight := maxInt(8, contentHeight/3)
+	if headerHeight > contentHeight-6 {
+		headerHeight = maxInt(6, contentHeight-6)
+	}
+	bodyHeight := maxInt(6, contentHeight-headerHeight-1)
+	return panelInnerHeight(bodyHeight)
+}
+
+func brewViewportRange(total int, cursor int, visible int) (int, int) {
+	if total <= 0 {
+		return 0, 0
+	}
+	if visible <= 0 || visible >= total {
+		return 0, total
+	}
+	if cursor < 0 {
+		cursor = 0
+	}
+	if cursor >= total {
+		cursor = total - 1
+	}
+	start := cursor - (visible / 2)
+	if start < 0 {
+		start = 0
+	}
+	maxStart := total - visible
+	if start > maxStart {
+		start = maxStart
+	}
+	return start, start + visible
 }
 
 func panelInnerWidth(width int) int {

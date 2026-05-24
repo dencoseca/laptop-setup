@@ -2,6 +2,7 @@ package ui
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/dencoseca/laptop-setup/internal/runner"
 	"github.com/dencoseca/laptop-setup/internal/stages"
 	"github.com/dencoseca/laptop-setup/internal/state"
@@ -230,6 +232,69 @@ func TestWindowSizeMessageUpdatesViewState(t *testing.T) {
 	}
 	if updated.gitNameInput.Width == 0 || updated.gitEmailInput.Width == 0 {
 		t.Fatalf("expected text inputs to be resized, got name=%d email=%d", updated.gitNameInput.Width, updated.gitEmailInput.Width)
+	}
+}
+
+func TestBrewViewportRange(t *testing.T) {
+	start, end := brewViewportRange(30, 1, 10)
+	if start != 0 || end != 10 {
+		t.Fatalf("expected 0-10 for cursor near start, got %d-%d", start, end)
+	}
+
+	start, end = brewViewportRange(30, 29, 10)
+	if start != 20 || end != 30 {
+		t.Fatalf("expected 20-30 for cursor near end, got %d-%d", start, end)
+	}
+
+	start, end = brewViewportRange(30, 15, 10)
+	if start != 10 || end != 20 {
+		t.Fatalf("expected 10-20 for cursor in middle, got %d-%d", start, end)
+	}
+}
+
+func TestViewBrewSelectionRendersViewportInsteadOfFullList(t *testing.T) {
+	entries := make([]stages.BrewEntry, 0, 30)
+	selected := map[string]bool{}
+	for index := 0; index < 30; index++ {
+		id := fmt.Sprintf("pkg-%02d", index)
+		entries = append(entries, stages.BrewEntry{ID: id, Kind: "brew"})
+	}
+	selected["pkg-15"] = true
+
+	m := model{
+		width:        120,
+		height:       36,
+		cursor:       15,
+		brewEntries:  entries,
+		brewSelected: selected,
+	}
+
+	view := m.viewBrewSelection()
+	if !strings.Contains(view, "> [x] pkg-15 (brew)") {
+		t.Fatalf("expected current cursor row to be visible, got %q", view)
+	}
+	if strings.Contains(view, "pkg-00 (brew)") {
+		t.Fatalf("expected early rows to be outside viewport, got %q", view)
+	}
+	if strings.Contains(view, "pkg-29 (brew)") {
+		t.Fatalf("expected trailing rows to be outside viewport, got %q", view)
+	}
+	if !strings.Contains(view, "Showing 9-22 of 30 | Selected: 1") {
+		t.Fatalf("expected viewport/selection summary, got %q", view)
+	}
+}
+
+func TestRenderOutputPanelCapsRenderedHeight(t *testing.T) {
+	lines := make([]string, 0, 80)
+	for index := 0; index < 80; index++ {
+		lines = append(lines, fmt.Sprintf("line-%02d", index))
+	}
+	content := strings.Join(lines, "\n")
+
+	m := model{}
+	rendered := m.renderOutputPanel(56, 25, content)
+	if got, want := lipgloss.Height(rendered), panelInnerHeight(25); got != want {
+		t.Fatalf("expected output panel height=%d, got=%d", want, got)
 	}
 }
 
