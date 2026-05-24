@@ -87,7 +87,6 @@ type selectOption struct {
 
 type brewListItem struct {
 	ID       string
-	Kind     string
 	Selected bool
 }
 
@@ -96,11 +95,11 @@ func (i brewListItem) Title() string {
 }
 
 func (i brewListItem) Description() string {
-	return i.Kind
+	return ""
 }
 
 func (i brewListItem) FilterValue() string {
-	return strings.Join([]string{i.ID, i.Kind}, " ")
+	return i.ID
 }
 
 type stageStatusMsg struct {
@@ -787,10 +786,10 @@ func (m model) viewSelectOptions(title string, options []selectOption, selected 
 
 func (m model) viewBrewSelection() string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "%s\n\n", lipgloss.NewStyle().Bold(true).Render("Brew Catalog Selection"))
+	fmt.Fprintf(&b, "%s\n\n", lipgloss.NewStyle().Bold(true).Render("Package & App Selection"))
 
 	if len(m.brewEntries) == 0 {
-		fmt.Fprintf(&b, "No Brew entries found in templates/Brewfile.\n")
+		fmt.Fprintf(&b, "No package or app entries found in templates/Brewfile.\n")
 		return b.String()
 	}
 
@@ -853,7 +852,7 @@ func (m *model) viewReview() string {
 	fmt.Fprintf(&b, "%s\n\n", lipgloss.NewStyle().Bold(true).Render("Execution Plan Review"))
 	fmt.Fprintf(&b, "Mode: %s\n", modeName(m.effectiveDryRun()))
 	if !m.resumeRun {
-		fmt.Fprintf(&b, "Selected Brew entries: %d\n", len(m.selectedBrewIDs()))
+		fmt.Fprintf(&b, "Selected packages/apps: %d\n", len(m.selectedBrewIDs()))
 	}
 	decisions := m.effectiveDecisions()
 	fmt.Fprintf(&b, "Node toolchain: %s\n", selectOptionTitle(m.nodeOptions, stages.NodeToolchainFromDecisions(decisions)))
@@ -985,6 +984,7 @@ func (m *model) reloadBrewEntries() error {
 
 func newBrewList(items []list.Item, width int, height int) list.Model {
 	delegate := list.NewDefaultDelegate()
+	delegate.ShowDescription = false
 	delegate.SetSpacing(0)
 	delegate.Styles.NormalTitle = delegate.Styles.NormalTitle.Foreground(textColor)
 	delegate.Styles.NormalDesc = delegate.Styles.NormalDesc.Foreground(mutedColor)
@@ -999,8 +999,8 @@ func newBrewList(items []list.Item, width int, height int) list.Model {
 		Underline(true)
 
 	selector := list.New(items, delegate, maxInt(1, width), maxInt(1, height))
-	selector.Title = "Brew entries"
-	selector.SetStatusBarItemName("entry", "entries")
+	selector.SetShowTitle(false)
+	selector.SetShowStatusBar(false)
 	selector.SetShowHelp(false)
 	selector.DisableQuitKeybindings()
 	selector.Styles.Title = selector.Styles.Title.
@@ -1020,7 +1020,6 @@ func (m model) brewListItems() []list.Item {
 	for _, entry := range m.brewEntries {
 		items = append(items, brewListItem{
 			ID:       entry.ID,
-			Kind:     entry.Kind,
 			Selected: m.brewSelected[entry.ID],
 		})
 	}
@@ -1089,7 +1088,7 @@ func (m *model) resolvePlan() ([]string, error) {
 	}
 
 	if slices.Contains(onlyIDs, "brew_bundle") && len(m.selectedBrewIDs()) == 0 {
-		return nil, fmt.Errorf("%s selected with no Brew entries; select at least one entry or deselect %s",
+		return nil, fmt.Errorf("%s selected with no package/app entries; select at least one entry or deselect %s",
 			m.stageTitle("brew_bundle"),
 			m.stageTitle("brew_bundle"),
 		)
@@ -2376,7 +2375,7 @@ func screenTitle(current screen) string {
 	case screenInstall:
 		return "Install Apps/Packages"
 	case screenBrew:
-		return "Brew Catalog Selection"
+		return "Package & App Selection"
 	case screenDevTools:
 		return "Dev Tools Setup"
 	case screenNodeToolchain:

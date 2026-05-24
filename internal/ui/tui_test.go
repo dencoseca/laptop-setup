@@ -252,7 +252,11 @@ func TestViewBrewSelectionRendersViewportInsteadOfFullList(t *testing.T) {
 	selected := map[string]bool{}
 	for index := 0; index < 30; index++ {
 		id := fmt.Sprintf("pkg-%02d", index)
-		entries = append(entries, stages.BrewEntry{ID: id, Kind: "brew"})
+		kind := "brew"
+		if index%2 == 0 {
+			kind = "cask"
+		}
+		entries = append(entries, stages.BrewEntry{ID: id, Kind: kind})
 	}
 	selected["pkg-15"] = true
 
@@ -265,11 +269,14 @@ func TestViewBrewSelectionRendersViewportInsteadOfFullList(t *testing.T) {
 	}
 
 	view := ansi.Strip(m.viewBrewSelection())
-	if !strings.Contains(view, "Brew entries") || !strings.Contains(view, "30 entries") {
-		t.Fatalf("expected styled Bubbles list chrome, got %q", view)
-	}
 	if !strings.Contains(view, "│ ● pkg-15") {
 		t.Fatalf("expected current cursor row to be visible, got %q", view)
+	}
+	if strings.Contains(view, "Packages and apps") || strings.Contains(view, "30 items") {
+		t.Fatalf("expected list title and item count to be hidden, got %q", view)
+	}
+	if strings.Contains(view, "brew") || strings.Contains(view, "cask") {
+		t.Fatalf("expected package manager implementation details to be hidden, got %q", view)
 	}
 	if strings.Contains(view, "pkg-00") {
 		t.Fatalf("expected early rows to be outside viewport, got %q", view)
@@ -551,7 +558,7 @@ func TestRenderDashboardStatusPanelLeftAlignsBadgeWithContent(t *testing.T) {
 	view := ansi.Strip(m.renderDashboardStatusPanel(34, 13, dashboardStatus{
 		Badge:                    "Configuring",
 		BadgeTone:                accentAltColor,
-		Heading:                  "Brew Catalog Selection",
+		Heading:                  "Package & App Selection",
 		Summary:                  "4 of 13",
 		ConfigurationProgressPct: 30,
 		ExecutionProgressPct:     0,
@@ -567,7 +574,7 @@ func TestRenderDashboardStatusPanelLeftAlignsBadgeWithContent(t *testing.T) {
 		if strings.Contains(line, "CONFIGURING") {
 			badgeLineIndex = index
 		}
-		if strings.Contains(line, "Brew Catalog Selection") {
+		if strings.Contains(line, "Package & App Selection") {
 			headingLineIndex = index
 		}
 		if strings.Contains(line, "Plan") {
@@ -581,7 +588,7 @@ func TestRenderDashboardStatusPanelLeftAlignsBadgeWithContent(t *testing.T) {
 	if badgeLineIndex == -1 || headingLineIndex == -1 || configLineIndex == -1 || executionLineIndex == -1 {
 		t.Fatalf("expected badge, heading, and both progress labels in status panel, got %q", view)
 	}
-	if got, want := strings.Index(lines[badgeLineIndex], "CONFIGURING"), strings.Index(lines[headingLineIndex], "Brew Catalog Selection"); got != want {
+	if got, want := strings.Index(lines[badgeLineIndex], "CONFIGURING"), strings.Index(lines[headingLineIndex], "Package & App Selection"); got != want {
 		t.Fatalf("expected badge and heading to start in same column, got badge=%d heading=%d view=%q", got, want, view)
 	}
 	if headingLineIndex != badgeLineIndex+2 {
@@ -674,7 +681,7 @@ func TestRenderDashboardPlacesShortcutHintBelowBody(t *testing.T) {
 	view := ansi.Strip(m.renderDashboard(dashboardStatus{
 		Badge:                    "Configuring",
 		BadgeTone:                accentAltColor,
-		Heading:                  "Brew Catalog Selection",
+		Heading:                  "Package & App Selection",
 		Summary:                  "4 of 13",
 		ConfigurationProgressPct: 30,
 		ExecutionProgressPct:     0,
@@ -1247,7 +1254,7 @@ func TestReviewEnterBlocksExecutionWhenPlanInvalid(t *testing.T) {
 	if m.executing {
 		t.Fatalf("expected execution not to start")
 	}
-	if !strings.Contains(m.planError, "Brew Bundle selected with no Brew entries") {
+	if !strings.Contains(m.planError, "Brew Bundle selected with no package/app entries") {
 		t.Fatalf("expected plan validation error, got %q", m.planError)
 	}
 }
