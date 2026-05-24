@@ -1592,13 +1592,14 @@ type executionProgress struct {
 }
 
 type dashboardStatus struct {
-	Badge       string
-	BadgeTone   lipgloss.TerminalColor
-	Heading     string
-	Summary     string
-	ProgressPct int
-	Hint        string
-	Spinner     bool
+	Badge                    string
+	BadgeTone                lipgloss.TerminalColor
+	Heading                  string
+	Summary                  string
+	ConfigurationProgressPct int
+	ExecutionProgressPct     int
+	Hint                     string
+	Spinner                  bool
 }
 
 type dashboardJourney struct {
@@ -1646,7 +1647,7 @@ func (m model) renderDashboard(status dashboardStatus, journey dashboardJourney,
 	if shortcutHint != "" {
 		shortcutGapHeight = 1
 	}
-	headerHeight := maxInt(12, contentHeight/3)
+	headerHeight := maxInt(13, contentHeight/3)
 	if headerHeight > contentHeight-6-shortcutHintHeight-shortcutGapHeight {
 		headerHeight = maxInt(6, contentHeight-6-shortcutHintHeight-shortcutGapHeight)
 	}
@@ -1735,10 +1736,11 @@ func (m model) renderDashboardStatusPanel(width int, height int, status dashboar
 		"",
 		truncateLine(status.Heading, innerWidth),
 		"",
+		lipgloss.NewStyle().Bold(true).Foreground(accentAltColor).Render("Plan"),
+		renderProgressBar(barWidth, status.ConfigurationProgressPct),
 		"",
-		"",
-		lipgloss.NewStyle().Bold(true).Foreground(accentAltColor).Render("Overall Progress"),
-		renderProgressBar(barWidth, status.ProgressPct),
+		lipgloss.NewStyle().Bold(true).Foreground(accentAltColor).Render("Apply"),
+		renderProgressBar(barWidth, status.ExecutionProgressPct),
 	}
 	return m.panelStyle(width, height).Render(strings.Join(limitLines(lines, panelInnerHeight(height)), "\n"))
 }
@@ -1927,13 +1929,14 @@ func (m model) executionProgress() executionProgress {
 
 func (m model) executionDashboardStatus(progress executionProgress) dashboardStatus {
 	return dashboardStatus{
-		Badge:       humanizeStatus(progress.CurrentStageStatus),
-		BadgeTone:   statusTone(progress.CurrentStageStatus),
-		Heading:     progress.CurrentStageTitle,
-		Summary:     fmt.Sprintf("%d of %d  %d finished", progress.CurrentStageIndex, progress.TotalStages, progress.CompletedStages),
-		ProgressPct: progress.PercentComplete,
-		Hint:        "CTRL+C abort",
-		Spinner:     true,
+		Badge:                    humanizeStatus(progress.CurrentStageStatus),
+		BadgeTone:                statusTone(progress.CurrentStageStatus),
+		Heading:                  progress.CurrentStageTitle,
+		Summary:                  fmt.Sprintf("%d of %d  %d finished", progress.CurrentStageIndex, progress.TotalStages, progress.CompletedStages),
+		ConfigurationProgressPct: 100,
+		ExecutionProgressPct:     progress.PercentComplete,
+		Hint:                     "CTRL+C abort",
+		Spinner:                  true,
 	}
 }
 
@@ -1956,12 +1959,13 @@ func (m model) configurationDashboardStatus() dashboardStatus {
 		hint = "CTRL+C quit  Esc return"
 	}
 	return dashboardStatus{
-		Badge:       badge,
-		BadgeTone:   badgeTone,
-		Heading:     screenTitle(m.screen),
-		Summary:     fmt.Sprintf("%d of %d", stepIndex, totalSteps),
-		ProgressPct: stepIndex * 100 / maxInt(1, totalSteps),
-		Hint:        hint,
+		Badge:                    badge,
+		BadgeTone:                badgeTone,
+		Heading:                  screenTitle(m.screen),
+		Summary:                  fmt.Sprintf("%d of %d", stepIndex, totalSteps),
+		ConfigurationProgressPct: stepIndex * 100 / maxInt(1, totalSteps),
+		ExecutionProgressPct:     m.executionProgress().PercentComplete,
+		Hint:                     hint,
 	}
 }
 
@@ -1977,12 +1981,13 @@ func (m model) failureDashboardStatus() dashboardStatus {
 		heading = m.stageTitle(stageID)
 	}
 	return dashboardStatus{
-		Badge:       "Failed",
-		BadgeTone:   failureColor,
-		Heading:     heading,
-		Summary:     fmt.Sprintf("attempt %d  choose retry, skip, or abort", attempt),
-		ProgressPct: m.executionProgress().PercentComplete,
-		Hint:        "Enter retry  Space skip  CTRL+C abort",
+		Badge:                    "Failed",
+		BadgeTone:                failureColor,
+		Heading:                  heading,
+		Summary:                  fmt.Sprintf("attempt %d  choose retry, skip, or abort", attempt),
+		ConfigurationProgressPct: 100,
+		ExecutionProgressPct:     m.executionProgress().PercentComplete,
+		Hint:                     "Enter retry  Space skip  CTRL+C abort",
 	}
 }
 
@@ -2003,12 +2008,13 @@ func (m model) summaryDashboardStatus() dashboardStatus {
 		}
 	}
 	return dashboardStatus{
-		Badge:       badge,
-		BadgeTone:   badgeTone,
-		Heading:     heading,
-		Summary:     fmt.Sprintf("%d completed  %d skipped  %d failed", completed, skipped, failed),
-		ProgressPct: m.executionProgress().PercentComplete,
-		Hint:        "Enter exit  CTRL+C quit",
+		Badge:                    badge,
+		BadgeTone:                badgeTone,
+		Heading:                  heading,
+		Summary:                  fmt.Sprintf("%d completed  %d skipped  %d failed", completed, skipped, failed),
+		ConfigurationProgressPct: 100,
+		ExecutionProgressPct:     m.executionProgress().PercentComplete,
+		Hint:                     "Enter exit  CTRL+C quit",
 	}
 }
 

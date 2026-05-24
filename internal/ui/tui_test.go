@@ -395,7 +395,8 @@ func TestViewExecutingRendersDashboardLayout(t *testing.T) {
 	for _, fragment := range []string{
 		"██████╗  ██████╗",
 		"Initiating CHAPEAUX, stand by for awesomeness...",
-		"Overall Progress",
+		"Plan",
+		"Apply",
 		"Stage: Brew Bundle",
 		"Brew Bundle",
 		"installing docker",
@@ -483,18 +484,20 @@ func TestRenderTitlePanelUsesCompactFallback(t *testing.T) {
 func TestRenderDashboardStatusPanelLeftAlignsBadgeWithContent(t *testing.T) {
 	var m model
 	view := ansi.Strip(m.renderDashboardStatusPanel(34, 13, dashboardStatus{
-		Badge:       "Configuring",
-		BadgeTone:   accentAltColor,
-		Heading:     "Brew Catalog Selection",
-		Summary:     "4 of 13",
-		ProgressPct: 30,
-		Hint:        "Enter continue  Esc back",
+		Badge:                    "Configuring",
+		BadgeTone:                accentAltColor,
+		Heading:                  "Brew Catalog Selection",
+		Summary:                  "4 of 13",
+		ConfigurationProgressPct: 30,
+		ExecutionProgressPct:     0,
+		Hint:                     "Enter continue  Esc back",
 	}))
 	lines := strings.Split(view, "\n")
 
 	badgeLineIndex := -1
 	headingLineIndex := -1
-	progressLineIndex := -1
+	configLineIndex := -1
+	executionLineIndex := -1
 	for index, line := range lines {
 		if strings.Contains(line, "CONFIGURING") {
 			badgeLineIndex = index
@@ -502,13 +505,16 @@ func TestRenderDashboardStatusPanelLeftAlignsBadgeWithContent(t *testing.T) {
 		if strings.Contains(line, "Brew Catalog Selection") {
 			headingLineIndex = index
 		}
-		if strings.Contains(line, "Overall Progress") {
-			progressLineIndex = index
+		if strings.Contains(line, "Plan") {
+			configLineIndex = index
+		}
+		if strings.Contains(line, "Apply") {
+			executionLineIndex = index
 		}
 	}
 
-	if badgeLineIndex == -1 || headingLineIndex == -1 || progressLineIndex == -1 {
-		t.Fatalf("expected badge, heading, and progress label in status panel, got %q", view)
+	if badgeLineIndex == -1 || headingLineIndex == -1 || configLineIndex == -1 || executionLineIndex == -1 {
+		t.Fatalf("expected badge, heading, and both progress labels in status panel, got %q", view)
 	}
 	if got, want := strings.Index(lines[badgeLineIndex], "CONFIGURING"), strings.Index(lines[headingLineIndex], "Brew Catalog Selection"); got != want {
 		t.Fatalf("expected badge and heading to start in same column, got badge=%d heading=%d view=%q", got, want, view)
@@ -522,14 +528,14 @@ func TestRenderDashboardStatusPanelLeftAlignsBadgeWithContent(t *testing.T) {
 	if strings.Trim(lines[headingLineIndex+1], " │") != "" {
 		t.Fatalf("expected spacer line after heading, got %q", lines[headingLineIndex+1])
 	}
-	if strings.Trim(lines[headingLineIndex+2], " │") != "" {
-		t.Fatalf("expected reserved summary slot to stay blank, got %q", lines[headingLineIndex+2])
+	if configLineIndex != headingLineIndex+2 {
+		t.Fatalf("expected config progress label directly below heading spacer, got view=%q", view)
 	}
-	if progressLineIndex != headingLineIndex+4 {
-		t.Fatalf("expected progress label to keep its reserved vertical position, got view=%q", view)
+	if executionLineIndex != configLineIndex+3 {
+		t.Fatalf("expected execution progress label below config progress bar, got view=%q", view)
 	}
-	if strings.Trim(lines[headingLineIndex+3], " │") != "" {
-		t.Fatalf("expected spacer line before progress label, got %q", lines[headingLineIndex+3])
+	if strings.Trim(lines[configLineIndex+2], " │") != "" {
+		t.Fatalf("expected spacer line between progress bars, got %q", lines[configLineIndex+2])
 	}
 	if strings.Contains(view, "4 of 13") {
 		t.Fatalf("expected status panel to omit stage count summary, got %q", view)
@@ -545,6 +551,37 @@ func TestRenderDashboardStatusPanelLeftAlignsBadgeWithContent(t *testing.T) {
 	}
 }
 
+func TestDashboardStatusSplitsConfigurationAndExecutionProgress(t *testing.T) {
+	configStatus := model{screen: screenBrew}.configurationDashboardStatus()
+	if configStatus.ConfigurationProgressPct == 0 {
+		t.Fatalf("expected configuration progress to advance during config flow")
+	}
+	if configStatus.ExecutionProgressPct != 0 {
+		t.Fatalf("expected execution progress to stay at zero before execution, got %d", configStatus.ExecutionProgressPct)
+	}
+
+	m := model{
+		stageOrder: []string{"xcode_clt", "brew_bundle", "git_config"},
+		stageMap: map[string]stages.Stage{
+			"xcode_clt":   {ID: "xcode_clt", Title: "Xcode Command Line Tools"},
+			"brew_bundle": {ID: "brew_bundle", Title: "Brew Bundle"},
+			"git_config":  {ID: "git_config", Title: "Git Configuration"},
+		},
+		stageStatuses: map[string]state.StageStatus{
+			"xcode_clt":   {Status: string(stages.StatusSuccess)},
+			"brew_bundle": {Status: string(stages.StatusRunning)},
+			"git_config":  {Status: string(stages.StatusPending)},
+		},
+	}
+	executionStatus := m.executionDashboardStatus(m.executionProgress())
+	if executionStatus.ConfigurationProgressPct != 100 {
+		t.Fatalf("expected configuration progress complete during execution, got %d", executionStatus.ConfigurationProgressPct)
+	}
+	if executionStatus.ExecutionProgressPct != 33 {
+		t.Fatalf("expected execution progress to reflect terminal stages, got %d", executionStatus.ExecutionProgressPct)
+	}
+}
+
 func TestRenderDashboardPlacesShortcutHintBelowBody(t *testing.T) {
 	m := model{
 		width:  96,
@@ -552,12 +589,13 @@ func TestRenderDashboardPlacesShortcutHintBelowBody(t *testing.T) {
 	}
 	hint := "Enter continue  Esc back  CTRL+C quit"
 	view := ansi.Strip(m.renderDashboard(dashboardStatus{
-		Badge:       "Configuring",
-		BadgeTone:   accentAltColor,
-		Heading:     "Brew Catalog Selection",
-		Summary:     "4 of 13",
-		ProgressPct: 30,
-		Hint:        hint,
+		Badge:                    "Configuring",
+		BadgeTone:                accentAltColor,
+		Heading:                  "Brew Catalog Selection",
+		Summary:                  "4 of 13",
+		ConfigurationProgressPct: 30,
+		ExecutionProgressPct:     0,
+		Hint:                     hint,
 	}, dashboardJourney{}, ""))
 	lines := strings.Split(view, "\n")
 
