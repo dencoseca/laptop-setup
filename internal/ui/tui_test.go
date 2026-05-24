@@ -557,7 +557,7 @@ func TestViewConfigurationUsesDashboardLayoutWithJourneyPreview(t *testing.T) {
 		"██████╗  ██████╗",
 		"Initiating CHAPEAUX, stand by for awesomeness...",
 		"Dev Tools: Git Configuration",
-		"Choose how git config should be handled.",
+		"Use Up/Down to choose. Enter to continue, Esc to go back.",
 		"Xcode Command Line Tools",
 		"Brew Bundle",
 		"Git Configuration",
@@ -701,6 +701,76 @@ func sendEnter(t *testing.T, m model) model {
 		t.Fatalf("expected model type after update, got %T", next)
 	}
 	return updated
+}
+
+func sendKey(t *testing.T, m model, key tea.KeyMsg) model {
+	t.Helper()
+	next, _ := m.updateKey(key)
+	updated, ok := next.(model)
+	if !ok {
+		t.Fatalf("expected model type after update, got %T", next)
+	}
+	return updated
+}
+
+func TestRadioSelectionFollowsArrowNavigation(t *testing.T) {
+	t.Run("node toolchain", func(t *testing.T) {
+		m := model{
+			screen:        screenNodeToolchain,
+			cursor:        0,
+			nodeSelection: 0,
+			nodeOptions: []selectOption{
+				{ID: stages.NodeToolchainVitePlus, Title: "vite+"},
+				{ID: stages.NodeToolchainNvmPnpm, Title: "pnpm + nvm"},
+			},
+		}
+
+		m = sendKey(t, m, tea.KeyMsg{Type: tea.KeyDown})
+		if m.cursor != 1 || m.nodeSelection != 1 {
+			t.Fatalf("expected down arrow to select node option 1, got cursor=%d selection=%d", m.cursor, m.nodeSelection)
+		}
+
+		m = sendKey(t, m, tea.KeyMsg{Type: tea.KeyUp})
+		if m.cursor != 0 || m.nodeSelection != 0 {
+			t.Fatalf("expected up arrow to select node option 0, got cursor=%d selection=%d", m.cursor, m.nodeSelection)
+		}
+	})
+
+	t.Run("docker runtime", func(t *testing.T) {
+		m := model{
+			screen:          screenDockerRuntime,
+			cursor:          0,
+			dockerSelection: 0,
+			dockerOptions: []selectOption{
+				{ID: "colima", Title: "colima"},
+				{ID: "future-runtime", Title: "future runtime"},
+			},
+		}
+
+		m = sendKey(t, m, tea.KeyMsg{Type: tea.KeyDown})
+		if m.cursor != 1 || m.dockerSelection != 1 {
+			t.Fatalf("expected down arrow to select docker option 1, got cursor=%d selection=%d", m.cursor, m.dockerSelection)
+		}
+	})
+
+	t.Run("git config", func(t *testing.T) {
+		m := model{
+			screen:           screenGitConfig,
+			cursor:           0,
+			gitModeSelection: 0,
+			gitModeOptions: []selectOption{
+				{ID: stages.GitConfigModeTemplate, Title: "template"},
+				{ID: stages.GitConfigModeExisting, Title: "existing"},
+				{ID: stages.GitConfigModeCustom, Title: "custom"},
+			},
+		}
+
+		m = sendKey(t, m, tea.KeyMsg{Type: tea.KeyDown})
+		m = sendKey(t, m, tea.KeyMsg{Type: tea.KeyDown})
+		if m.cursor != 2 || m.gitModeSelection != 2 {
+			t.Fatalf("expected down arrows to select git mode 2, got cursor=%d selection=%d", m.cursor, m.gitModeSelection)
+		}
+	})
 }
 
 func TestGitIdentityInputsAcceptAlphanumericCharacters(t *testing.T) {

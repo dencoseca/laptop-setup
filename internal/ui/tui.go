@@ -441,13 +441,9 @@ func (m model) updateKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.screen = screenDevTools
 			m.cursor = 0
 		case "up":
-			if m.cursor > 0 {
-				m.cursor--
-			}
+			m.updateRadioSelection(len(m.nodeOptions), &m.nodeSelection, -1)
 		case "down":
-			if m.cursor < len(m.nodeOptions)-1 {
-				m.cursor++
-			}
+			m.updateRadioSelection(len(m.nodeOptions), &m.nodeSelection, 1)
 		case " ":
 			if len(m.nodeOptions) > 0 {
 				m.nodeSelection = m.cursor
@@ -465,13 +461,9 @@ func (m model) updateKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.screen = screenNodeToolchain
 			m.cursor = m.nodeSelection
 		case "up":
-			if m.cursor > 0 {
-				m.cursor--
-			}
+			m.updateRadioSelection(len(m.dockerOptions), &m.dockerSelection, -1)
 		case "down":
-			if m.cursor < len(m.dockerOptions)-1 {
-				m.cursor++
-			}
+			m.updateRadioSelection(len(m.dockerOptions), &m.dockerSelection, 1)
 		case " ":
 			if len(m.dockerOptions) > 0 {
 				m.dockerSelection = m.cursor
@@ -510,13 +502,9 @@ func (m model) updateKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.screen = screenShellOptions
 			m.cursor = 0
 		case "up":
-			if m.cursor > 0 {
-				m.cursor--
-			}
+			m.updateRadioSelection(len(m.gitModeOptions), &m.gitModeSelection, -1)
 		case "down":
-			if m.cursor < len(m.gitModeOptions)-1 {
-				m.cursor++
-			}
+			m.updateRadioSelection(len(m.gitModeOptions), &m.gitModeSelection, 1)
 		case " ":
 			if len(m.gitModeOptions) > 0 {
 				m.gitModeSelection = m.cursor
@@ -644,6 +632,18 @@ func (m model) updateKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func (m *model) updateRadioSelection(optionCount int, selected *int, delta int) {
+	if delta < 0 && m.cursor > 0 {
+		m.cursor--
+	}
+	if delta > 0 && m.cursor < optionCount-1 {
+		m.cursor++
+	}
+	if optionCount > 0 {
+		*selected = m.cursor
+	}
+}
+
 func (m *model) updateToggleScreen(
 	key tea.KeyMsg,
 	options *[]toggleOption,
@@ -749,7 +749,7 @@ func (m model) viewToggleOptions(title string, options []toggleOption) string {
 func (m model) viewSelectOptions(title string, options []selectOption, selected int) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s\n\n", lipgloss.NewStyle().Bold(true).Render(title))
-	fmt.Fprintf(&b, "Select one option with Space. Enter to continue, Esc to go back.\n\n")
+	fmt.Fprintf(&b, "Use Up/Down to choose. Enter to continue, Esc to go back.\n\n")
 	for index, option := range options {
 		prefix := "  "
 		if m.cursor == index {
@@ -805,7 +805,7 @@ func (m model) viewGitConfigMode() string {
 		currentEmail = "(not set)"
 	}
 	fmt.Fprintf(&b, "Current identity: %s <%s>\n", currentName, currentEmail)
-	fmt.Fprintf(&b, "Choose how git config should be handled.\n\n")
+	fmt.Fprintf(&b, "Use Up/Down to choose. Enter to continue, Esc to go back.\n\n")
 	for index, option := range m.gitModeOptions {
 		prefix := "  "
 		if m.cursor == index {
