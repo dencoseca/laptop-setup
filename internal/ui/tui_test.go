@@ -478,6 +478,43 @@ func TestRenderTitlePanelUsesCompactFallback(t *testing.T) {
 	}
 }
 
+func TestRenderDashboardStatusPanelLeftAlignsBadgeWithContent(t *testing.T) {
+	var m model
+	view := ansi.Strip(m.renderDashboardStatusPanel(34, 13, dashboardStatus{
+		Badge:       "Configuring",
+		BadgeTone:   accentAltColor,
+		Heading:     "Brew Catalog Selection",
+		Summary:     "4 of 13  9 stages selected",
+		ProgressPct: 30,
+		Hint:        "Enter continue  Esc back",
+	}))
+	lines := strings.Split(view, "\n")
+
+	badgeLineIndex := -1
+	headingLineIndex := -1
+	for index, line := range lines {
+		if strings.Contains(line, "CONFIGURING") {
+			badgeLineIndex = index
+		}
+		if strings.Contains(line, "Brew Catalog Selection") {
+			headingLineIndex = index
+		}
+	}
+
+	if badgeLineIndex == -1 || headingLineIndex == -1 {
+		t.Fatalf("expected badge and heading in status panel, got %q", view)
+	}
+	if got, want := strings.Index(lines[badgeLineIndex], "CONFIGURING"), strings.Index(lines[headingLineIndex], "Brew Catalog Selection"); got != want {
+		t.Fatalf("expected badge and heading to start in same column, got badge=%d heading=%d view=%q", got, want, view)
+	}
+	if headingLineIndex != badgeLineIndex+2 {
+		t.Fatalf("expected one spacer line between badge and heading, got view=%q", view)
+	}
+	if strings.Trim(lines[badgeLineIndex+1], " │") != "" {
+		t.Fatalf("expected spacer line between badge and heading, got %q", lines[badgeLineIndex+1])
+	}
+}
+
 func TestViewConfigurationUsesDashboardLayoutWithJourneyPreview(t *testing.T) {
 	m := model{
 		screen: screenGitConfig,

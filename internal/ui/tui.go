@@ -1712,7 +1712,6 @@ func (m model) renderDashboardStatusPanel(width int, height int, status dashboar
 	statusBadge := lipgloss.NewStyle().
 		Bold(true).
 		Foreground(status.BadgeTone).
-		Padding(0, 1).
 		Render(strings.ToUpper(status.Badge))
 	badgeLine := statusBadge
 	if status.Spinner {
@@ -1720,6 +1719,7 @@ func (m model) renderDashboardStatusPanel(width int, height int, status dashboar
 	}
 	lines := []string{
 		badgeLine,
+		"",
 		truncateLine(status.Heading, innerWidth),
 		lipgloss.NewStyle().Foreground(mutedColor).Render(truncateLine(status.Summary, innerWidth)),
 		lipgloss.NewStyle().Bold(true).Foreground(accentAltColor).Render("Overall Progress"),
