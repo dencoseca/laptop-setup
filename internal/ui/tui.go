@@ -1247,6 +1247,7 @@ func startExecutionWorker(
 				RunState:      setup.runState,
 				Catalog:       catalog,
 				DryRun:        setup.dryRun,
+				DryRunDelay:   execution.RandomDryRunStageDelay(2*time.Second, 5*time.Second),
 				RepoRoot:      repoRoot,
 				HomeDir:       homeDir,
 				RunDir:        filepath.Dir(setup.humanLogPath),

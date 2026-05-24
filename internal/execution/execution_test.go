@@ -256,6 +256,78 @@ func TestExecuteDryRunUsesSimulate(t *testing.T) {
 	}
 }
 
+func TestExecuteDryRunAppliesStageDelayBeforeSimulate(t *testing.T) {
+	store := state.NewStore(filepath.Join(t.TempDir(), "state.json"))
+	runState := &state.RunState{
+		RunID:        state.NewRunID(time.Now()),
+		StartAt:      time.Now().UTC(),
+		Mode:         "dry-run",
+		ResolvedPlan: []string{"simulate_only"},
+		Stages:       map[string]state.StageStatus{},
+	}
+	if err := store.Save(context.Background(), runState); err != nil {
+		t.Fatalf("save initial state: %v", err)
+	}
+
+	callOrder := make([]string, 0, 2)
+	catalog := []stages.Stage{
+		{
+			ID:      "simulate_only",
+			Title:   "Simulate Only",
+			CanSkip: true,
+			Precheck: func(context.Context, stages.ExecutionContext) (stages.CheckResult, error) {
+				return stages.CheckResult{}, nil
+			},
+			Run: func(context.Context, stages.ExecutionContext) error {
+				callOrder = append(callOrder, "run")
+				return nil
+			},
+			Simulate: func(context.Context, stages.ExecutionContext) error {
+				callOrder = append(callOrder, "simulate")
+				return nil
+			},
+		},
+	}
+
+	logger := runner.NewEventLogger(&bytes.Buffer{}, &bytes.Buffer{})
+	err := Execute(context.Background(), Options{
+		Store:    store,
+		RunState: runState,
+		Catalog:  catalog,
+		DryRun:   true,
+		DryRunDelay: func(context.Context, stages.ExecutionContext) error {
+			callOrder = append(callOrder, "delay")
+			return nil
+		},
+		RepoRoot:      t.TempDir(),
+		HomeDir:       t.TempDir(),
+		RunDir:        t.TempDir(),
+		CommandRunner: runner.NewOSCommandRunner(),
+		Logger:        logger,
+	})
+	if err != nil {
+		t.Fatalf("execute returned error: %v", err)
+	}
+
+	if len(callOrder) != 2 {
+		t.Fatalf("unexpected call order length: %v", callOrder)
+	}
+	if callOrder[0] != "delay" || callOrder[1] != "simulate" {
+		t.Fatalf("unexpected call order: %v", callOrder)
+	}
+}
+
+func TestRandomDryRunStageDelayHonorsContextCancellation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	delay := RandomDryRunStageDelay(2*time.Second, 5*time.Second)
+	err := delay(ctx, stages.ExecutionContext{})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context cancellation, got %v", err)
+	}
+}
+
 func TestExecuteResumeSkipsTerminalStages(t *testing.T) {
 	store := state.NewStore(filepath.Join(t.TempDir(), "state.json"))
 	runState := &state.RunState{

@@ -36,6 +36,7 @@ var (
 	executeRun             = execution.Execute
 	getwd                  = os.Getwd
 	userHomeDirectory      = os.UserHomeDir
+	dryRunStageDelay       = execution.RandomDryRunStageDelay(2*time.Second, 5*time.Second)
 )
 
 func Run(ctx context.Context, args []string, stdout io.Writer, stderr io.Writer) error {
@@ -201,6 +202,7 @@ func runNonInteractive(
 		RunState:      runState,
 		Catalog:       catalog,
 		DryRun:        effectiveDryRun,
+		DryRunDelay:   dryRunStageDelay,
 		RepoRoot:      repoRoot,
 		HomeDir:       homeDir,
 		RunDir:        runDir,

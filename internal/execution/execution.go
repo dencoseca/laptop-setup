@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand"
 	"time"
 
 	"github.com/dencoseca/laptop-setup/internal/runner"
@@ -33,11 +34,14 @@ type Hooks struct {
 	OnFailure     func(ctx context.Context, failure Failure) (FailureAction, error)
 }
 
+type DryRunStageDelayFunc func(ctx context.Context, execCtx stages.ExecutionContext) error
+
 type Options struct {
 	Store         *state.Store
 	RunState      *state.RunState
 	Catalog       []stages.Stage
 	DryRun        bool
+	DryRunDelay   DryRunStageDelayFunc
 	RepoRoot      string
 	HomeDir       string
 	RunDir        string
@@ -194,7 +198,14 @@ func Execute(ctx context.Context, options Options) error {
 
 			var runErr error
 			if options.DryRun {
-				runErr = stage.Simulate(ctx, execCtx)
+				if options.DryRunDelay != nil {
+					if err := options.DryRunDelay(ctx, execCtx); err != nil {
+						runErr = err
+					}
+				}
+				if runErr == nil {
+					runErr = stage.Simulate(ctx, execCtx)
+				}
 			} else {
 				runErr = stage.Run(ctx, execCtx)
 			}
@@ -353,5 +364,39 @@ func isTerminalStatus(status string) bool {
 		return true
 	default:
 		return false
+	}
+}
+
+func RandomDryRunStageDelay(minDelay time.Duration, maxDelay time.Duration) DryRunStageDelayFunc {
+	if minDelay < 0 {
+		minDelay = 0
+	}
+	if maxDelay < 0 {
+		maxDelay = 0
+	}
+	if maxDelay < minDelay {
+		minDelay, maxDelay = maxDelay, minDelay
+	}
+
+	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+
+	return func(ctx context.Context, _ stages.ExecutionContext) error {
+		delay := minDelay
+		if maxDelay > minDelay {
+			delay += time.Duration(rng.Int63n(int64(maxDelay-minDelay) + 1))
+		}
+		if delay <= 0 {
+			return nil
+		}
+
+		timer := time.NewTimer(delay)
+		defer timer.Stop()
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-timer.C:
+			return nil
+		}
 	}
 }
