@@ -143,16 +143,16 @@ func DefaultCatalog() []Stage {
 			Simulate:     simulateBrewBundle,
 		},
 		{
-			ID:           "vite_plus_install",
-			Title:        "Vite+ Install",
+			ID:           "node_toolchain",
+			Title:        "Node Toolchain",
 			Description:  "Set up Node toolchain",
 			DecisionDeps: []string{DecisionNodeToolchain},
 			CanSkip:      true,
 			Critical:     false,
-			LogTag:       "vite_plus_install",
+			LogTag:       "node_toolchain",
 			Precheck:     precheckNotSatisfied,
-			Run:          runVitePlusInstall,
-			Simulate:     simulateVitePlusInstall,
+			Run:          runNodeToolchainInstall,
+			Simulate:     simulateNodeToolchainInstall,
 		},
 		{
 			ID:           "docker_config",
@@ -427,7 +427,7 @@ func simulateBrewBundle(ctx context.Context, execCtx ExecutionContext) error {
 	return logSimulation(execCtx, "Would run: brew bundle install --file <generated Brewfile>")
 }
 
-func runVitePlusInstall(ctx context.Context, execCtx ExecutionContext) error {
+func runNodeToolchainInstall(ctx context.Context, execCtx ExecutionContext) error {
 	switch NodeToolchainFromDecisions(execCtx.Decisions) {
 	case NodeToolchainNvmPnpm:
 		if err := runCommand(ctx, execCtx, runner.Command{
@@ -448,7 +448,7 @@ func runVitePlusInstall(ctx context.Context, execCtx ExecutionContext) error {
 	}
 }
 
-func simulateVitePlusInstall(_ context.Context, execCtx ExecutionContext) error {
+func simulateNodeToolchainInstall(_ context.Context, execCtx ExecutionContext) error {
 	switch NodeToolchainFromDecisions(execCtx.Decisions) {
 	case NodeToolchainNvmPnpm:
 		if err := logSimulation(execCtx, "Would install nvm (curl raw.githubusercontent.com/nvm-sh/.../install.sh | bash)"); err != nil {

@@ -244,16 +244,16 @@ func TestResolveSelectedBrewIDs(t *testing.T) {
 	}
 }
 
-func TestRunVitePlusInstallUsesViteChoice(t *testing.T) {
+func TestRunNodeToolchainInstallUsesViteChoice(t *testing.T) {
 	runnerStub := &recordingRunner{}
-	err := runVitePlusInstall(context.Background(), ExecutionContext{
+	err := runNodeToolchainInstall(context.Background(), ExecutionContext{
 		Runner: runnerStub,
 		Decisions: map[string]any{
 			DecisionNodeToolchain: NodeToolchainVitePlus,
 		},
 	})
 	if err != nil {
-		t.Fatalf("runVitePlusInstall returned error: %v", err)
+		t.Fatalf("runNodeToolchainInstall returned error: %v", err)
 	}
 
 	if len(runnerStub.commands) != 1 {
@@ -264,16 +264,16 @@ func TestRunVitePlusInstallUsesViteChoice(t *testing.T) {
 	}
 }
 
-func TestRunVitePlusInstallUsesNvmAndPnpmChoice(t *testing.T) {
+func TestRunNodeToolchainInstallUsesNvmAndPnpmChoice(t *testing.T) {
 	runnerStub := &recordingRunner{}
-	err := runVitePlusInstall(context.Background(), ExecutionContext{
+	err := runNodeToolchainInstall(context.Background(), ExecutionContext{
 		Runner: runnerStub,
 		Decisions: map[string]any{
 			DecisionNodeToolchain: NodeToolchainNvmPnpm,
 		},
 	})
 	if err != nil {
-		t.Fatalf("runVitePlusInstall returned error: %v", err)
+		t.Fatalf("runNodeToolchainInstall returned error: %v", err)
 	}
 
 	if len(runnerStub.commands) != 2 {

@@ -24,7 +24,7 @@ import (
 var (
 	phaseMacOSStages   = []string{"xcode_clt", "macos_defaults"}
 	phaseInstallStages = []string{"homebrew_install", "brew_bundle"}
-	phaseDevStages     = []string{"vite_plus_install", "docker_config", "shell_setup", "git_config"}
+	phaseDevStages     = []string{"node_toolchain", "docker_config", "shell_setup", "git_config"}
 	phaseManualStages  = []string{"manual_app_store_apps"}
 )
 

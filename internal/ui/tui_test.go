@@ -24,7 +24,7 @@ func TestPrepareExecutionSetupPersistsPhaseDecisions(t *testing.T) {
 
 	store := state.NewStore(filepath.Join(t.TempDir(), "state.json"))
 	catalog := []stages.Stage{
-		{ID: "vite_plus_install"},
+		{ID: "node_toolchain"},
 		{ID: "docker_config"},
 		{ID: "shell_setup"},
 		{ID: "git_config"},
@@ -35,7 +35,7 @@ func TestPrepareExecutionSetupPersistsPhaseDecisions(t *testing.T) {
 		catalog: catalog,
 		config:  Config{},
 		devOptions: []toggleOption{
-			{ID: "vite_plus_install", Title: "Vite+ Install", Selected: true},
+			{ID: "node_toolchain", Title: "Node Toolchain", Selected: true},
 			{ID: "docker_config", Title: "Docker Configuration", Selected: true},
 			{ID: "shell_setup", Title: "Shell Setup", Selected: true},
 			{ID: "git_config", Title: "Git Configuration", Selected: true},
@@ -579,13 +579,13 @@ func TestViewPhaseConfigurationOmitsPhasePrefix(t *testing.T) {
 		width:  120,
 		height: 36,
 		catalog: []stages.Stage{
-			{ID: "vite_plus_install", Title: "Vite+ Install"},
+			{ID: "node_toolchain", Title: "Node Toolchain"},
 		},
 		stageMap: map[string]stages.Stage{
-			"vite_plus_install": {ID: "vite_plus_install", Title: "Vite+ Install"},
+			"node_toolchain": {ID: "node_toolchain", Title: "Node Toolchain"},
 		},
 		devOptions: []toggleOption{
-			{ID: "vite_plus_install", Title: "Vite+ Install", Selected: true},
+			{ID: "node_toolchain", Title: "Node Toolchain", Selected: true},
 		},
 	}
 
@@ -596,7 +596,7 @@ func TestViewPhaseConfigurationOmitsPhasePrefix(t *testing.T) {
 	if got := strings.Count(view, "Dev Tools Setup"); got < 2 {
 		t.Fatalf("expected status and output panels to show Dev Tools Setup, count=%d view=%q", got, view)
 	}
-	if strings.Contains(view, "vite_plus_install") {
+	if strings.Contains(view, "node_toolchain") {
 		t.Fatalf("expected internal stage id to be hidden, got %q", view)
 	}
 }
@@ -607,15 +607,15 @@ func TestViewReviewHidesInternalStageIDs(t *testing.T) {
 		width:  120,
 		height: 36,
 		catalog: []stages.Stage{
-			{ID: "vite_plus_install", Title: "Vite+ Install"},
+			{ID: "node_toolchain", Title: "Node Toolchain"},
 			{ID: "docker_config", Title: "Docker Configuration"},
 		},
 		stageMap: map[string]stages.Stage{
-			"vite_plus_install": {ID: "vite_plus_install", Title: "Vite+ Install"},
-			"docker_config":     {ID: "docker_config", Title: "Docker Configuration"},
+			"node_toolchain": {ID: "node_toolchain", Title: "Node Toolchain"},
+			"docker_config":  {ID: "docker_config", Title: "Docker Configuration"},
 		},
 		devOptions: []toggleOption{
-			{ID: "vite_plus_install", Title: "Vite+ Install", Selected: true},
+			{ID: "node_toolchain", Title: "Node Toolchain", Selected: true},
 			{ID: "docker_config", Title: "Docker Configuration", Selected: true},
 		},
 		nodeOptions: []selectOption{
@@ -630,12 +630,12 @@ func TestViewReviewHidesInternalStageIDs(t *testing.T) {
 	}
 
 	view := m.View()
-	for _, fragment := range []string{"Vite+ Install", "Docker Configuration"} {
+	for _, fragment := range []string{"Node Toolchain", "Docker Configuration"} {
 		if !strings.Contains(view, fragment) {
 			t.Fatalf("expected review to contain %q, got %q", fragment, view)
 		}
 	}
-	for _, internalID := range []string{"vite_plus_install", "docker_config"} {
+	for _, internalID := range []string{"node_toolchain", "docker_config"} {
 		if strings.Contains(view, internalID) {
 			t.Fatalf("expected review to hide internal stage id %q, got %q", internalID, view)
 		}

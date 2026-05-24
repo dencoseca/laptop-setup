@@ -88,7 +88,7 @@ Map from existing shell-era setup behavior:
    - `homebrew_install`
    - `brew_bundle` (generate a run-scoped Brewfile from selected package/app entries, then run `brew bundle install --file <generated-brewfile>`)
 3. **Phase: `dev_tools_setup` (Dev tools setup)**
-   - `vite_plus_install` (or alternative Node toolchain path per user decision)
+   - `node_toolchain` (or alternative Node toolchain path per user decision)
    - `docker_config` (e.g., Colima toggle/config)
    - `shell_setup` (oh-my-zsh + zshrc + starship; decision-driven options)
    - `git_config` (confirm/edit identity and config prior to run)
@@ -298,7 +298,7 @@ Allowed phase statuses:
   - Bubble Tea views and interaction model.
   - Bootstrap artifact download flow.
 - Deliverables:
-  - Stage implementations mapped from current behavior (`xcode_clt`, `macos_defaults`, `homebrew_install`, `brew_bundle`, `vite_plus_install`, `docker_config`, `shell_setup`, `git_config`, `manual_app_store_apps`).
+  - Stage implementations mapped from current behavior (`xcode_clt`, `macos_defaults`, `homebrew_install`, `brew_bundle`, `node_toolchain`, `docker_config`, `shell_setup`, `git_config`, `manual_app_store_apps`).
   - Resume-aware state transitions and per-stage status tracking.
   - Dry-run simulation path with non-mutating behavior.
 - Verification Commands:
