@@ -2237,8 +2237,12 @@ func renderProgressBar(width int, percent int) string {
 	if percent > 0 && filled == 0 {
 		filled = 1
 	}
+	fillColor := accentColor
+	if percent == 100 {
+		fillColor = successColor
+	}
 	return "[" +
-		lipgloss.NewStyle().Foreground(accentColor).Render(strings.Repeat("=", filled)) +
+		lipgloss.NewStyle().Foreground(fillColor).Render(strings.Repeat("=", filled)) +
 		lipgloss.NewStyle().Foreground(dimColor).Render(strings.Repeat(".", width-filled)) +
 		"]"
 }

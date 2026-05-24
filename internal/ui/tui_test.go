@@ -567,6 +567,26 @@ func TestRenderDashboardStatusPanelLeftAlignsBadgeWithContent(t *testing.T) {
 	}
 }
 
+func TestRenderProgressBarUsesSuccessColorAtComplete(t *testing.T) {
+	inProgress := renderProgressBar(10, 90)
+	complete := renderProgressBar(10, 100)
+
+	expectedInProgress := "[" +
+		lipgloss.NewStyle().Foreground(accentColor).Render("=========") +
+		lipgloss.NewStyle().Foreground(dimColor).Render(".") +
+		"]"
+	expectedComplete := "[" +
+		lipgloss.NewStyle().Foreground(successColor).Render("==========") +
+		"]"
+
+	if inProgress != expectedInProgress {
+		t.Fatalf("expected in-progress bar to use accent color, got %q", inProgress)
+	}
+	if complete != expectedComplete {
+		t.Fatalf("expected complete bar to use success color, got %q", complete)
+	}
+}
+
 func TestDashboardStatusSplitsConfigurationAndExecutionProgress(t *testing.T) {
 	configStatus := model{screen: screenBrew}.configurationDashboardStatus()
 	if configStatus.ConfigurationProgressPct == 0 {
