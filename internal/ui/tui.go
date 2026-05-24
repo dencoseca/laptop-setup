@@ -1637,11 +1637,20 @@ func (m model) renderDashboard(status dashboardStatus, journey dashboardJourney,
 	contentWidth := maxInt(20, width-4)
 	contentHeight := maxInt(12, height-2)
 	columnGap := 2
-	headerHeight := maxInt(12, contentHeight/3)
-	if headerHeight > contentHeight-6 {
-		headerHeight = maxInt(6, contentHeight-6)
+	shortcutHint := m.renderDashboardShortcutHint(contentWidth, status.Hint)
+	shortcutHintHeight := lipgloss.Height(shortcutHint)
+	if shortcutHint == "" {
+		shortcutHintHeight = 0
 	}
-	bodyHeight := maxInt(6, contentHeight-headerHeight-1)
+	shortcutGapHeight := 0
+	if shortcutHint != "" {
+		shortcutGapHeight = 1
+	}
+	headerHeight := maxInt(12, contentHeight/3)
+	if headerHeight > contentHeight-6-shortcutHintHeight-shortcutGapHeight {
+		headerHeight = maxInt(6, contentHeight-6-shortcutHintHeight-shortcutGapHeight)
+	}
+	bodyHeight := maxInt(6, contentHeight-headerHeight-1-shortcutHintHeight-shortcutGapHeight)
 
 	titlePanelMinWidth := bootstrapTitleArtWidth() + 6
 	statusMinWidth := 20
@@ -1669,7 +1678,11 @@ func (m model) renderDashboard(status dashboardStatus, journey dashboardJourney,
 		m.renderOutputPanel(outputWidth, bodyHeight, output),
 	)
 
-	layout := lipgloss.JoinVertical(lipgloss.Left, header, "", body)
+	blocks := []string{header, "", body}
+	if shortcutHint != "" {
+		blocks = append(blocks, "", shortcutHint)
+	}
+	layout := lipgloss.JoinVertical(lipgloss.Left, blocks...)
 	framed := lipgloss.Place(contentWidth, contentHeight, lipgloss.Left, lipgloss.Top, layout)
 	return m.screenStyle(width, height).Render(framed)
 }
@@ -1721,13 +1734,26 @@ func (m model) renderDashboardStatusPanel(width int, height int, status dashboar
 		badgeLine,
 		"",
 		truncateLine(status.Heading, innerWidth),
-		lipgloss.NewStyle().Foreground(mutedColor).Render(truncateLine(status.Summary, innerWidth)),
+		"",
+		"",
+		"",
 		lipgloss.NewStyle().Bold(true).Foreground(accentAltColor).Render("Overall Progress"),
 		renderProgressBar(barWidth, status.ProgressPct),
-		lipgloss.NewStyle().Foreground(mutedColor).Render(fmt.Sprintf("%d%% complete", status.ProgressPct)),
-		lipgloss.NewStyle().Foreground(mutedColor).Render(truncateLine(status.Hint, innerWidth)),
 	}
 	return m.panelStyle(width, height).Render(strings.Join(limitLines(lines, panelInnerHeight(height)), "\n"))
+}
+
+func (m model) renderDashboardShortcutHint(width int, hint string) string {
+	hint = strings.TrimSpace(hint)
+	if hint == "" {
+		return ""
+	}
+	return lipgloss.NewStyle().
+		Width(maxInt(1, width)).
+		MaxWidth(maxInt(1, width)).
+		Align(lipgloss.Center).
+		Foreground(mutedColor).
+		Render(hint)
 }
 
 func (m model) renderJourneyPanel(width int, height int, journey dashboardJourney) string {
@@ -1912,7 +1938,6 @@ func (m model) executionDashboardStatus(progress executionProgress) dashboardSta
 }
 
 func (m model) configurationDashboardStatus() dashboardStatus {
-	journey := m.previewJourney()
 	stepIndex, totalSteps := configurationStepPosition(m.screen)
 	badge := "Configuring"
 	badgeTone := accentAltColor
@@ -1934,7 +1959,7 @@ func (m model) configurationDashboardStatus() dashboardStatus {
 		Badge:       badge,
 		BadgeTone:   badgeTone,
 		Heading:     screenTitle(m.screen),
-		Summary:     fmt.Sprintf("%d of %d  %d stages selected", stepIndex, totalSteps, len(journey.StageOrder)),
+		Summary:     fmt.Sprintf("%d of %d", stepIndex, totalSteps),
 		ProgressPct: stepIndex * 100 / maxInt(1, totalSteps),
 		Hint:        hint,
 	}

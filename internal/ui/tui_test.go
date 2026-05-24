@@ -395,7 +395,6 @@ func TestViewExecutingRendersDashboardLayout(t *testing.T) {
 	for _, fragment := range []string{
 		"██████╗  ██████╗",
 		"Initiating CHAPEAUX, stand by for awesomeness...",
-		"2 of 3",
 		"Overall Progress",
 		"Stage: Brew Bundle",
 		"Brew Bundle",
@@ -412,6 +411,9 @@ func TestViewExecutingRendersDashboardLayout(t *testing.T) {
 	}
 	if strings.Contains(view, "brew_bundle") {
 		t.Fatalf("expected execution view to hide internal stage id, got %q", view)
+	}
+	if strings.Contains(view, "2 of 3") || strings.Contains(view, "finished") {
+		t.Fatalf("expected execution view to omit status summary counts, got %q", view)
 	}
 	if !strings.Contains(view, "┌") {
 		t.Fatalf("expected bordered execution view, got %q", view)
@@ -484,7 +486,7 @@ func TestRenderDashboardStatusPanelLeftAlignsBadgeWithContent(t *testing.T) {
 		Badge:       "Configuring",
 		BadgeTone:   accentAltColor,
 		Heading:     "Brew Catalog Selection",
-		Summary:     "4 of 13  9 stages selected",
+		Summary:     "4 of 13",
 		ProgressPct: 30,
 		Hint:        "Enter continue  Esc back",
 	}))
@@ -492,6 +494,7 @@ func TestRenderDashboardStatusPanelLeftAlignsBadgeWithContent(t *testing.T) {
 
 	badgeLineIndex := -1
 	headingLineIndex := -1
+	progressLineIndex := -1
 	for index, line := range lines {
 		if strings.Contains(line, "CONFIGURING") {
 			badgeLineIndex = index
@@ -499,10 +502,13 @@ func TestRenderDashboardStatusPanelLeftAlignsBadgeWithContent(t *testing.T) {
 		if strings.Contains(line, "Brew Catalog Selection") {
 			headingLineIndex = index
 		}
+		if strings.Contains(line, "Overall Progress") {
+			progressLineIndex = index
+		}
 	}
 
-	if badgeLineIndex == -1 || headingLineIndex == -1 {
-		t.Fatalf("expected badge and heading in status panel, got %q", view)
+	if badgeLineIndex == -1 || headingLineIndex == -1 || progressLineIndex == -1 {
+		t.Fatalf("expected badge, heading, and progress label in status panel, got %q", view)
 	}
 	if got, want := strings.Index(lines[badgeLineIndex], "CONFIGURING"), strings.Index(lines[headingLineIndex], "Brew Catalog Selection"); got != want {
 		t.Fatalf("expected badge and heading to start in same column, got badge=%d heading=%d view=%q", got, want, view)
@@ -512,6 +518,77 @@ func TestRenderDashboardStatusPanelLeftAlignsBadgeWithContent(t *testing.T) {
 	}
 	if strings.Trim(lines[badgeLineIndex+1], " │") != "" {
 		t.Fatalf("expected spacer line between badge and heading, got %q", lines[badgeLineIndex+1])
+	}
+	if strings.Trim(lines[headingLineIndex+1], " │") != "" {
+		t.Fatalf("expected spacer line after heading, got %q", lines[headingLineIndex+1])
+	}
+	if strings.Trim(lines[headingLineIndex+2], " │") != "" {
+		t.Fatalf("expected reserved summary slot to stay blank, got %q", lines[headingLineIndex+2])
+	}
+	if progressLineIndex != headingLineIndex+4 {
+		t.Fatalf("expected progress label to keep its reserved vertical position, got view=%q", view)
+	}
+	if strings.Trim(lines[headingLineIndex+3], " │") != "" {
+		t.Fatalf("expected spacer line before progress label, got %q", lines[headingLineIndex+3])
+	}
+	if strings.Contains(view, "4 of 13") {
+		t.Fatalf("expected status panel to omit stage count summary, got %q", view)
+	}
+	if strings.Contains(view, "stages selected") {
+		t.Fatalf("expected status panel to omit selected stage count, got %q", view)
+	}
+	if strings.Contains(view, "% complete") {
+		t.Fatalf("expected status panel to omit textual progress percentage, got %q", view)
+	}
+	if strings.Contains(view, "Enter continue") {
+		t.Fatalf("expected status panel to omit keyboard shortcuts, got %q", view)
+	}
+}
+
+func TestRenderDashboardPlacesShortcutHintBelowBody(t *testing.T) {
+	m := model{
+		width:  96,
+		height: 28,
+	}
+	hint := "Enter continue  Esc back  CTRL+C quit"
+	view := ansi.Strip(m.renderDashboard(dashboardStatus{
+		Badge:       "Configuring",
+		BadgeTone:   accentAltColor,
+		Heading:     "Brew Catalog Selection",
+		Summary:     "4 of 13",
+		ProgressPct: 30,
+		Hint:        hint,
+	}, dashboardJourney{}, ""))
+	lines := strings.Split(view, "\n")
+
+	lastPanelBorderIndex := -1
+	hintLineIndex := -1
+	for index, line := range lines {
+		if strings.Contains(line, "└") {
+			lastPanelBorderIndex = index
+		}
+		if strings.Contains(line, hint) {
+			hintLineIndex = index
+		}
+	}
+
+	if hintLineIndex == -1 {
+		t.Fatalf("expected dashboard footer to contain shortcut hint, got %q", view)
+	}
+	if hintLineIndex <= lastPanelBorderIndex {
+		t.Fatalf("expected shortcut hint below body panels, got hint line=%d border line=%d view=%q", hintLineIndex, lastPanelBorderIndex, view)
+	}
+	if hintLineIndex != lastPanelBorderIndex+2 {
+		t.Fatalf("expected one spacer line before shortcut hint, got hint line=%d border line=%d view=%q", hintLineIndex, lastPanelBorderIndex, view)
+	}
+	if strings.TrimSpace(lines[lastPanelBorderIndex+1]) != "" {
+		t.Fatalf("expected blank spacer line before shortcut hint, got %q", lines[lastPanelBorderIndex+1])
+	}
+	if strings.ContainsAny(lines[hintLineIndex], "│┌┐└┘─") {
+		t.Fatalf("expected shortcut hint without a border, got %q", lines[hintLineIndex])
+	}
+	if got := strings.Index(lines[hintLineIndex], hint); got <= 2 {
+		t.Fatalf("expected shortcut hint to be centered, got line %q", lines[hintLineIndex])
 	}
 }
 
