@@ -288,6 +288,61 @@ func TestViewExecutingRendersDashboardLayout(t *testing.T) {
 	}
 }
 
+func TestViewConfigurationUsesDashboardLayoutWithJourneyPreview(t *testing.T) {
+	m := model{
+		screen: screenGitConfig,
+		width:  120,
+		height: 36,
+		catalog: []stages.Stage{
+			{ID: "xcode_clt", Title: "Xcode Command Line Tools"},
+			{ID: "brew_bundle", Title: "Brew Bundle"},
+			{ID: "git_config", Title: "Git Configuration"},
+		},
+		stageMap: map[string]stages.Stage{
+			"xcode_clt":   {ID: "xcode_clt", Title: "Xcode Command Line Tools"},
+			"brew_bundle": {ID: "brew_bundle", Title: "Brew Bundle"},
+			"git_config":  {ID: "git_config", Title: "Git Configuration"},
+		},
+		macOSOptions: []toggleOption{
+			{ID: "xcode_clt", Title: "Xcode Command Line Tools", Selected: true},
+		},
+		installOptions: []toggleOption{
+			{ID: "brew_bundle", Title: "Brew Bundle", Selected: true},
+		},
+		brewEntries: []stages.BrewEntry{
+			{ID: "go", Kind: "brew"},
+		},
+		brewSelected: map[string]bool{
+			"go": true,
+		},
+		devOptions: []toggleOption{
+			{ID: "git_config", Title: "Git Configuration", Selected: true},
+		},
+		gitModeOptions: []selectOption{
+			{ID: stages.GitConfigModeTemplate, Title: "Use template git config", Description: "Write templates/gitconfig as ~/.gitconfig"},
+			{ID: stages.GitConfigModeCustom, Title: "Set custom identity", Description: "Write template config and override user.name/user.email"},
+		},
+	}
+
+	view := m.View()
+
+	for _, fragment := range []string{
+		"SETUP JOURNEY",
+		"CONFIGURATION",
+		"JOURNEY",
+		"STANDARD OUTPUT",
+		"Dev Tools: Git Configuration",
+		"Choose how git config should be handled.",
+		"Xcode Command Line Tools",
+		"Brew Bundle",
+		"Git Configuration",
+	} {
+		if !strings.Contains(view, fragment) {
+			t.Fatalf("expected configuration view to contain %q, got %q", fragment, view)
+		}
+	}
+}
+
 type noOpRunner struct{}
 
 func (r *noOpRunner) Run(context.Context, runner.Command) (runner.Result, error) {

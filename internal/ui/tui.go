@@ -709,18 +709,15 @@ func (m model) View() string {
 	case screenReview:
 		content = m.viewReview()
 	case screenExecuting:
-		content = m.viewExecuting()
+		return m.viewExecuting()
 	case screenFailure:
-		content = m.viewFailure()
+		return m.viewFailureScreen()
 	case screenSummary:
-		content = m.viewSummary()
+		return m.viewSummaryScreen()
 	default:
 		content = ""
 	}
-	if m.screen == screenExecuting {
-		return content
-	}
-	return m.renderDocument(content)
+	return m.viewConfigFlow(content)
 }
 
 func (m model) viewWelcome() string {
@@ -875,8 +872,7 @@ func (m *model) viewReview() string {
 	}
 	fmt.Fprintf(&b, "\nStages:\n")
 	for _, stageID := range m.plan {
-		stage := m.stageMap[stageID]
-		fmt.Fprintf(&b, "- %s (%s)\n", stage.Title, stageID)
+		fmt.Fprintf(&b, "- %s (%s)\n", m.stageTitle(stageID), stageID)
 	}
 	if m.planError != "" {
 		fmt.Fprintf(&b, "\nPlan error: %s\n", m.planError)
@@ -886,43 +882,28 @@ func (m *model) viewReview() string {
 }
 
 func (m model) viewExecuting() string {
-	width, height := m.viewDimensions()
-	contentWidth := maxInt(20, width-4)
-	contentHeight := maxInt(12, height-2)
-	headerHeight := maxInt(8, contentHeight/3)
-	if headerHeight > contentHeight-6 {
-		headerHeight = maxInt(6, contentHeight-6)
-	}
-	bodyHeight := maxInt(6, contentHeight-headerHeight-1)
-
-	titleWidth := maxInt(24, ((contentWidth-1)*2)/3)
-	statusWidth := maxInt(20, contentWidth-titleWidth-1)
-	if titleWidth+1+statusWidth > contentWidth {
-		titleWidth = maxInt(20, contentWidth-statusWidth-1)
-	}
-
-	journeyWidth := maxInt(24, (contentWidth-1)/2)
-	logWidth := maxInt(24, contentWidth-journeyWidth-1)
-	if journeyWidth+1+logWidth > contentWidth {
-		journeyWidth = maxInt(20, contentWidth-logWidth-1)
-	}
-
 	progress := m.executionProgress()
-	header := lipgloss.JoinHorizontal(
-		lipgloss.Top,
-		m.renderTitlePanel(titleWidth, headerHeight),
-		"  ",
-		m.renderStatusPanel(statusWidth, headerHeight, progress),
+	return m.renderDashboard(
+		m.executionDashboardStatus(progress),
+		dashboardJourney{
+			StageOrder:  m.stageOrder,
+			Statuses:    m.stageStatuses,
+			CurrentStep: progress.CurrentStageID,
+		},
+		m.executionOutput(progress.CurrentStageID),
 	)
-	body := lipgloss.JoinHorizontal(
-		lipgloss.Top,
-		m.renderJourneyPanel(journeyWidth, bodyHeight, progress),
-		"  ",
-		m.renderLogPanel(logWidth, bodyHeight, progress.CurrentStageID),
-	)
+}
 
-	layout := lipgloss.JoinVertical(lipgloss.Left, header, "", body)
-	return m.screenStyle(width, height).Render(layout)
+func (m model) viewConfigFlow(output string) string {
+	return m.renderDashboard(m.configurationDashboardStatus(), m.previewJourney(), m.standardOutputContent(output))
+}
+
+func (m model) viewFailureScreen() string {
+	return m.renderDashboard(m.failureDashboardStatus(), m.previewJourney(), m.standardOutputContent(m.viewFailure()))
+}
+
+func (m model) viewSummaryScreen() string {
+	return m.renderDashboard(m.summaryDashboardStatus(), m.previewJourney(), m.standardOutputContent(m.viewSummary()))
 }
 
 func (m model) viewFailure() string {
@@ -1587,10 +1568,82 @@ type executionProgress struct {
 	PercentComplete    int
 }
 
+type dashboardStatus struct {
+	Title       string
+	Badge       string
+	BadgeTone   lipgloss.TerminalColor
+	Heading     string
+	Summary     string
+	ProgressPct int
+	Hint        string
+	Spinner     bool
+}
+
+type dashboardJourney struct {
+	StageOrder  []string
+	Statuses    map[string]state.StageStatus
+	CurrentStep string
+}
+
+var configurationScreenOrder = []screen{
+	screenWelcome,
+	screenMacOS,
+	screenInstall,
+	screenBrew,
+	screenDevTools,
+	screenNodeToolchain,
+	screenDockerRuntime,
+	screenShellOptions,
+	screenGitConfig,
+	screenGitName,
+	screenGitEmail,
+	screenManual,
+	screenReview,
+}
+
 func (m model) renderDocument(content string) string {
 	width, height := m.viewDimensions()
 	panel := m.panelStyle(maxInt(20, width-4), maxInt(8, height-2), surfaceColor).Render(content)
 	return m.screenStyle(width, height).Render(panel)
+}
+
+func (m model) renderDashboard(status dashboardStatus, journey dashboardJourney, output string) string {
+	width, height := m.viewDimensions()
+	contentWidth := maxInt(20, width-4)
+	contentHeight := maxInt(12, height-2)
+	headerHeight := maxInt(8, contentHeight/3)
+	if headerHeight > contentHeight-6 {
+		headerHeight = maxInt(6, contentHeight-6)
+	}
+	bodyHeight := maxInt(6, contentHeight-headerHeight-1)
+
+	titleWidth := maxInt(24, ((contentWidth-1)*2)/3)
+	statusWidth := maxInt(20, contentWidth-titleWidth-1)
+	if titleWidth+1+statusWidth > contentWidth {
+		titleWidth = maxInt(20, contentWidth-statusWidth-1)
+	}
+
+	journeyWidth := maxInt(24, (contentWidth-1)/2)
+	outputWidth := maxInt(24, contentWidth-journeyWidth-1)
+	if journeyWidth+1+outputWidth > contentWidth {
+		journeyWidth = maxInt(20, contentWidth-outputWidth-1)
+	}
+
+	header := lipgloss.JoinHorizontal(
+		lipgloss.Top,
+		m.renderTitlePanel(titleWidth, headerHeight),
+		"  ",
+		m.renderDashboardStatusPanel(statusWidth, headerHeight, status),
+	)
+	body := lipgloss.JoinHorizontal(
+		lipgloss.Top,
+		m.renderJourneyPanel(journeyWidth, bodyHeight, journey),
+		"  ",
+		m.renderOutputPanel(outputWidth, bodyHeight, output),
+	)
+
+	layout := lipgloss.JoinVertical(lipgloss.Left, header, "", body)
+	return m.screenStyle(width, height).Render(layout)
 }
 
 func (m model) renderTitlePanel(width int, height int) string {
@@ -1612,71 +1665,84 @@ func (m model) renderTitlePanel(width int, height int) string {
 		Render(content)
 }
 
-func (m model) renderStatusPanel(width int, height int, progress executionProgress) string {
+func (m model) renderDashboardStatusPanel(width int, height int, status dashboardStatus) string {
 	innerWidth := panelInnerWidth(width)
 	barWidth := maxInt(10, minInt(24, innerWidth-2))
-	stageSummary := fmt.Sprintf("%d of %d", progress.CurrentStageIndex, progress.TotalStages)
-	completedSummary := fmt.Sprintf("%d finished", progress.CompletedStages)
 	statusBadge := lipgloss.NewStyle().
 		Bold(true).
 		Foreground(canvasColor).
-		Background(statusTone(progress.CurrentStageStatus)).
+		Background(status.BadgeTone).
 		Padding(0, 1).
-		Render(strings.ToUpper(humanizeStatus(progress.CurrentStageStatus)))
+		Render(strings.ToUpper(status.Badge))
+	badgeLine := statusBadge
+	if status.Spinner {
+		badgeLine = lipgloss.JoinHorizontal(lipgloss.Center, statusBadge, " ", lipgloss.NewStyle().Foreground(mutedColor).Render(m.spinner.View()))
+	}
 	lines := []string{
-		lipgloss.NewStyle().Bold(true).Foreground(accentAltColor).Render("LIVE STATUS"),
-		lipgloss.JoinHorizontal(lipgloss.Center, statusBadge, " ", lipgloss.NewStyle().Foreground(mutedColor).Render(m.spinner.View())),
-		truncateLine(progress.CurrentStageTitle, innerWidth),
-		lipgloss.NewStyle().Foreground(mutedColor).Render(stageSummary + "  " + completedSummary),
+		lipgloss.NewStyle().Bold(true).Foreground(accentAltColor).Render(status.Title),
+		badgeLine,
+		truncateLine(status.Heading, innerWidth),
+		lipgloss.NewStyle().Foreground(mutedColor).Render(truncateLine(status.Summary, innerWidth)),
 		lipgloss.NewStyle().Bold(true).Foreground(accentAltColor).Render("Overall Progress"),
-		renderProgressBar(barWidth, progress.PercentComplete),
-		lipgloss.NewStyle().Foreground(mutedColor).Render(fmt.Sprintf("%d%% complete", progress.PercentComplete)),
-		lipgloss.NewStyle().Foreground(mutedColor).Render("q abort"),
+		renderProgressBar(barWidth, status.ProgressPct),
+		lipgloss.NewStyle().Foreground(mutedColor).Render(fmt.Sprintf("%d%% complete", status.ProgressPct)),
+		lipgloss.NewStyle().Foreground(mutedColor).Render(truncateLine(status.Hint, innerWidth)),
 	}
 	return m.panelStyle(width, height, surfaceAltColor).Render(strings.Join(limitLines(lines, panelInnerHeight(height)), "\n"))
 }
 
-func (m model) renderJourneyPanel(width int, height int, progress executionProgress) string {
+func (m model) renderJourneyPanel(width int, height int, journey dashboardJourney) string {
 	innerWidth := panelInnerWidth(width)
 	lineBudget := maxInt(1, panelInnerHeight(height)-2)
 	lines := []string{lipgloss.NewStyle().Bold(true).Foreground(accentColor).Render("JOURNEY")}
-	for index, stageID := range m.stageOrder {
-		stage := m.stageMap[stageID]
-		status := normalizedStageStatus(m.stageStatuses[stageID])
+	for index, stageID := range journey.StageOrder {
+		status := normalizedStageStatus(journey.Statuses[stageID])
 		prefix := lipgloss.NewStyle().Foreground(statusTone(status)).Render("•")
-		if stageID == progress.CurrentStageID {
+		if stageID == journey.CurrentStep {
 			prefix = lipgloss.NewStyle().Bold(true).Foreground(accentAltColor).Render(">")
 		}
 		sequence := lipgloss.NewStyle().Foreground(mutedColor).Render(fmt.Sprintf("%02d", index+1))
 		state := lipgloss.NewStyle().Foreground(statusTone(status)).Render(statusLabel(status))
-		title := lipgloss.NewStyle().Foreground(textColor).Render(stage.Title)
+		title := lipgloss.NewStyle().Foreground(textColor).Render(m.stageTitle(stageID))
 		line := lipgloss.JoinHorizontal(lipgloss.Center, prefix, " ", sequence, " ", state, " ", title)
 		lines = append(lines, truncateLine(line, innerWidth))
+	}
+	if len(journey.StageOrder) == 0 {
+		lines = append(lines, lipgloss.NewStyle().Foreground(mutedColor).Render("No stages selected yet"))
 	}
 	lines = limitLines(lines, lineBudget+1)
 	return m.panelStyle(width, height, surfaceColor).Render(strings.Join(lines, "\n"))
 }
 
-func (m model) renderLogPanel(width int, height int, currentStageID string) string {
-	innerWidth := panelInnerWidth(width)
-	lineBudget := maxInt(1, panelInnerHeight(height)-2)
+func (m model) renderOutputPanel(width int, height int, content string) string {
+	return m.panelStyle(width, height, surfaceAltColor).Render(content)
+}
+
+func (m model) standardOutputContent(content string) string {
+	lines := []string{lipgloss.NewStyle().Bold(true).Foreground(accentAltColor).Render("STANDARD OUTPUT")}
+	if strings.TrimSpace(content) != "" {
+		lines = append(lines, "", content)
+	}
+	return strings.Join(lines, "\n")
+}
+
+func (m model) executionOutput(currentStageID string) string {
 	lines := []string{lipgloss.NewStyle().Bold(true).Foreground(accentAltColor).Render("STANDARD OUTPUT")}
 	if currentStageID != "" {
-		lines = append(lines, lipgloss.NewStyle().Foreground(mutedColor).Render(truncateLine("Stage "+currentStageID, innerWidth)))
+		lines = append(lines, lipgloss.NewStyle().Foreground(mutedColor).Render("Stage "+currentStageID))
 	} else {
 		lines = append(lines, lipgloss.NewStyle().Foreground(mutedColor).Render("Stage waiting"))
 	}
 
-	logLines := filteredLogLines(m.tailedLogs, currentStageID, minInt(displayedLogLineLimit, lineBudget))
+	logLines := filteredLogLines(m.tailedLogs, currentStageID, displayedLogLineLimit)
 	if len(logLines) == 0 {
 		lines = append(lines, lipgloss.NewStyle().Foreground(mutedColor).Render("(waiting for events)"))
 	} else {
 		for _, line := range logLines {
-			lines = append(lines, lipgloss.NewStyle().Foreground(textColor).Render(truncateLine(line, innerWidth)))
+			lines = append(lines, lipgloss.NewStyle().Foreground(textColor).Render(line))
 		}
 	}
-	lines = limitLines(lines, lineBudget+1)
-	return m.panelStyle(width, height, surfaceAltColor).Render(strings.Join(lines, "\n"))
+	return strings.Join(lines, "\n")
 }
 
 func (m model) panelStyle(width int, height int, background lipgloss.TerminalColor) lipgloss.Style {
@@ -1709,7 +1775,7 @@ func (m model) executionProgress() executionProgress {
 		}
 		if status == string(stages.StatusRunning) {
 			progress.CurrentStageID = stageID
-			progress.CurrentStageTitle = m.stageMap[stageID].Title
+			progress.CurrentStageTitle = m.stageTitle(stageID)
 			progress.CurrentStageStatus = status
 			progress.CurrentStageIndex = index + 1
 		}
@@ -1723,13 +1789,13 @@ func (m model) executionProgress() executionProgress {
 		case firstPendingIndex >= 0:
 			stageID := m.stageOrder[firstPendingIndex]
 			progress.CurrentStageID = stageID
-			progress.CurrentStageTitle = m.stageMap[stageID].Title
+			progress.CurrentStageTitle = m.stageTitle(stageID)
 			progress.CurrentStageIndex = firstPendingIndex + 1
 		default:
 			lastIndex := len(m.stageOrder) - 1
 			stageID := m.stageOrder[lastIndex]
 			progress.CurrentStageID = stageID
-			progress.CurrentStageTitle = m.stageMap[stageID].Title
+			progress.CurrentStageTitle = m.stageTitle(stageID)
 			progress.CurrentStageStatus = normalizedStageStatus(m.stageStatuses[stageID])
 			progress.CurrentStageIndex = lastIndex + 1
 		}
@@ -1743,6 +1809,191 @@ func (m model) executionProgress() executionProgress {
 	}
 	progress.PercentComplete = progress.TerminalStages * 100 / maxInt(1, progress.TotalStages)
 	return progress
+}
+
+func (m model) executionDashboardStatus(progress executionProgress) dashboardStatus {
+	return dashboardStatus{
+		Title:       "LIVE STATUS",
+		Badge:       humanizeStatus(progress.CurrentStageStatus),
+		BadgeTone:   statusTone(progress.CurrentStageStatus),
+		Heading:     progress.CurrentStageTitle,
+		Summary:     fmt.Sprintf("%d of %d  %d finished", progress.CurrentStageIndex, progress.TotalStages, progress.CompletedStages),
+		ProgressPct: progress.PercentComplete,
+		Hint:        "q abort",
+		Spinner:     true,
+	}
+}
+
+func (m model) configurationDashboardStatus() dashboardStatus {
+	journey := m.previewJourney()
+	stepIndex, totalSteps := configurationStepPosition(m.screen)
+	badge := "Configuring"
+	badgeTone := accentAltColor
+	hint := "enter continue  b back  q quit"
+	if m.screen == screenReview {
+		badge = "Ready"
+		badgeTone = successColor
+		hint = "enter execute  b back  q quit"
+	} else if m.screen == screenWelcome {
+		badge = "Ready"
+		badgeTone = accentColor
+		hint = "enter continue  q quit"
+	}
+	return dashboardStatus{
+		Title:       "CONFIGURATION",
+		Badge:       badge,
+		BadgeTone:   badgeTone,
+		Heading:     screenTitle(m.screen),
+		Summary:     fmt.Sprintf("%d of %d  %d stages selected", stepIndex, totalSteps, len(journey.StageOrder)),
+		ProgressPct: stepIndex * 100 / maxInt(1, totalSteps),
+		Hint:        hint,
+	}
+}
+
+func (m model) failureDashboardStatus() dashboardStatus {
+	stageID := ""
+	attempt := 0
+	if m.failurePrompt != nil {
+		stageID = m.failurePrompt.StageID
+		attempt = m.failurePrompt.Attempt
+	}
+	heading := "Stage failure"
+	if stageID != "" {
+		heading = m.stageTitle(stageID)
+	}
+	return dashboardStatus{
+		Title:       "RUN STATUS",
+		Badge:       "Failed",
+		BadgeTone:   failureColor,
+		Heading:     heading,
+		Summary:     fmt.Sprintf("attempt %d  choose retry, skip, or abort", attempt),
+		ProgressPct: m.executionProgress().PercentComplete,
+		Hint:        "r retry  s skip  a abort",
+	}
+}
+
+func (m model) summaryDashboardStatus() dashboardStatus {
+	completed, skipped, failed := stageCounts(m.stageStatuses)
+	badge := "Completed"
+	badgeTone := successColor
+	heading := "Run finished"
+	if m.runErr != nil {
+		if errors.Is(m.runErr, execution.ErrAborted) || errors.Is(m.runErr, context.Canceled) {
+			badge = "Aborted"
+			badgeTone = warningColor
+			heading = "Run aborted"
+		} else {
+			badge = "Failed"
+			badgeTone = failureColor
+			heading = "Run failed"
+		}
+	}
+	return dashboardStatus{
+		Title:       "RUN STATUS",
+		Badge:       badge,
+		BadgeTone:   badgeTone,
+		Heading:     heading,
+		Summary:     fmt.Sprintf("%d completed  %d skipped  %d failed", completed, skipped, failed),
+		ProgressPct: m.executionProgress().PercentComplete,
+		Hint:        "enter exit  q quit",
+	}
+}
+
+func (m model) previewJourney() dashboardJourney {
+	if len(m.stageOrder) > 0 {
+		currentStep := ""
+		if m.executing || m.screen == screenFailure || m.screen == screenSummary {
+			currentStep = m.executionProgress().CurrentStageID
+		}
+		return dashboardJourney{
+			StageOrder:  slices.Clone(m.stageOrder),
+			Statuses:    cloneStatuses(m.stageStatuses),
+			CurrentStep: currentStep,
+		}
+	}
+
+	if m.resumeRun && m.current != nil && len(m.current.ResolvedPlan) > 0 {
+		return dashboardJourney{
+			StageOrder: slices.Clone(m.current.ResolvedPlan),
+			Statuses:   cloneStatuses(m.current.Stages),
+		}
+	}
+
+	plan, err := m.resolvePlan()
+	if err != nil {
+		plan = m.selectedStageIDs()
+	}
+	return dashboardJourney{
+		StageOrder: plan,
+		Statuses:   map[string]state.StageStatus{},
+	}
+}
+
+func cloneStatuses(statuses map[string]state.StageStatus) map[string]state.StageStatus {
+	if len(statuses) == 0 {
+		return map[string]state.StageStatus{}
+	}
+	cloned := make(map[string]state.StageStatus, len(statuses))
+	for key, value := range statuses {
+		cloned[key] = value
+	}
+	return cloned
+}
+
+func configurationStepPosition(current screen) (int, int) {
+	total := len(configurationScreenOrder)
+	for index, candidate := range configurationScreenOrder {
+		if current == candidate {
+			return index + 1, total
+		}
+	}
+	return total, total
+}
+
+func screenTitle(current screen) string {
+	switch current {
+	case screenWelcome:
+		return "Interactive Setup"
+	case screenMacOS:
+		return "Phase: MacOS Setup"
+	case screenInstall:
+		return "Phase: Install Apps/Packages"
+	case screenBrew:
+		return "Phase: Brew Catalog Selection"
+	case screenDevTools:
+		return "Phase: Dev Tools Setup"
+	case screenNodeToolchain:
+		return "Dev Tools: Node Toolchain"
+	case screenDockerRuntime:
+		return "Dev Tools: Docker Runtime"
+	case screenShellOptions:
+		return "Dev Tools: Shell Setup Options"
+	case screenGitConfig:
+		return "Dev Tools: Git Configuration"
+	case screenGitName:
+		return "Git Identity: user.name"
+	case screenGitEmail:
+		return "Git Identity: user.email"
+	case screenManual:
+		return "Phase: Manual Steps"
+	case screenReview:
+		return "Execution Plan Review"
+	case screenExecuting:
+		return "Executing Plan"
+	case screenFailure:
+		return "Stage Failure"
+	case screenSummary:
+		return "Run Summary"
+	default:
+		return "Laptop Setup"
+	}
+}
+
+func (m model) stageTitle(stageID string) string {
+	if stage, ok := m.stageMap[stageID]; ok && strings.TrimSpace(stage.Title) != "" {
+		return stage.Title
+	}
+	return stageID
 }
 
 func (m model) screenStyle(width int, height int) lipgloss.Style {
