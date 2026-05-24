@@ -214,6 +214,80 @@ func TestViewSummaryIncludesManualAppStoreReminders(t *testing.T) {
 	}
 }
 
+func TestWindowSizeMessageUpdatesViewState(t *testing.T) {
+	m := model{
+		gitNameInput:  textinput.New(),
+		gitEmailInput: textinput.New(),
+	}
+
+	next, _ := m.Update(tea.WindowSizeMsg{Width: 132, Height: 44})
+	updated, ok := next.(model)
+	if !ok {
+		t.Fatalf("expected model type after resize, got %T", next)
+	}
+	if updated.width != 132 || updated.height != 44 {
+		t.Fatalf("unexpected view size: %dx%d", updated.width, updated.height)
+	}
+	if updated.gitNameInput.Width == 0 || updated.gitEmailInput.Width == 0 {
+		t.Fatalf("expected text inputs to be resized, got name=%d email=%d", updated.gitNameInput.Width, updated.gitEmailInput.Width)
+	}
+}
+
+func TestViewExecutingRendersDashboardLayout(t *testing.T) {
+	m := model{
+		screen: screenExecuting,
+		width:  120,
+		height: 36,
+		stageOrder: []string{
+			"xcode_clt",
+			"brew_bundle",
+			"git_config",
+		},
+		stageMap: map[string]stages.Stage{
+			"xcode_clt":   {ID: "xcode_clt", Title: "Xcode Command Line Tools"},
+			"brew_bundle": {ID: "brew_bundle", Title: "Brew Bundle"},
+			"git_config":  {ID: "git_config", Title: "Git Configuration"},
+		},
+		stageStatuses: map[string]state.StageStatus{
+			"xcode_clt":   {Status: string(stages.StatusSuccess)},
+			"brew_bundle": {Status: string(stages.StatusRunning)},
+			"git_config":  {Status: string(stages.StatusPending)},
+		},
+		tailedLogs: []tailedLogLine{
+			{StageID: "xcode_clt", Line: "completed xcode"},
+			{StageID: "brew_bundle", Line: "installing go"},
+			{StageID: "brew_bundle", Line: "installing docker"},
+		},
+	}
+
+	view := m.View()
+
+	for _, fragment := range []string{
+		"SETUP JOURNEY",
+		"Laptop",
+		"Setup",
+		"LIVE STATUS",
+		"2 of 3",
+		"Overall Progress",
+		"33% complete",
+		"JOURNEY",
+		"STANDARD OUTPUT",
+		"Stage brew_bundle",
+		"Brew Bundle",
+		"installing go",
+	} {
+		if !strings.Contains(view, fragment) {
+			t.Fatalf("expected execution view to contain %q, got %q", fragment, view)
+		}
+	}
+	if strings.Contains(view, "+---") || strings.Contains(view, "|  Journey") {
+		t.Fatalf("expected borderless execution view, got %q", view)
+	}
+	if strings.Contains(view, "completed xcode") {
+		t.Fatalf("expected execution log view to filter to current stage, got %q", view)
+	}
+}
+
 type noOpRunner struct{}
 
 func (r *noOpRunner) Run(context.Context, runner.Command) (runner.Result, error) {
