@@ -270,7 +270,7 @@ func TestViewBrewSelectionRendersViewportInsteadOfFullList(t *testing.T) {
 	}
 
 	view := m.viewBrewSelection()
-	if !strings.Contains(view, "> [x] pkg-15 (brew)") {
+	if !strings.Contains(view, fmt.Sprintf("> %s pkg-15 (brew)", selectionMarker(true))) {
 		t.Fatalf("expected current cursor row to be visible, got %q", view)
 	}
 	if strings.Contains(view, "pkg-00 (brew)") {
@@ -476,6 +476,31 @@ func TestViewConfigurationUsesDashboardLayoutWithJourneyPreview(t *testing.T) {
 		if !strings.Contains(view, fragment) {
 			t.Fatalf("expected configuration view to contain %q, got %q", fragment, view)
 		}
+	}
+}
+
+func TestViewPhaseConfigurationOmitsPhasePrefix(t *testing.T) {
+	m := model{
+		screen: screenDevTools,
+		width:  120,
+		height: 36,
+		catalog: []stages.Stage{
+			{ID: "vite_plus_install", Title: "Vite+ Install"},
+		},
+		stageMap: map[string]stages.Stage{
+			"vite_plus_install": {ID: "vite_plus_install", Title: "Vite+ Install"},
+		},
+		devOptions: []toggleOption{
+			{ID: "vite_plus_install", Title: "Vite+ Install", Selected: true},
+		},
+	}
+
+	view := m.View()
+	if strings.Contains(view, "Phase:") {
+		t.Fatalf("expected phase prefix to be omitted, got %q", view)
+	}
+	if got := strings.Count(view, "Dev Tools Setup"); got < 2 {
+		t.Fatalf("expected status and output panels to show Dev Tools Setup, count=%d view=%q", got, view)
 	}
 }
 

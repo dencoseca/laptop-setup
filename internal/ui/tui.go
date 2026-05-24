@@ -699,13 +699,13 @@ func (m model) View() string {
 	case screenWelcome:
 		content = m.viewWelcome()
 	case screenMacOS:
-		content = m.viewToggleOptions("Phase: MacOS Setup", m.macOSOptions)
+		content = m.viewToggleOptions("MacOS Setup", m.macOSOptions)
 	case screenInstall:
-		content = m.viewToggleOptions("Phase: Install Apps/Packages", m.installOptions)
+		content = m.viewToggleOptions("Install Apps/Packages", m.installOptions)
 	case screenBrew:
 		content = m.viewBrewSelection()
 	case screenDevTools:
-		content = m.viewToggleOptions("Phase: Dev Tools Setup", m.devOptions)
+		content = m.viewToggleOptions("Dev Tools Setup", m.devOptions)
 	case screenNodeToolchain:
 		content = m.viewSelectOptions("Dev Tools: Node Toolchain", m.nodeOptions, m.nodeSelection)
 	case screenDockerRuntime:
@@ -719,7 +719,7 @@ func (m model) View() string {
 	case screenGitEmail:
 		content = m.viewTextInput("Git Identity: user.email", "Enter git user.email, then press Enter.", m.gitEmailInput)
 	case screenManual:
-		content = m.viewToggleOptions("Phase: Manual Steps", m.manualOptions)
+		content = m.viewToggleOptions("Manual Steps", m.manualOptions)
 	case screenReview:
 		content = m.viewReview()
 	case screenExecuting:
@@ -759,11 +759,7 @@ func (m model) viewToggleOptions(title string, options []toggleOption) string {
 		if m.cursor == index {
 			prefix = "> "
 		}
-		selected := " "
-		if option.Selected {
-			selected = "x"
-		}
-		fmt.Fprintf(&b, "%s[%s] %s (%s)\n", prefix, selected, option.Title, option.ID)
+		fmt.Fprintf(&b, "%s%s %s (%s)\n", prefix, selectionMarker(option.Selected), option.Title, option.ID)
 	}
 	return b.String()
 }
@@ -777,11 +773,7 @@ func (m model) viewSelectOptions(title string, options []selectOption, selected 
 		if m.cursor == index {
 			prefix = "> "
 		}
-		current := " "
-		if selected == index {
-			current = "x"
-		}
-		fmt.Fprintf(&b, "%s[%s] %s\n", prefix, current, option.Title)
+		fmt.Fprintf(&b, "%s%s %s\n", prefix, selectionMarker(selected == index), option.Title)
 		if option.Description != "" {
 			fmt.Fprintf(&b, "    %s\n", option.Description)
 		}
@@ -791,7 +783,7 @@ func (m model) viewSelectOptions(title string, options []selectOption, selected 
 
 func (m model) viewBrewSelection() string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "%s\n", lipgloss.NewStyle().Bold(true).Render("Phase: Brew Catalog Selection"))
+	fmt.Fprintf(&b, "%s\n", lipgloss.NewStyle().Bold(true).Render("Brew Catalog Selection"))
 	fmt.Fprintf(&b, "Space toggles. Enter continues, b goes back.\n\n")
 
 	if len(m.brewEntries) == 0 {
@@ -812,11 +804,7 @@ func (m model) viewBrewSelection() string {
 		if m.cursor == index {
 			prefix = "> "
 		}
-		selected := " "
-		if m.brewSelected[entry.ID] {
-			selected = "x"
-		}
-		fmt.Fprintf(&b, "%s[%s] %s (%s)\n", prefix, selected, entry.ID, entry.Kind)
+		fmt.Fprintf(&b, "%s%s %s (%s)\n", prefix, selectionMarker(m.brewSelected[entry.ID]), entry.ID, entry.Kind)
 	}
 
 	if hasMoreBelow {
@@ -844,11 +832,7 @@ func (m model) viewGitConfigMode() string {
 		if m.cursor == index {
 			prefix = "> "
 		}
-		selected := " "
-		if m.gitModeSelection == index {
-			selected = "x"
-		}
-		fmt.Fprintf(&b, "%s[%s] %s\n", prefix, selected, option.Title)
+		fmt.Fprintf(&b, "%s%s %s\n", prefix, selectionMarker(m.gitModeSelection == index), option.Title)
 		if option.Description != "" {
 			fmt.Fprintf(&b, "    %s\n", option.Description)
 		}
@@ -866,6 +850,13 @@ func (m model) viewTextInput(title string, subtitle string, input textinput.Mode
 	}
 	fmt.Fprintf(&b, "\nPress Enter to continue, b to go back.")
 	return b.String()
+}
+
+func selectionMarker(selected bool) string {
+	if selected {
+		return lipgloss.NewStyle().Bold(true).Foreground(successColor).Render("✓")
+	}
+	return " "
 }
 
 func (m *model) viewReview() string {
@@ -2003,13 +1994,13 @@ func screenTitle(current screen) string {
 	case screenWelcome:
 		return "Interactive Setup"
 	case screenMacOS:
-		return "Phase: MacOS Setup"
+		return "MacOS Setup"
 	case screenInstall:
-		return "Phase: Install Apps/Packages"
+		return "Install Apps/Packages"
 	case screenBrew:
-		return "Phase: Brew Catalog Selection"
+		return "Brew Catalog Selection"
 	case screenDevTools:
-		return "Phase: Dev Tools Setup"
+		return "Dev Tools Setup"
 	case screenNodeToolchain:
 		return "Dev Tools: Node Toolchain"
 	case screenDockerRuntime:
@@ -2023,7 +2014,7 @@ func screenTitle(current screen) string {
 	case screenGitEmail:
 		return "Git Identity: user.email"
 	case screenManual:
-		return "Phase: Manual Steps"
+		return "Manual Steps"
 	case screenReview:
 		return "Execution Plan Review"
 	case screenExecuting:
