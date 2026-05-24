@@ -785,8 +785,13 @@ func (m model) viewBrewSelection() string {
 		return b.String()
 	}
 
-	visibleCount := m.brewVisibleCount()
+	visibleCount := m.brewVisibleCount(len(m.brewEntries))
 	start, end := brewViewportRange(len(m.brewEntries), m.cursor, visibleCount)
+	hasMoreAbove := start > 0
+	hasMoreBelow := end < len(m.brewEntries)
+	if hasMoreAbove {
+		fmt.Fprintln(&b, "  ...")
+	}
 	for index := start; index < end; index++ {
 		entry := m.brewEntries[index]
 		prefix := "  "
@@ -799,14 +804,11 @@ func (m model) viewBrewSelection() string {
 		}
 		fmt.Fprintf(&b, "%s[%s] %s (%s)\n", prefix, selected, entry.ID, entry.Kind)
 	}
-	fmt.Fprintf(
-		&b,
-		"\nShowing %d-%d of %d | Selected: %d",
-		start+1,
-		end,
-		len(m.brewEntries),
-		len(m.selectedBrewIDs()),
-	)
+
+	if hasMoreBelow {
+		fmt.Fprintln(&b, "  ...")
+	}
+	fmt.Fprintln(&b)
 	return b.String()
 }
 
@@ -2132,13 +2134,19 @@ func truncateLine(value string, width int) string {
 	return value[:width-3] + "..."
 }
 
-func (m model) brewVisibleCount() int {
-	// Standard output panel includes a fixed "STANDARD OUTPUT" header line and a blank spacer line.
-	// This screen content then adds title/instructions and one summary line.
-	const reservedLines = 6
+func (m model) brewVisibleCount(total int) int {
+	// Line budget in output panel:
+	// - STANDARD OUTPUT heading + spacer = 2
+	// - Brew title + instruction + spacer = 3
+	// - Optional top/bottom overflow markers + trailing spacer = 3
+	const reservedLines = 8
+
 	visible := m.outputPanelLineBudget() - reservedLines
 	if visible < 1 {
-		return 1
+		visible = 1
+	}
+	if total > 0 && visible > total {
+		return total
 	}
 	return visible
 }

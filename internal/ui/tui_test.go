@@ -279,8 +279,46 @@ func TestViewBrewSelectionRendersViewportInsteadOfFullList(t *testing.T) {
 	if strings.Contains(view, "pkg-29 (brew)") {
 		t.Fatalf("expected trailing rows to be outside viewport, got %q", view)
 	}
-	if !strings.Contains(view, "Showing 9-22 of 30 | Selected: 1") {
-		t.Fatalf("expected viewport/selection summary, got %q", view)
+	if strings.Contains(view, "More: ^") {
+		t.Fatalf("expected verbose offscreen indicator to be removed, got %q", view)
+	}
+	if !strings.Contains(view, "Space toggles. Enter continues, b goes back.\n\n  ...\n") {
+		t.Fatalf("expected top ellipsis when rows are hidden above, got %q", view)
+	}
+	if !strings.Contains(view, "pkg-20 (brew)\n  ...\n\n") {
+		t.Fatalf("expected bottom ellipsis and trailing spacing, got %q", view)
+	}
+	if strings.Contains(view, "Showing ") || strings.Contains(view, "Selected: ") {
+		t.Fatalf("expected summary footer to be removed, got %q", view)
+	}
+}
+
+func TestViewBrewSelectionHidesEllipsisAtEndOfList(t *testing.T) {
+	entries := make([]stages.BrewEntry, 0, 24)
+	selected := map[string]bool{}
+	for index := 0; index < 24; index++ {
+		id := fmt.Sprintf("pkg-%02d", index)
+		entries = append(entries, stages.BrewEntry{ID: id, Kind: "brew"})
+		selected[id] = true
+	}
+
+	m := model{
+		width:        120,
+		height:       36,
+		cursor:       23,
+		brewEntries:  entries,
+		brewSelected: selected,
+	}
+
+	view := m.viewBrewSelection()
+	if !strings.Contains(view, "Space toggles. Enter continues, b goes back.\n\n  ...\n") {
+		t.Fatalf("expected top ellipsis when rows are hidden above, got %q", view)
+	}
+	if strings.Contains(view, "pkg-23 (brew)\n  ...\n\n") {
+		t.Fatalf("expected no bottom ellipsis when at list end, got %q", view)
+	}
+	if strings.Contains(view, "Showing ") || strings.Contains(view, "Selected: ") {
+		t.Fatalf("expected end-of-list summary footer removed, got %q", view)
 	}
 }
 
