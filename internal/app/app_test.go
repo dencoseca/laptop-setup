@@ -169,16 +169,16 @@ func TestRunNonInteractiveEndToEndPath(t *testing.T) {
 		t.Fatal("expected persisted run state")
 	}
 
-	if !slices.Equal(loaded.ResolvedPlan, []string{"first", "second"}) {
+	if !slices.Equal(loaded.ResolvedPlan, []state.StageID{"first", "second"}) {
 		t.Fatalf("resolved plan mismatch: %v", loaded.ResolvedPlan)
 	}
 	if !slices.Equal(loaded.SelectedIDs, []string{"go", "warp"}) {
 		t.Fatalf("selected brew ids mismatch: %v", loaded.SelectedIDs)
 	}
-	if status := loaded.Stages["first"].Status; status != string(stages.StatusSuccess) {
+	if status := loaded.Stages["first"].Status; status != stages.StatusSuccess {
 		t.Fatalf("first stage status mismatch: %q", status)
 	}
-	if status := loaded.Stages["second"].Status; status != string(stages.StatusAlreadyDone) {
+	if status := loaded.Stages["second"].Status; status != stages.StatusAlreadyDone {
 		t.Fatalf("second stage status mismatch: %q", status)
 	}
 	if got := stages.NodeToolchainFromDecisions(loaded.Decisions); got != stages.NodeToolchainVitePlus {
@@ -232,8 +232,8 @@ func TestRunNonInteractiveResumeRejectsUnknownStageID(t *testing.T) {
 	current := &state.RunState{
 		RunID:        "run-1",
 		Mode:         "normal",
-		ResolvedPlan: []string{"missing"},
-		Stages:       map[string]state.StageStatus{},
+		ResolvedPlan: []state.StageID{"missing"},
+		Stages:       map[state.StageID]state.StageStatus{},
 	}
 
 	var stdout bytes.Buffer
@@ -285,8 +285,8 @@ func TestRunNonInteractiveResumeRejectsNormalRunAsDryRun(t *testing.T) {
 	current := &state.RunState{
 		RunID:        "run-1",
 		Mode:         "normal",
-		ResolvedPlan: []string{"known"},
-		Stages:       map[string]state.StageStatus{},
+		ResolvedPlan: []state.StageID{"known"},
+		Stages:       map[state.StageID]state.StageStatus{},
 	}
 
 	var stdout bytes.Buffer

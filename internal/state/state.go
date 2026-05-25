@@ -2,16 +2,16 @@ package state
 
 import (
 	"context"
-	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
-	"sync/atomic"
 	"time"
+
+	"github.com/dencoseca/laptop-setup/internal/domain/setup"
+	"github.com/dencoseca/laptop-setup/internal/stages"
 )
 
 const (
@@ -19,43 +19,41 @@ const (
 	relativeRunsDir   = ".laptop-setup/runs"
 )
 
-var (
-	validRunIDPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]*$`)
-	runIDFallbackSeq  atomic.Uint64
+type RunID = setup.RunID
+type Mode = setup.Mode
+type StageID = setup.StageID
+type StageStatusValue = setup.StageStatus
+
+const (
+	ModeNormal Mode = setup.ModeNormal
+	ModeDryRun Mode = setup.ModeDryRun
+
+	StageStatusPending          StageStatusValue = setup.StageStatusPending
+	StageStatusRunning          StageStatusValue = setup.StageStatusRunning
+	StageStatusSuccess          StageStatusValue = setup.StageStatusSuccess
+	StageStatusSkipped          StageStatusValue = setup.StageStatusSkipped
+	StageStatusFailed           StageStatusValue = setup.StageStatusFailed
+	StageStatusAlreadyDone      StageStatusValue = setup.StageStatusAlreadyDone
+	StageStatusSimulatedSuccess StageStatusValue = setup.StageStatusSimulatedSuccess
 )
 
-var validRunModes = map[string]struct{}{
-	"normal":  {},
-	"dry-run": {},
-}
-
-var validStageStatuses = map[string]struct{}{
-	"pending":           {},
-	"running":           {},
-	"success":           {},
-	"skipped":           {},
-	"failed":            {},
-	"already_done":      {},
-	"simulated_success": {},
-}
-
 type StageStatus struct {
-	Status    string `json:"status"`
-	Attempts  int    `json:"attempts"`
-	LastError string `json:"last_error,omitempty"`
+	Status    StageStatusValue `json:"status"`
+	Attempts  int              `json:"attempts"`
+	LastError string           `json:"last_error,omitempty"`
 }
 
 type RunState struct {
-	RunID         string                 `json:"run_id"`
-	StartAt       time.Time              `json:"start_at"`
-	EndAt         *time.Time             `json:"end_at,omitempty"`
-	Mode          string                 `json:"mode"`
-	Decisions     map[string]any         `json:"decisions,omitempty"`
-	SelectedIDs   []string               `json:"selected_ids,omitempty"`
-	ResolvedPlan  []string               `json:"resolved_plan"`
-	Stages        map[string]StageStatus `json:"stages"`
-	LastFailure   string                 `json:"last_failure,omitempty"`
-	GeneratedFile string                 `json:"generated_file,omitempty"`
+	RunID         RunID                   `json:"run_id"`
+	StartAt       time.Time               `json:"start_at"`
+	EndAt         *time.Time              `json:"end_at,omitempty"`
+	Mode          Mode                    `json:"mode"`
+	Decisions     stages.DecisionSet      `json:"decisions,omitempty"`
+	SelectedIDs   []string                `json:"selected_ids,omitempty"`
+	ResolvedPlan  []StageID               `json:"resolved_plan"`
+	Stages        map[StageID]StageStatus `json:"stages"`
+	LastFailure   string                  `json:"last_failure,omitempty"`
+	GeneratedFile string                  `json:"generated_file,omitempty"`
 }
 
 type Store struct {
@@ -82,82 +80,70 @@ func RunsDir() (string, error) {
 	return filepath.Join(home, relativeRunsDir), nil
 }
 
-func RunDir(runID string) (string, error) {
-	if err := validateRunID(runID); err != nil {
+func RunDir(runID RunID) (string, error) {
+	if err := runID.Validate(); err != nil {
 		return "", err
 	}
 	runsDir, err := RunsDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(runsDir, runID), nil
+	return filepath.Join(runsDir, runID.String()), nil
 }
 
-func NewRunID(now time.Time) string {
-	utc := now.UTC()
-	timestamp := fmt.Sprintf("%s%09dZ", utc.Format("20060102T150405"), utc.Nanosecond())
-	var suffix [8]byte
-	if _, err := rand.Read(suffix[:]); err != nil {
-		return fmt.Sprintf("%s-%016x", timestamp, runIDFallbackSeq.Add(1))
-	}
-	return fmt.Sprintf("%s-%x", timestamp, suffix)
+func NewRunID(now time.Time) RunID {
+	return setup.NewRunID(now)
 }
 
-func validateRunID(runID string) error {
-	if runID == "" {
-		return errors.New("run id is required")
-	}
-	if filepath.IsAbs(runID) {
-		return fmt.Errorf("run id must be relative: %q", runID)
-	}
-	if strings.Contains(runID, "/") || strings.Contains(runID, `\`) {
-		return fmt.Errorf("run id must not contain path separators: %q", runID)
-	}
-	if !validRunIDPattern.MatchString(runID) {
-		return fmt.Errorf("run id contains invalid characters: %q", runID)
-	}
-	if filepath.Clean(runID) != runID {
-		return fmt.Errorf("run id must be clean: %q", runID)
-	}
-	return nil
+func ModeFromDryRun(dryRun bool) Mode {
+	return setup.ModeFromDryRun(dryRun)
+}
+
+func IsTerminalStatus(status StageStatusValue) bool {
+	return setup.IsTerminalStatus(status)
 }
 
 func ValidateRunState(run *RunState) error {
 	if run == nil {
 		return errors.New("field run_state: is required")
 	}
-	if err := validateRunID(run.RunID); err != nil {
+	if err := run.RunID.Validate(); err != nil {
 		return fmt.Errorf("field run_id: %w", err)
 	}
-	if _, ok := validRunModes[run.Mode]; !ok {
-		return fmt.Errorf("field mode: unknown value %q", run.Mode)
+	if err := run.Mode.Validate(); err != nil {
+		return fmt.Errorf("field mode: %w", err)
 	}
 	if len(run.ResolvedPlan) == 0 {
 		return errors.New("field resolved_plan: must contain at least one stage id")
 	}
-	seenPlanIDs := make(map[string]struct{}, len(run.ResolvedPlan))
+	seenPlanIDs := make(map[StageID]struct{}, len(run.ResolvedPlan))
 	for index, stageID := range run.ResolvedPlan {
-		normalized := strings.TrimSpace(stageID)
-		if normalized == "" {
-			return fmt.Errorf("field resolved_plan[%d]: stage id is required", index)
-		}
-		if normalized != stageID {
-			return fmt.Errorf("field resolved_plan[%d]: stage id must not have surrounding whitespace", index)
+		if err := stageID.Validate(); err != nil {
+			return fmt.Errorf("field resolved_plan[%d]: %w", index, err)
 		}
 		if _, seen := seenPlanIDs[stageID]; seen {
 			return fmt.Errorf("field resolved_plan[%d]: duplicate stage id %q", index, stageID)
 		}
 		seenPlanIDs[stageID] = struct{}{}
 	}
+	if run.Decisions.IsZero() {
+		run.Decisions = stages.DefaultDecisions().WithSelectedStageIDs(run.ResolvedPlan)
+	}
+	if len(run.Decisions.SelectedStageIDs) == 0 {
+		run.Decisions = run.Decisions.WithSelectedStageIDs(run.ResolvedPlan)
+	}
+	if err := run.Decisions.Validate(); err != nil {
+		return fmt.Errorf("field decisions: %w", err)
+	}
 	for stageID, status := range run.Stages {
-		if strings.TrimSpace(stageID) == "" {
-			return errors.New("field stages: stage id is required")
+		if err := stageID.Validate(); err != nil {
+			return fmt.Errorf("field stages: %w", err)
 		}
-		if strings.TrimSpace(status.Status) == "" {
+		if strings.TrimSpace(status.Status.String()) == "" {
 			return fmt.Errorf("field stages.%s.status: status is required", stageID)
 		}
-		if _, ok := validStageStatuses[status.Status]; !ok {
-			return fmt.Errorf("field stages.%s.status: unknown value %q", stageID, status.Status)
+		if err := status.Status.Validate(); err != nil {
+			return fmt.Errorf("field stages.%s.status: %w", stageID, err)
 		}
 		if status.Attempts < 0 {
 			return fmt.Errorf("field stages.%s.attempts: must be non-negative", stageID)
@@ -171,7 +157,7 @@ func ValidateRunState(run *RunState) error {
 	return nil
 }
 
-func validateGeneratedFile(runID string, path string) error {
+func validateGeneratedFile(runID RunID, path string) error {
 	if !filepath.IsAbs(path) {
 		return fmt.Errorf("must be an absolute path inside the run directory: %q", path)
 	}

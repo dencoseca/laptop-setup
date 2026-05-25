@@ -11,26 +11,27 @@ type PlanOptions struct {
 	SkipIDs []string
 }
 
-func ResolvePlan(catalog []Stage, options PlanOptions) ([]string, error) {
+func ResolvePlan(catalog []Stage, options PlanOptions) ([]StageID, error) {
 	ids := IDs(catalog)
-	index := make(map[string]int, len(ids))
+	index := make(map[StageID]int, len(ids))
 	for i, id := range ids {
 		index[id] = i
 	}
 
-	plan := make([]string, 0, len(ids))
+	plan := make([]StageID, 0, len(ids))
 
 	if len(options.OnlyIDs) > 0 {
-		onlySet := make(map[string]struct{}, len(options.OnlyIDs))
+		onlySet := make(map[StageID]struct{}, len(options.OnlyIDs))
 		for _, id := range options.OnlyIDs {
 			normalized := strings.TrimSpace(id)
 			if normalized == "" {
 				continue
 			}
-			if _, ok := index[normalized]; !ok {
+			stageID := StageID(normalized)
+			if _, ok := index[stageID]; !ok {
 				return nil, fmt.Errorf("unknown stage id in --only: %s", normalized)
 			}
-			onlySet[normalized] = struct{}{}
+			onlySet[stageID] = struct{}{}
 		}
 		for _, id := range ids {
 			if _, ok := onlySet[id]; ok {
@@ -42,12 +43,13 @@ func ResolvePlan(catalog []Stage, options PlanOptions) ([]string, error) {
 	}
 
 	if from := strings.TrimSpace(options.FromID); from != "" {
-		fromIndex, ok := index[from]
+		fromID := StageID(from)
+		fromIndex, ok := index[fromID]
 		if !ok {
 			return nil, fmt.Errorf("unknown stage id in --from: %s", from)
 		}
 
-		filtered := make([]string, 0, len(plan))
+		filtered := make([]StageID, 0, len(plan))
 		for _, id := range plan {
 			if index[id] >= fromIndex {
 				filtered = append(filtered, id)
@@ -57,19 +59,20 @@ func ResolvePlan(catalog []Stage, options PlanOptions) ([]string, error) {
 	}
 
 	if len(options.SkipIDs) > 0 {
-		skipSet := make(map[string]struct{}, len(options.SkipIDs))
+		skipSet := make(map[StageID]struct{}, len(options.SkipIDs))
 		for _, id := range options.SkipIDs {
 			normalized := strings.TrimSpace(id)
 			if normalized == "" {
 				continue
 			}
-			if _, ok := index[normalized]; !ok {
+			stageID := StageID(normalized)
+			if _, ok := index[stageID]; !ok {
 				return nil, fmt.Errorf("unknown stage id in --skip: %s", normalized)
 			}
-			skipSet[normalized] = struct{}{}
+			skipSet[stageID] = struct{}{}
 		}
 
-		filtered := make([]string, 0, len(plan))
+		filtered := make([]StageID, 0, len(plan))
 		for _, id := range plan {
 			if _, skip := skipSet[id]; skip {
 				continue

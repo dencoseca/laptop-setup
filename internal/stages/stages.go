@@ -11,21 +11,23 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/dencoseca/laptop-setup/internal/domain/setup"
 	"github.com/dencoseca/laptop-setup/internal/runner"
 )
 
 var brewEntryPattern = regexp.MustCompile(`^\s*(brew|cask)\s+"([^"]+)"`)
 
-type Status string
+type StageID = setup.StageID
+type Status = setup.StageStatus
 
 const (
-	StatusPending          Status = "pending"
-	StatusRunning          Status = "running"
-	StatusSuccess          Status = "success"
-	StatusSkipped          Status = "skipped"
-	StatusFailed           Status = "failed"
-	StatusAlreadyDone      Status = "already_done"
-	StatusSimulatedSuccess Status = "simulated_success"
+	StatusPending          Status = setup.StageStatusPending
+	StatusRunning          Status = setup.StageStatusRunning
+	StatusSuccess          Status = setup.StageStatusSuccess
+	StatusSkipped          Status = setup.StageStatusSkipped
+	StatusFailed           Status = setup.StageStatusFailed
+	StatusAlreadyDone      Status = setup.StageStatusAlreadyDone
+	StatusSimulatedSuccess Status = setup.StageStatusSimulatedSuccess
 )
 
 const (
@@ -53,14 +55,14 @@ type ExecutionContext struct {
 	DryRun                   bool
 	Runner                   runner.CommandRunner
 	Logger                   EventLogger
-	RunID                    string
-	Mode                     string
-	StageID                  string
+	RunID                    setup.RunID
+	Mode                     setup.Mode
+	StageID                  StageID
 	Attempt                  int
 	RunDir                   string
 	RepoRoot                 string
 	HomeDir                  string
-	Decisions                map[string]any
+	Decisions                DecisionSet
 	SelectedBrewIDs          []string
 	GeneratedBrewfilePath    string
 	SetGeneratedBrewfilePath func(path string)
@@ -70,7 +72,7 @@ type CheckFunc func(context.Context, ExecutionContext) (CheckResult, error)
 type RunFunc func(context.Context, ExecutionContext) error
 
 type Stage struct {
-	ID           string
+	ID           StageID
 	Title        string
 	Description  string
 	DecisionDeps []string
@@ -209,8 +211,8 @@ func DefaultCatalog() []Stage {
 	}
 }
 
-func IDs(catalog []Stage) []string {
-	ids := make([]string, 0, len(catalog))
+func IDs(catalog []Stage) []StageID {
+	ids := make([]StageID, 0, len(catalog))
 	for _, stage := range catalog {
 		ids = append(ids, stage.ID)
 	}
@@ -601,10 +603,10 @@ func runCommand(ctx context.Context, execCtx ExecutionContext, command runner.Co
 
 	if execCtx.Logger != nil {
 		if err := execCtx.Logger.Log(runner.Event{
-			RunID:     execCtx.RunID,
-			StageID:   execCtx.StageID,
+			RunID:     execCtx.RunID.String(),
+			StageID:   execCtx.StageID.String(),
 			Attempt:   execCtx.Attempt,
-			Mode:      execCtx.Mode,
+			Mode:      execCtx.Mode.String(),
 			EventType: "command_started",
 			Command:   command.String(),
 		}); err != nil {
@@ -623,10 +625,10 @@ func runCommand(ctx context.Context, execCtx ExecutionContext, command runner.Co
 
 		exitCode := result.ExitCode
 		event := runner.Event{
-			RunID:     execCtx.RunID,
-			StageID:   execCtx.StageID,
+			RunID:     execCtx.RunID.String(),
+			StageID:   execCtx.StageID.String(),
 			Attempt:   execCtx.Attempt,
-			Mode:      execCtx.Mode,
+			Mode:      execCtx.Mode.String(),
 			EventType: "command_completed",
 			Command:   command.String(),
 			ExitCode:  &exitCode,
@@ -658,10 +660,10 @@ func logCommandOutput(execCtx ExecutionContext, eventType string, output string)
 			message = "<blank>"
 		}
 		event := runner.Event{
-			RunID:     execCtx.RunID,
-			StageID:   execCtx.StageID,
+			RunID:     execCtx.RunID.String(),
+			StageID:   execCtx.StageID.String(),
 			Attempt:   execCtx.Attempt,
-			Mode:      execCtx.Mode,
+			Mode:      execCtx.Mode.String(),
 			EventType: eventType,
 			Message:   message,
 		}
@@ -694,10 +696,10 @@ func logSimulation(execCtx ExecutionContext, message string) error {
 		return nil
 	}
 	return execCtx.Logger.Log(runner.Event{
-		RunID:     execCtx.RunID,
-		StageID:   execCtx.StageID,
+		RunID:     execCtx.RunID.String(),
+		StageID:   execCtx.StageID.String(),
 		Attempt:   execCtx.Attempt,
-		Mode:      execCtx.Mode,
+		Mode:      execCtx.Mode.String(),
 		EventType: "simulation",
 		Message:   message,
 	})
@@ -708,10 +710,10 @@ func logStageMessage(execCtx ExecutionContext, message string) error {
 		return nil
 	}
 	return execCtx.Logger.Log(runner.Event{
-		RunID:     execCtx.RunID,
-		StageID:   execCtx.StageID,
+		RunID:     execCtx.RunID.String(),
+		StageID:   execCtx.StageID.String(),
 		Attempt:   execCtx.Attempt,
-		Mode:      execCtx.Mode,
+		Mode:      execCtx.Mode.String(),
 		EventType: "stage_message",
 		Message:   message,
 	})

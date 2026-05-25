@@ -1,37 +1,115 @@
 package stages
 
-import "testing"
+import (
+	"strings"
+	"testing"
 
-func TestNormalizeDecisionsAppliesDefaultsAndValidation(t *testing.T) {
-	normalized := NormalizeDecisions(map[string]any{
-		DecisionNodeToolchain:       "invalid",
-		DecisionDockerRuntime:       "invalid",
-		DecisionShellInstallOhMyZsh: false,
-		DecisionShellApplyZshrc:     "wrong-type",
-		DecisionGitConfigMode:       GitConfigModeCustom,
-		DecisionGitUserName:         "  Alice  ",
-		DecisionGitUserEmail:        " alice@example.com ",
-	})
+	"github.com/dencoseca/laptop-setup/internal/domain/setup"
+)
 
-	if normalized[DecisionNodeToolchain] != NodeToolchainVitePlus {
-		t.Fatalf("expected default node toolchain, got %v", normalized[DecisionNodeToolchain])
+func TestDecisionSetFromMap(t *testing.T) {
+	cases := []struct {
+		name    string
+		values  map[string]any
+		want    DecisionSet
+		wantErr string
+	}{
+		{
+			name: "defaults missing values",
+			values: map[string]any{
+				DecisionSelectedStageIDs: []any{"xcode_clt", "brew_bundle"},
+			},
+			want: DefaultDecisions().WithSelectedStageIDs([]setup.StageID{"xcode_clt", "brew_bundle"}),
+		},
+		{
+			name: "valid overrides",
+			values: map[string]any{
+				DecisionNodeToolchain:       string(NodeToolchainNvmPnpm),
+				DecisionDockerRuntime:       string(DockerRuntimeColima),
+				DecisionShellInstallOhMyZsh: false,
+				DecisionShellApplyZshrc:     true,
+				DecisionShellApplyStarship:  false,
+				DecisionGitConfigMode:       string(GitConfigModeTemplate),
+				DecisionGitUserName:         "  Alice  ",
+				DecisionGitUserEmail:        " alice@example.com ",
+			},
+			want: DecisionSet{
+				NodeToolchain:       NodeToolchainNvmPnpm,
+				DockerRuntime:       DockerRuntimeColima,
+				ShellInstallOhMyZsh: false,
+				ShellApplyZshrc:     true,
+				ShellApplyStarship:  false,
+				GitConfigMode:       GitConfigModeTemplate,
+				GitUserName:         "Alice",
+				GitUserEmail:        "alice@example.com",
+			},
+		},
+		{
+			name: "invalid enum rejected",
+			values: map[string]any{
+				DecisionNodeToolchain: "invalid",
+			},
+			wantErr: DecisionNodeToolchain,
+		},
+		{
+			name: "invalid bool type rejected",
+			values: map[string]any{
+				DecisionShellApplyZshrc: "wrong-type",
+			},
+			wantErr: DecisionShellApplyZshrc,
+		},
+		{
+			name: "custom git identity requires name",
+			values: map[string]any{
+				DecisionGitConfigMode: string(GitConfigModeCustom),
+				DecisionGitUserEmail:  "alice@example.com",
+			},
+			wantErr: DecisionGitUserName,
+		},
+		{
+			name: "unknown key rejected",
+			values: map[string]any{
+				"unknown": true,
+			},
+			wantErr: "unknown decision key",
+		},
 	}
-	if normalized[DecisionDockerRuntime] != DockerRuntimeColima {
-		t.Fatalf("expected default docker runtime, got %v", normalized[DecisionDockerRuntime])
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := DecisionSetFromMap(tc.values)
+			if tc.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+					t.Fatalf("expected error containing %q, got %v", tc.wantErr, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("DecisionSetFromMap returned error: %v", err)
+			}
+			if got.NodeToolchain != tc.want.NodeToolchain ||
+				got.DockerRuntime != tc.want.DockerRuntime ||
+				got.ShellInstallOhMyZsh != tc.want.ShellInstallOhMyZsh ||
+				got.ShellApplyZshrc != tc.want.ShellApplyZshrc ||
+				got.ShellApplyStarship != tc.want.ShellApplyStarship ||
+				got.GitConfigMode != tc.want.GitConfigMode ||
+				got.GitUserName != tc.want.GitUserName ||
+				got.GitUserEmail != tc.want.GitUserEmail {
+				t.Fatalf("decision mismatch: got=%+v want=%+v", got, tc.want)
+			}
+		})
 	}
-	if normalized[DecisionShellInstallOhMyZsh] != false {
-		t.Fatalf("expected shell install override to persist, got %v", normalized[DecisionShellInstallOhMyZsh])
+}
+
+func TestDecisionSetToMapPreservesJSONKeys(t *testing.T) {
+	decisions := DefaultDecisions().WithSelectedStageIDs([]setup.StageID{"xcode_clt"})
+	decisions.NodeToolchain = NodeToolchainNvmPnpm
+
+	out := decisions.ToMap()
+	if out[DecisionNodeToolchain] != string(NodeToolchainNvmPnpm) {
+		t.Fatalf("node toolchain mismatch: %v", out[DecisionNodeToolchain])
 	}
-	if normalized[DecisionShellApplyZshrc] != true {
-		t.Fatalf("expected invalid bool to fallback true, got %v", normalized[DecisionShellApplyZshrc])
-	}
-	if normalized[DecisionGitConfigMode] != GitConfigModeCustom {
-		t.Fatalf("expected custom git mode, got %v", normalized[DecisionGitConfigMode])
-	}
-	if normalized[DecisionGitUserName] != "Alice" {
-		t.Fatalf("expected trimmed git user name, got %v", normalized[DecisionGitUserName])
-	}
-	if normalized[DecisionGitUserEmail] != "alice@example.com" {
-		t.Fatalf("expected trimmed git user email, got %v", normalized[DecisionGitUserEmail])
+	if _, ok := out[DecisionSelectedStageIDs]; !ok {
+		t.Fatalf("expected selected stage ids key in map: %+v", out)
 	}
 }

@@ -22,6 +22,15 @@ const (
 	ActionSkip  FailureAction = "skip"
 )
 
+func (action FailureAction) Validate() error {
+	switch action {
+	case ActionAbort, ActionRetry, ActionSkip:
+		return nil
+	default:
+		return fmt.Errorf("unknown failure action %q", action)
+	}
+}
+
 type Failure struct {
 	Stage   stages.Stage
 	Attempt int
@@ -30,7 +39,7 @@ type Failure struct {
 
 type Hooks struct {
 	OnEvent       func(event runner.Event)
-	OnStageStatus func(stageID string, status state.StageStatus)
+	OnStageStatus func(stageID state.StageID, status state.StageStatus)
 	OnFailure     func(ctx context.Context, failure Failure) (FailureAction, error)
 }
 
@@ -90,10 +99,10 @@ func Execute(ctx context.Context, options Options) error {
 
 	runState := options.RunState
 	if runState.Stages == nil {
-		runState.Stages = make(map[string]state.StageStatus, len(options.Catalog))
+		runState.Stages = make(map[state.StageID]state.StageStatus, len(options.Catalog))
 	}
 
-	stageIndex := make(map[string]stages.Stage, len(options.Catalog))
+	stageIndex := make(map[stages.StageID]stages.Stage, len(options.Catalog))
 	for _, stage := range options.Catalog {
 		stageIndex[stage.ID] = stage
 	}
@@ -104,8 +113,8 @@ func Execute(ctx context.Context, options Options) error {
 	}
 
 	if err := logger.Log(runner.Event{
-		RunID:     runState.RunID,
-		Mode:      runState.Mode,
+		RunID:     runState.RunID.String(),
+		Mode:      runState.Mode.String(),
 		EventType: "run_started",
 		Message:   "Starting stage execution",
 	}); err != nil {
@@ -125,7 +134,7 @@ func Execute(ctx context.Context, options Options) error {
 		}
 
 		for {
-			progress.Status = string(stages.StatusRunning)
+			progress.Status = stages.StatusRunning
 			progress.Attempts++
 			progress.LastError = ""
 			runState.Stages[stageID] = progress
@@ -135,10 +144,10 @@ func Execute(ctx context.Context, options Options) error {
 			emitStageStatus(options.Hooks, stageID, progress)
 
 			if err := logger.Log(runner.Event{
-				RunID:     runState.RunID,
-				StageID:   stageID,
+				RunID:     runState.RunID.String(),
+				StageID:   stageID.String(),
 				Attempt:   progress.Attempts,
-				Mode:      runState.Mode,
+				Mode:      runState.Mode.String(),
 				EventType: "stage_started",
 				Message:   stage.Title,
 			}); err != nil {
@@ -178,7 +187,7 @@ func Execute(ctx context.Context, options Options) error {
 			}
 
 			if checkResult.Satisfied {
-				progress.Status = string(stages.StatusAlreadyDone)
+				progress.Status = stages.StatusAlreadyDone
 				progress.LastError = ""
 				runState.Stages[stageID] = progress
 				runState.LastFailure = ""
@@ -187,10 +196,10 @@ func Execute(ctx context.Context, options Options) error {
 				}
 				emitStageStatus(options.Hooks, stageID, progress)
 				if err := logger.Log(runner.Event{
-					RunID:     runState.RunID,
-					StageID:   stageID,
+					RunID:     runState.RunID.String(),
+					StageID:   stageID.String(),
 					Attempt:   progress.Attempts,
-					Mode:      runState.Mode,
+					Mode:      runState.Mode.String(),
 					EventType: "stage_already_done",
 					Message:   checkResult.Message,
 				}); err != nil {
@@ -225,9 +234,9 @@ func Execute(ctx context.Context, options Options) error {
 			}
 
 			if options.DryRun {
-				progress.Status = string(stages.StatusSimulatedSuccess)
+				progress.Status = stages.StatusSimulatedSuccess
 			} else {
-				progress.Status = string(stages.StatusSuccess)
+				progress.Status = stages.StatusSuccess
 			}
 			progress.LastError = ""
 			runState.Stages[stageID] = progress
@@ -237,12 +246,12 @@ func Execute(ctx context.Context, options Options) error {
 			}
 			emitStageStatus(options.Hooks, stageID, progress)
 			if err := logger.Log(runner.Event{
-				RunID:     runState.RunID,
-				StageID:   stageID,
+				RunID:     runState.RunID.String(),
+				StageID:   stageID.String(),
 				Attempt:   progress.Attempts,
-				Mode:      runState.Mode,
+				Mode:      runState.Mode.String(),
 				EventType: "stage_completed",
-				Message:   progress.Status,
+				Message:   progress.Status.String(),
 			}); err != nil {
 				return err
 			}
@@ -257,8 +266,8 @@ func Execute(ctx context.Context, options Options) error {
 	}
 
 	if err := logger.Log(runner.Event{
-		RunID:     runState.RunID,
-		Mode:      runState.Mode,
+		RunID:     runState.RunID.String(),
+		Mode:      runState.Mode.String(),
 		EventType: "run_completed",
 		Message:   "All planned stages processed",
 	}); err != nil {
@@ -272,14 +281,14 @@ func ValidateRunStateForCatalog(runState *state.RunState, catalog []stages.Stage
 	if err := state.ValidateRunState(runState); err != nil {
 		return fmt.Errorf("resume state: %w", err)
 	}
-	if (runState.Mode == "dry-run") != dryRun {
+	if runState.Mode.IsDryRun() != dryRun {
 		return fmt.Errorf("resume state field mode: saved mode %q is incompatible with requested dry-run=%t", runState.Mode, dryRun)
 	}
 	if len(catalog) == 0 {
 		return errors.New("resume state: catalog is empty")
 	}
 
-	stageIndex := make(map[string]stages.Stage, len(catalog))
+	stageIndex := make(map[stages.StageID]stages.Stage, len(catalog))
 	for index, stage := range catalog {
 		if stage.ID == "" {
 			return fmt.Errorf("resume state: catalog stage at index %d has empty id", index)
@@ -327,7 +336,7 @@ func processFailure(
 	stageErr error,
 ) (FailureAction, error) {
 	stageID := stage.ID
-	progress.Status = string(stages.StatusFailed)
+	progress.Status = stages.StatusFailed
 	progress.LastError = stageErr.Error()
 	options.RunState.Stages[stageID] = progress
 	options.RunState.LastFailure = stageErr.Error()
@@ -338,10 +347,10 @@ func processFailure(
 
 	if err := logger.Log(runner.Event{
 		Level:     "error",
-		RunID:     options.RunState.RunID,
-		StageID:   stageID,
+		RunID:     options.RunState.RunID.String(),
+		StageID:   stageID.String(),
 		Attempt:   progress.Attempts,
-		Mode:      options.RunState.Mode,
+		Mode:      options.RunState.Mode.String(),
 		EventType: "stage_failed",
 		Message:   stageErr.Error(),
 	}); err != nil {
@@ -361,13 +370,17 @@ func processFailure(
 		return ActionAbort, err
 	}
 
+	if err := action.Validate(); err != nil {
+		return ActionAbort, err
+	}
+
 	switch action {
 	case ActionRetry:
 		if err = logger.Log(runner.Event{
-			RunID:     options.RunState.RunID,
-			StageID:   stageID,
+			RunID:     options.RunState.RunID.String(),
+			StageID:   stageID.String(),
 			Attempt:   progress.Attempts,
-			Mode:      options.RunState.Mode,
+			Mode:      options.RunState.Mode.String(),
 			EventType: "stage_retry",
 			Message:   "Retrying failed stage",
 		}); err != nil {
@@ -378,17 +391,17 @@ func processFailure(
 		if !stage.CanSkip {
 			return ActionAbort, fmt.Errorf("stage %s cannot be skipped", stageID)
 		}
-		progress.Status = string(stages.StatusSkipped)
+		progress.Status = stages.StatusSkipped
 		options.RunState.Stages[stageID] = progress
 		if err = options.Store.Save(ctx, options.RunState); err != nil {
 			return ActionAbort, err
 		}
 		emitStageStatus(options.Hooks, stageID, progress)
 		if err = logger.Log(runner.Event{
-			RunID:     options.RunState.RunID,
-			StageID:   stageID,
+			RunID:     options.RunState.RunID.String(),
+			StageID:   stageID.String(),
 			Attempt:   progress.Attempts,
-			Mode:      options.RunState.Mode,
+			Mode:      options.RunState.Mode.String(),
 			EventType: "stage_skipped",
 			Message:   "Skipped after failure",
 		}); err != nil {
@@ -402,22 +415,14 @@ func processFailure(
 	}
 }
 
-func emitStageStatus(hooks Hooks, stageID string, status state.StageStatus) {
+func emitStageStatus(hooks Hooks, stageID state.StageID, status state.StageStatus) {
 	if hooks.OnStageStatus != nil {
 		hooks.OnStageStatus(stageID, status)
 	}
 }
 
-func isTerminalStatus(status string) bool {
-	switch status {
-	case string(stages.StatusSuccess),
-		string(stages.StatusAlreadyDone),
-		string(stages.StatusSimulatedSuccess),
-		string(stages.StatusSkipped):
-		return true
-	default:
-		return false
-	}
+func isTerminalStatus(status state.StageStatusValue) bool {
+	return state.IsTerminalStatus(status)
 }
 
 func RandomDryRunStageDelay(minDelay time.Duration, maxDelay time.Duration) DryRunStageDelayFunc {

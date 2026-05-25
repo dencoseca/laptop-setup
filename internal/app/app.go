@@ -129,7 +129,7 @@ func runNonInteractive(
 
 	if cfg.resume {
 		runState = current
-		effectiveDryRun = runState.Mode == "dry-run"
+		effectiveDryRun = runState.Mode.IsDryRun()
 		if err := validateResumeRequest(runState, catalog, cfg.dryRun); err != nil {
 			return err
 		}
@@ -151,20 +151,20 @@ func runNonInteractive(
 			StartAt:      time.Now().UTC(),
 			Mode:         modeName(effectiveDryRun),
 			ResolvedPlan: plan,
-			Decisions: map[string]any{
-				stages.DecisionSelectedStageIDs: append([]string(nil), plan...),
-			},
-			SelectedIDs: selectedIDs,
-			Stages:      make(map[string]state.StageStatus, len(catalog)),
-		}
-		for key, value := range stages.DefaultDecisions() {
-			runState.Decisions[key] = value
+			Decisions:    stages.DefaultDecisions().WithSelectedStageIDs(plan),
+			SelectedIDs:  selectedIDs,
+			Stages:       make(map[state.StageID]state.StageStatus, len(catalog)),
 		}
 	}
 
-	runState.Decisions = stages.NormalizeDecisions(runState.Decisions)
-	if _, ok := runState.Decisions[stages.DecisionSelectedStageIDs]; !ok {
-		runState.Decisions[stages.DecisionSelectedStageIDs] = append([]string(nil), runState.ResolvedPlan...)
+	if runState.Decisions.IsZero() {
+		runState.Decisions = stages.DefaultDecisions().WithSelectedStageIDs(runState.ResolvedPlan)
+	}
+	if len(runState.Decisions.SelectedStageIDs) == 0 {
+		runState.Decisions = runState.Decisions.WithSelectedStageIDs(runState.ResolvedPlan)
+	}
+	if err = runState.Decisions.Validate(); err != nil {
+		return fmt.Errorf("validate decisions: %w", err)
 	}
 	if len(runState.SelectedIDs) == 0 {
 		selectedIDs, selectErr := resolveSelectedBrewIDs(repoRoot)
@@ -221,10 +221,10 @@ func validateResumeRequest(runState *state.RunState, catalog []stages.Stage, req
 	if runState == nil {
 		return errors.New("no previous run state found for --resume")
 	}
-	if requestedDryRun && runState.Mode != "dry-run" {
+	if requestedDryRun && !runState.Mode.IsDryRun() {
 		return errors.New("cannot resume a normal run as dry-run")
 	}
-	effectiveDryRun := runState.Mode == "dry-run"
+	effectiveDryRun := runState.Mode.IsDryRun()
 	return execution.ValidateRunStateForCatalog(runState, catalog, effectiveDryRun)
 }
 
@@ -265,11 +265,8 @@ func parseConfig(args []string, stderr io.Writer) (config, error) {
 	return cfg, nil
 }
 
-func modeName(dryRun bool) string {
-	if dryRun {
-		return "dry-run"
-	}
-	return "normal"
+func modeName(dryRun bool) state.Mode {
+	return state.ModeFromDryRun(dryRun)
 }
 
 func parseCSV(raw string) []string {

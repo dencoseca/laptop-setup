@@ -279,7 +279,7 @@ func Run(ctx context.Context, options Options) error {
 
 	stageMap := make(map[string]stages.Stage, len(options.Catalog))
 	for _, stage := range options.Catalog {
-		stageMap[stage.ID] = stage
+		stageMap[stage.ID.String()] = stage
 	}
 
 	spin := spinner.New()
@@ -316,11 +316,11 @@ func Run(ctx context.Context, options Options) error {
 		installOptions: optionsForStageIDs(options.Catalog, phaseInstallStages),
 		devOptions:     optionsForStageIDs(options.Catalog, phaseDevStages),
 		nodeOptions: []selectOption{
-			{ID: stages.NodeToolchainVitePlus, Title: "vite+"},
-			{ID: stages.NodeToolchainNvmPnpm, Title: "pnpm + nvm"},
+			{ID: string(stages.NodeToolchainVitePlus), Title: "vite+"},
+			{ID: string(stages.NodeToolchainNvmPnpm), Title: "pnpm + nvm"},
 		},
 		dockerOptions: []selectOption{
-			{ID: stages.DockerRuntimeColima, Title: "colima"},
+			{ID: string(stages.DockerRuntimeColima), Title: "colima"},
 		},
 		shellOptions: []toggleOption{
 			{ID: stages.DecisionShellInstallOhMyZsh, Title: "Install oh-my-zsh", Selected: true},
@@ -363,7 +363,7 @@ func Run(ctx context.Context, options Options) error {
 
 func (m model) Init() tea.Cmd {
 	if m.resumeRun {
-		m.plan = slices.Clone(m.current.ResolvedPlan)
+		m.plan = stageIDsToStrings(m.current.ResolvedPlan)
 	}
 	return nil
 }
@@ -566,7 +566,7 @@ func (m model) updateKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.runState = setup.runState
 			m.humanLogPath = setup.humanLogPath
 			m.eventsLogPath = setup.eventsPath
-			m.stageOrder = slices.Clone(setup.runState.ResolvedPlan)
+			m.stageOrder = stageIDsToStrings(setup.runState.ResolvedPlan)
 			m.initialiseStageStatuses()
 
 			m.screen = screenExecuting
@@ -891,8 +891,8 @@ func (m *model) viewReview() string {
 		fmt.Fprintf(&b, "Selected packages/apps: %d\n", len(m.selectedBrewIDs()))
 	}
 	decisions := m.effectiveDecisions()
-	fmt.Fprintf(&b, "Node toolchain: %s\n", selectOptionTitle(m.nodeOptions, stages.NodeToolchainFromDecisions(decisions)))
-	fmt.Fprintf(&b, "Docker runtime: %s\n", selectOptionTitle(m.dockerOptions, stages.DockerRuntimeFromDecisions(decisions)))
+	fmt.Fprintf(&b, "Node toolchain: %s\n", selectOptionTitle(m.nodeOptions, string(stages.NodeToolchainFromDecisions(decisions))))
+	fmt.Fprintf(&b, "Docker runtime: %s\n", selectOptionTitle(m.dockerOptions, string(stages.DockerRuntimeFromDecisions(decisions))))
 	fmt.Fprintf(&b, "Shell: oh-my-zsh=%t, zshrc=%t, starship=%t\n",
 		stages.ShellInstallOhMyZsh(decisions),
 		stages.ShellApplyZshrcTemplate(decisions),
@@ -1065,7 +1065,7 @@ func (m model) toggleListItems(options []toggleOption) []list.Item {
 			Label:    option.Title,
 			Index:    index,
 			Selected: option.Selected,
-			Complete: isCompleteStageStatus(status),
+			Complete: isCompleteStageStatus(status.String()),
 		})
 	}
 	return items
@@ -1245,7 +1245,7 @@ func (m *model) resolvePlan() ([]string, error) {
 		if m.current == nil {
 			return nil, errors.New("resume requested but no existing state is loaded")
 		}
-		return slices.Clone(m.current.ResolvedPlan), nil
+		return stageIDsToStrings(m.current.ResolvedPlan), nil
 	}
 
 	selectedStages := m.selectedStageIDs()
@@ -1261,11 +1261,15 @@ func (m *model) resolvePlan() ([]string, error) {
 		)
 	}
 
-	return stages.ResolvePlan(m.catalog, stages.PlanOptions{
+	typedPlan, err := stages.ResolvePlan(m.catalog, stages.PlanOptions{
 		FromID:  m.config.From,
 		OnlyIDs: onlyIDs,
 		SkipIDs: m.config.Skip,
 	})
+	if err != nil {
+		return nil, err
+	}
+	return stageIDsToStrings(typedPlan), nil
 }
 
 func (m *model) prepareExecutionSetup() (executionSetup, error) {
@@ -1284,7 +1288,7 @@ func (m *model) prepareExecutionSetup() (executionSetup, error) {
 			return executionSetup{}, errors.New("resume requested but no existing run state found")
 		}
 		runState = m.current
-		dryRun = runState.Mode == "dry-run"
+		dryRun = runState.Mode.IsDryRun()
 		if err := execution.ValidateRunStateForCatalog(runState, m.catalog, dryRun); err != nil {
 			return executionSetup{}, err
 		}
@@ -1294,20 +1298,25 @@ func (m *model) prepareExecutionSetup() (executionSetup, error) {
 			RunID:        state.NewRunID(time.Now()),
 			StartAt:      time.Now().UTC(),
 			Mode:         modeName(dryRun),
-			ResolvedPlan: plan,
+			ResolvedPlan: stringsToStageIDs(plan),
 			Decisions:    m.collectDecisions(),
 			SelectedIDs:  m.selectedBrewIDs(),
-			Stages:       make(map[string]state.StageStatus, len(m.catalog)),
+			Stages:       make(map[state.StageID]state.StageStatus, len(m.catalog)),
 		}
 	}
 
-	runState.Decisions = stages.NormalizeDecisions(runState.Decisions)
+	if runState.Decisions.IsZero() {
+		runState.Decisions = stages.DefaultDecisions().WithSelectedStageIDs(runState.ResolvedPlan)
+	}
 	if !m.resumeRun {
 		runState.SelectedIDs = m.selectedBrewIDs()
-		runState.ResolvedPlan = plan
+		runState.ResolvedPlan = stringsToStageIDs(plan)
 		runState.Decisions = m.collectDecisions()
-	} else if _, ok := runState.Decisions[stages.DecisionSelectedStageIDs]; !ok {
-		runState.Decisions[stages.DecisionSelectedStageIDs] = append([]string(nil), runState.ResolvedPlan...)
+	} else if len(runState.Decisions.SelectedStageIDs) == 0 {
+		runState.Decisions = runState.Decisions.WithSelectedStageIDs(runState.ResolvedPlan)
+	}
+	if err = runState.Decisions.Validate(); err != nil {
+		return executionSetup{}, fmt.Errorf("validate decisions: %w", err)
 	}
 
 	if err = m.store.Save(m.ctx, runState); err != nil {
@@ -1353,8 +1362,8 @@ func (m *model) selectedStageIDs() []string {
 
 	ids := make([]string, 0, len(selectedSet))
 	for _, stage := range m.catalog {
-		if _, ok := selectedSet[stage.ID]; ok {
-			ids = append(ids, stage.ID)
+		if _, ok := selectedSet[stage.ID.String()]; ok {
+			ids = append(ids, stage.ID.String())
 		}
 	}
 	return ids
@@ -1378,23 +1387,23 @@ func (m *model) selectedBrewIDs() []string {
 	return ids
 }
 
-func (m *model) collectDecisions() map[string]any {
+func (m *model) collectDecisions() stages.DecisionSet {
 	decisions := stages.DefaultDecisions()
-	decisions[stages.DecisionSelectedStageIDs] = m.selectedStageIDs()
-	decisions[stages.DecisionNodeToolchain] = m.selectedNodeToolchainID()
-	decisions[stages.DecisionDockerRuntime] = m.selectedDockerRuntimeID()
-	decisions[stages.DecisionShellInstallOhMyZsh] = m.shellOptionEnabled(stages.DecisionShellInstallOhMyZsh)
-	decisions[stages.DecisionShellApplyZshrc] = m.shellOptionEnabled(stages.DecisionShellApplyZshrc)
-	decisions[stages.DecisionShellApplyStarship] = m.shellOptionEnabled(stages.DecisionShellApplyStarship)
-	decisions[stages.DecisionGitConfigMode] = stages.GitConfigModeTemplate
-	decisions[stages.DecisionGitUserName] = strings.TrimSpace(m.gitNameInput.Value())
-	decisions[stages.DecisionGitUserEmail] = strings.TrimSpace(m.gitEmailInput.Value())
-	return stages.NormalizeDecisions(decisions)
+	decisions.SelectedStageIDs = stringsToStageIDs(m.selectedStageIDs())
+	decisions.NodeToolchain = stages.NodeToolchain(m.selectedNodeToolchainID())
+	decisions.DockerRuntime = stages.DockerRuntime(m.selectedDockerRuntimeID())
+	decisions.ShellInstallOhMyZsh = m.shellOptionEnabled(stages.DecisionShellInstallOhMyZsh)
+	decisions.ShellApplyZshrc = m.shellOptionEnabled(stages.DecisionShellApplyZshrc)
+	decisions.ShellApplyStarship = m.shellOptionEnabled(stages.DecisionShellApplyStarship)
+	decisions.GitConfigMode = stages.GitConfigModeTemplate
+	decisions.GitUserName = strings.TrimSpace(m.gitNameInput.Value())
+	decisions.GitUserEmail = strings.TrimSpace(m.gitEmailInput.Value())
+	return decisions
 }
 
-func (m *model) effectiveDecisions() map[string]any {
+func (m *model) effectiveDecisions() stages.DecisionSet {
 	if m.resumeRun && m.current != nil {
-		return stages.NormalizeDecisions(m.current.Decisions)
+		return m.current.Decisions
 	}
 	return m.collectDecisions()
 }
@@ -1403,14 +1412,14 @@ func (m *model) selectedNodeToolchainID() string {
 	if m.nodeSelection >= 0 && m.nodeSelection < len(m.nodeOptions) {
 		return m.nodeOptions[m.nodeSelection].ID
 	}
-	return stages.NodeToolchainVitePlus
+	return string(stages.NodeToolchainVitePlus)
 }
 
 func (m *model) selectedDockerRuntimeID() string {
 	if m.dockerSelection >= 0 && m.dockerSelection < len(m.dockerOptions) {
 		return m.dockerOptions[m.dockerSelection].ID
 	}
-	return stages.DockerRuntimeColima
+	return string(stages.DockerRuntimeColima)
 }
 
 func (m *model) shellOptionEnabled(id string) bool {
@@ -1420,6 +1429,22 @@ func (m *model) shellOptionEnabled(id string) bool {
 		}
 	}
 	return true
+}
+
+func stringsToStageIDs(ids []string) []state.StageID {
+	out := make([]state.StageID, 0, len(ids))
+	for _, id := range ids {
+		out = append(out, state.StageID(id))
+	}
+	return out
+}
+
+func stageIDsToStrings(ids []state.StageID) []string {
+	out := make([]string, 0, len(ids))
+	for _, id := range ids {
+		out = append(out, id.String())
+	}
+	return out
 }
 
 func (m *model) stageSelected(id string) bool {
@@ -1464,7 +1489,7 @@ func (m *model) manualBackScreen() screen {
 
 func (m *model) effectiveDryRun() bool {
 	if m.resumeRun && m.current != nil {
-		return m.current.Mode == "dry-run"
+		return m.current.Mode.IsDryRun()
 	}
 	return m.config.DryRun
 }
@@ -1480,9 +1505,9 @@ func (m *model) initialiseStageStatuses() {
 		return
 	}
 	for _, stageID := range m.stageOrder {
-		status := m.runState.Stages[stageID]
+		status := m.runState.Stages[state.StageID(stageID)]
 		if status.Status == "" {
-			status.Status = string(stages.StatusPending)
+			status.Status = stages.StatusPending
 		}
 		m.stageStatuses[stageID] = status
 	}
@@ -1538,16 +1563,16 @@ func startExecutionWorker(
 				CommandRunner: commandRunner,
 				Logger:        logger,
 				Hooks: execution.Hooks{
-					OnStageStatus: func(stageID string, status state.StageStatus) {
+					OnStageStatus: func(stageID state.StageID, status state.StageStatus) {
 						select {
-						case updates <- stageStatusMsg{StageID: stageID, Status: status}:
+						case updates <- stageStatusMsg{StageID: stageID.String(), Status: status}:
 						case <-ctx.Done():
 						}
 					},
 					OnFailure: func(inner context.Context, failure execution.Failure) (execution.FailureAction, error) {
 						response := make(chan execution.FailureAction, 1)
 						request := failureRequest{
-							StageID:  failure.Stage.ID,
+							StageID:  failure.Stage.ID.String(),
 							Title:    failure.Stage.Title,
 							Attempt:  failure.Attempt,
 							CanSkip:  failure.Stage.CanSkip,
@@ -1726,14 +1751,14 @@ func isEventToken(value string) bool {
 
 func currentLogStageID(stageOrder []string, statuses map[string]state.StageStatus) string {
 	for _, stageID := range stageOrder {
-		if statuses[stageID].Status == string(stages.StatusRunning) {
+		if statuses[stageID].Status == stages.StatusRunning {
 			return stageID
 		}
 	}
 	for idx := len(stageOrder) - 1; idx >= 0; idx-- {
 		stageID := stageOrder[idx]
 		status := statuses[stageID].Status
-		if status != "" && status != string(stages.StatusPending) {
+		if status != "" && status != stages.StatusPending {
 			return stageID
 		}
 	}
@@ -1803,7 +1828,7 @@ func parseGitIdentity(content string) (string, string) {
 func optionsForStageIDs(catalog []stages.Stage, ids []string) []toggleOption {
 	stageMap := make(map[string]stages.Stage, len(catalog))
 	for _, stage := range catalog {
-		stageMap[stage.ID] = stage
+		stageMap[stage.ID.String()] = stage
 	}
 	options := make([]toggleOption, 0, len(ids))
 	for _, id := range ids {
@@ -1812,7 +1837,7 @@ func optionsForStageIDs(catalog []stages.Stage, ids []string) []toggleOption {
 			continue
 		}
 		options = append(options, toggleOption{
-			ID:       stage.ID,
+			ID:       stage.ID.String(),
 			Title:    stage.Title,
 			Selected: true,
 		})
@@ -1820,11 +1845,8 @@ func optionsForStageIDs(catalog []stages.Stage, ids []string) []toggleOption {
 	return options
 }
 
-func modeName(dryRun bool) string {
-	if dryRun {
-		return "dry-run"
-	}
-	return "normal"
+func modeName(dryRun bool) state.Mode {
+	return state.ModeFromDryRun(dryRun)
 }
 
 func statusGlyph(status string) string {
@@ -1849,11 +1871,11 @@ func statusGlyph(status string) string {
 func stageCounts(statuses map[string]state.StageStatus) (completed int, skipped int, failed int) {
 	for _, stageStatus := range statuses {
 		switch stageStatus.Status {
-		case string(stages.StatusSuccess), string(stages.StatusAlreadyDone), string(stages.StatusSimulatedSuccess):
+		case stages.StatusSuccess, stages.StatusAlreadyDone, stages.StatusSimulatedSuccess:
 			completed++
-		case string(stages.StatusSkipped):
+		case stages.StatusSkipped:
 			skipped++
-		case string(stages.StatusFailed):
+		case stages.StatusFailed:
 			failed++
 		}
 	}
@@ -2469,8 +2491,8 @@ func (m model) previewJourney() dashboardJourney {
 
 	if m.resumeRun && m.current != nil && len(m.current.ResolvedPlan) > 0 {
 		return dashboardJourney{
-			StageOrder: slices.Clone(m.current.ResolvedPlan),
-			Statuses:   cloneStatuses(m.current.Stages),
+			StageOrder: stageIDsToStrings(m.current.ResolvedPlan),
+			Statuses:   stageStatusMapToStrings(m.current.Stages),
 		}
 	}
 
@@ -2508,8 +2530,8 @@ func detectAlreadyDoneStages(
 		if err != nil || !result.Satisfied {
 			continue
 		}
-		statuses[stage.ID] = state.StageStatus{
-			Status: string(stages.StatusAlreadyDone),
+		statuses[stage.ID.String()] = state.StageStatus{
+			Status: stages.StatusAlreadyDone,
 		}
 	}
 	return statuses
@@ -2524,6 +2546,17 @@ func cloneStatuses(statuses map[string]state.StageStatus) map[string]state.Stage
 		cloned[key] = value
 	}
 	return cloned
+}
+
+func stageStatusMapToStrings(statuses map[state.StageID]state.StageStatus) map[string]state.StageStatus {
+	if len(statuses) == 0 {
+		return map[string]state.StageStatus{}
+	}
+	out := make(map[string]state.StageStatus, len(statuses))
+	for stageID, status := range statuses {
+		out[stageID.String()] = status
+	}
+	return out
 }
 
 func configurationStepPosition(current screen) (int, int) {
@@ -2604,7 +2637,7 @@ func normalizedStageStatus(status state.StageStatus) string {
 	if status.Status == "" {
 		return string(stages.StatusPending)
 	}
-	return status.Status
+	return status.Status.String()
 }
 
 func isTerminalStageStatus(status string) bool {

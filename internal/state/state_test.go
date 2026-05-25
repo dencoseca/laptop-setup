@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/dencoseca/laptop-setup/internal/stages"
 )
 
 func TestStoreSaveLoadRoundTrip(t *testing.T) {
@@ -16,12 +18,10 @@ func TestStoreSaveLoadRoundTrip(t *testing.T) {
 		RunID:        NewRunID(now),
 		StartAt:      now,
 		Mode:         "normal",
-		ResolvedPlan: []string{"a", "b"},
-		Decisions: map[string]any{
-			"selected_stage_ids": []string{"a", "b"},
-		},
-		SelectedIDs: []string{"go", "jq"},
-		Stages: map[string]StageStatus{
+		ResolvedPlan: []StageID{"a", "b"},
+		Decisions:    stages.DefaultDecisions().WithSelectedStageIDs([]StageID{"a", "b"}),
+		SelectedIDs:  []string{"go", "jq"},
+		Stages: map[StageID]StageStatus{
 			"a": {Status: "success", Attempts: 1},
 			"b": {Status: "pending", Attempts: 0},
 		},
@@ -44,8 +44,8 @@ func TestStoreSaveLoadRoundTrip(t *testing.T) {
 	if loaded.Mode != "normal" {
 		t.Fatalf("mode mismatch: %s", loaded.Mode)
 	}
-	if got := loaded.Decisions["selected_stage_ids"]; got == nil {
-		t.Fatalf("decision mismatch: %v", got)
+	if len(loaded.Decisions.SelectedStageIDs) != 2 {
+		t.Fatalf("decision mismatch: %+v", loaded.Decisions)
 	}
 	if loaded.Stages["a"].Status != "success" {
 		t.Fatalf("stage status mismatch for a: %+v", loaded.Stages["a"])
@@ -95,6 +95,19 @@ func TestStoreLoadRejectsInvalidPersistedState(t *testing.T) {
 				}
 			}`,
 			want: "field stages.a.status",
+		},
+		{
+			name: "invalid decision value",
+			payload: `{
+				"run_id": "run-1",
+				"mode": "normal",
+				"decisions": {
+					"dev.node_toolchain": "invalid"
+				},
+				"resolved_plan": ["a"],
+				"stages": {}
+			}`,
+			want: "dev.node_toolchain",
 		},
 		{
 			name: "path traversal run id",
@@ -174,18 +187,18 @@ func TestNewRunIDDoesNotCollideForSameInstant(t *testing.T) {
 
 	for range 1000 {
 		runID := NewRunID(now)
-		if _, exists := seen[runID]; exists {
+		if _, exists := seen[runID.String()]; exists {
 			t.Fatalf("NewRunID collided for same instant: %s", runID)
 		}
-		seen[runID] = struct{}{}
+		seen[runID.String()] = struct{}{}
 
-		if !strings.HasPrefix(runID, "20260525T123456000000789Z-") {
+		if !strings.HasPrefix(runID.String(), "20260525T123456000000789Z-") {
 			t.Fatalf("generated run id missing UTC nanosecond timestamp prefix: %q", runID)
 		}
 		if _, err := RunDir(runID); err != nil {
 			t.Fatalf("generated run id rejected by RunDir: id=%q err=%v", runID, err)
 		}
-		if strings.ContainsAny(runID, `/\`) {
+		if strings.ContainsAny(runID.String(), `/\`) {
 			t.Fatalf("generated run id contains path separator: %q", runID)
 		}
 	}
@@ -207,7 +220,7 @@ func TestRunDirRejectsInvalidRunIDs(t *testing.T) {
 
 	for _, runID := range invalidIDs {
 		t.Run(runID, func(t *testing.T) {
-			if _, err := RunDir(runID); err == nil {
+			if _, err := RunDir(RunID(runID)); err == nil {
 				t.Fatalf("expected RunDir to reject %q", runID)
 			}
 		})

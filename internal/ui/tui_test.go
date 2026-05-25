@@ -41,11 +41,11 @@ func TestPrepareExecutionSetupPersistsPhaseDecisions(t *testing.T) {
 			{ID: "git_config", Title: "Git Configuration", Selected: true},
 		},
 		nodeOptions: []selectOption{
-			{ID: stages.NodeToolchainVitePlus, Title: "vite+"},
-			{ID: stages.NodeToolchainNvmPnpm, Title: "pnpm + nvm"},
+			{ID: string(stages.NodeToolchainVitePlus), Title: "vite+"},
+			{ID: string(stages.NodeToolchainNvmPnpm), Title: "pnpm + nvm"},
 		},
 		dockerOptions: []selectOption{
-			{ID: stages.DockerRuntimeColima, Title: "colima"},
+			{ID: string(stages.DockerRuntimeColima), Title: "colima"},
 		},
 		shellOptions: []toggleOption{
 			{ID: stages.DecisionShellInstallOhMyZsh, Title: "Install oh-my-zsh", Selected: false},
@@ -133,9 +133,9 @@ func TestParseRunLogLineWithoutStageID(t *testing.T) {
 func TestCurrentLogStageIDPrefersRunningStage(t *testing.T) {
 	stageOrder := []string{"xcode_clt", "brew_bundle", "git_config"}
 	statuses := map[string]state.StageStatus{
-		"xcode_clt":   {Status: string(stages.StatusSuccess)},
-		"brew_bundle": {Status: string(stages.StatusRunning)},
-		"git_config":  {Status: string(stages.StatusPending)},
+		"xcode_clt":   {Status: stages.StatusSuccess},
+		"brew_bundle": {Status: stages.StatusRunning},
+		"git_config":  {Status: stages.StatusPending},
 	}
 
 	if got := currentLogStageID(stageOrder, statuses); got != "brew_bundle" {
@@ -184,8 +184,8 @@ func TestConsumeLogTailChunkHandlesPartialLines(t *testing.T) {
 func TestViewSummaryIncludesManualAppStoreReminders(t *testing.T) {
 	m := model{
 		stageStatuses: map[string]state.StageStatus{
-			"xcode_clt":             {Status: string(stages.StatusSuccess)},
-			"manual_app_store_apps": {Status: string(stages.StatusSkipped)},
+			"xcode_clt":             {Status: stages.StatusSuccess},
+			"manual_app_store_apps": {Status: stages.StatusSkipped},
 		},
 		humanLogPath:  "/tmp/run.log",
 		eventsLogPath: "/tmp/events.jsonl",
@@ -292,8 +292,8 @@ func TestViewBrewSelectionRendersViewportInsteadOfFullList(t *testing.T) {
 func TestViewSelectOptionsUsesRadioMarkersAndOmitsDescriptions(t *testing.T) {
 	m := model{cursor: 0}
 	view := m.viewSelectOptions("Dev Tools: Node Toolchain", []selectOption{
-		{ID: stages.NodeToolchainVitePlus, Title: "vite+", Description: "Install Vite+ toolchain via official installer"},
-		{ID: stages.NodeToolchainNvmPnpm, Title: "pnpm + nvm", Description: "Install nvm and pnpm using official install scripts"},
+		{ID: string(stages.NodeToolchainVitePlus), Title: "vite+", Description: "Install Vite+ toolchain via official installer"},
+		{ID: string(stages.NodeToolchainNvmPnpm), Title: "pnpm + nvm", Description: "Install nvm and pnpm using official install scripts"},
 	}, 0)
 
 	for _, fragment := range []string{
@@ -335,7 +335,7 @@ func TestViewToggleOptionsUsesCompletionTickForAlreadyDoneStage(t *testing.T) {
 	m := model{
 		cursor: 0,
 		stageStatuses: map[string]state.StageStatus{
-			"xcode_clt": {Status: string(stages.StatusAlreadyDone)},
+			"xcode_clt": {Status: stages.StatusAlreadyDone},
 		},
 	}
 
@@ -411,9 +411,9 @@ func TestViewExecutingRendersDashboardLayout(t *testing.T) {
 			"git_config":  {ID: "git_config", Title: "Git Configuration"},
 		},
 		stageStatuses: map[string]state.StageStatus{
-			"xcode_clt":   {Status: string(stages.StatusSuccess)},
-			"brew_bundle": {Status: string(stages.StatusRunning)},
-			"git_config":  {Status: string(stages.StatusPending)},
+			"xcode_clt":   {Status: stages.StatusSuccess},
+			"brew_bundle": {Status: stages.StatusRunning},
+			"git_config":  {Status: stages.StatusPending},
 		},
 		tailedLogs: []tailedLogLine{
 			{StageID: "xcode_clt", Line: "completed xcode"},
@@ -526,13 +526,13 @@ func TestPreviewJourneyCarriesPrecheckStatuses(t *testing.T) {
 			{ID: "macos_defaults", Title: "macOS Defaults", Selected: true},
 		},
 		stageStatuses: map[string]state.StageStatus{
-			"xcode_clt": {Status: string(stages.StatusAlreadyDone)},
+			"xcode_clt": {Status: stages.StatusAlreadyDone},
 		},
 	}
 
 	journey := m.previewJourney()
 
-	if got := journey.Statuses["xcode_clt"].Status; got != string(stages.StatusAlreadyDone) {
+	if got := journey.Statuses["xcode_clt"].Status; got != stages.StatusAlreadyDone {
 		t.Fatalf("expected preview journey to carry xcode already-done status, got %q", got)
 	}
 }
@@ -662,9 +662,9 @@ func TestDashboardStatusSplitsConfigurationAndExecutionProgress(t *testing.T) {
 			"git_config":  {ID: "git_config", Title: "Git Configuration"},
 		},
 		stageStatuses: map[string]state.StageStatus{
-			"xcode_clt":   {Status: string(stages.StatusSuccess)},
-			"brew_bundle": {Status: string(stages.StatusRunning)},
-			"git_config":  {Status: string(stages.StatusPending)},
+			"xcode_clt":   {Status: stages.StatusSuccess},
+			"brew_bundle": {Status: stages.StatusRunning},
+			"git_config":  {Status: stages.StatusPending},
 		},
 	}
 	executionStatus := m.executionDashboardStatus(m.executionProgress())
@@ -896,10 +896,10 @@ func TestViewReviewHidesInternalStageIDs(t *testing.T) {
 			{ID: "docker_config", Title: "Docker Configuration", Selected: true},
 		},
 		nodeOptions: []selectOption{
-			{ID: stages.NodeToolchainVitePlus, Title: "vite+"},
+			{ID: string(stages.NodeToolchainVitePlus), Title: "vite+"},
 		},
 		dockerOptions: []selectOption{
-			{ID: stages.DockerRuntimeColima, Title: "colima"},
+			{ID: string(stages.DockerRuntimeColima), Title: "colima"},
 		},
 	}
 
@@ -990,8 +990,8 @@ func TestRadioSelectionFollowsArrowNavigation(t *testing.T) {
 			cursor:        0,
 			nodeSelection: 0,
 			nodeOptions: []selectOption{
-				{ID: stages.NodeToolchainVitePlus, Title: "vite+"},
-				{ID: stages.NodeToolchainNvmPnpm, Title: "pnpm + nvm"},
+				{ID: string(stages.NodeToolchainVitePlus), Title: "vite+"},
+				{ID: string(stages.NodeToolchainNvmPnpm), Title: "pnpm + nvm"},
 			},
 		}
 
@@ -1170,11 +1170,11 @@ func TestPromptFlowReachesReviewScreen(t *testing.T) {
 			{ID: "git_config", Title: "Git", Selected: true},
 		},
 		nodeOptions: []selectOption{
-			{ID: stages.NodeToolchainVitePlus, Title: "vite+"},
-			{ID: stages.NodeToolchainNvmPnpm, Title: "pnpm + nvm"},
+			{ID: string(stages.NodeToolchainVitePlus), Title: "vite+"},
+			{ID: string(stages.NodeToolchainNvmPnpm), Title: "pnpm + nvm"},
 		},
 		dockerOptions: []selectOption{
-			{ID: stages.DockerRuntimeColima, Title: "colima"},
+			{ID: string(stages.DockerRuntimeColima), Title: "colima"},
 		},
 		shellOptions: []toggleOption{
 			{ID: stages.DecisionShellInstallOhMyZsh, Title: "Install oh-my-zsh", Selected: true},
@@ -1249,8 +1249,8 @@ func TestReviewEnterBlocksExecutionWhenPlanInvalid(t *testing.T) {
 		},
 		brewEntries:   []stages.BrewEntry{},
 		brewSelected:  map[string]bool{},
-		nodeOptions:   []selectOption{{ID: stages.NodeToolchainVitePlus, Title: "vite+"}},
-		dockerOptions: []selectOption{{ID: stages.DockerRuntimeColima, Title: "colima"}},
+		nodeOptions:   []selectOption{{ID: string(stages.NodeToolchainVitePlus), Title: "vite+"}},
+		dockerOptions: []selectOption{{ID: string(stages.DockerRuntimeColima), Title: "colima"}},
 		stageStatuses: make(map[string]state.StageStatus),
 	}
 
@@ -1296,7 +1296,7 @@ func TestReviewEnterConfirmsPlanAndStartsExecution(t *testing.T) {
 	}
 	stageMap := map[string]stages.Stage{}
 	for _, stage := range catalog {
-		stageMap[stage.ID] = stage
+		stageMap[stage.ID.String()] = stage
 	}
 
 	m := model{
@@ -1319,10 +1319,10 @@ func TestReviewEnterConfirmsPlanAndStartsExecution(t *testing.T) {
 			"go": true,
 		},
 		nodeOptions: []selectOption{
-			{ID: stages.NodeToolchainVitePlus, Title: "vite+"},
+			{ID: string(stages.NodeToolchainVitePlus), Title: "vite+"},
 		},
 		dockerOptions: []selectOption{
-			{ID: stages.DockerRuntimeColima, Title: "colima"},
+			{ID: string(stages.DockerRuntimeColima), Title: "colima"},
 		},
 		shellOptions: []toggleOption{
 			{ID: stages.DecisionShellInstallOhMyZsh, Title: "Install oh-my-zsh", Selected: true},

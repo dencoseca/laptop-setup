@@ -96,7 +96,7 @@ func TestResolvePlan(t *testing.T) {
 				t.Fatalf("plan length mismatch: got=%v want=%v", got, test.want)
 			}
 			for i := range got {
-				if got[i] != test.want[i] {
+				if got[i].String() != test.want[i] {
 					t.Fatalf("plan mismatch at %d: got=%v want=%v", i, got, test.want)
 				}
 			}

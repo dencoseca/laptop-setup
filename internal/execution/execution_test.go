@@ -20,8 +20,8 @@ func TestExecuteRetryThenSuccess(t *testing.T) {
 		RunID:        state.NewRunID(time.Now()),
 		StartAt:      time.Now().UTC(),
 		Mode:         "normal",
-		ResolvedPlan: []string{"flaky"},
-		Stages:       map[string]state.StageStatus{},
+		ResolvedPlan: []state.StageID{"flaky"},
+		Stages:       map[state.StageID]state.StageStatus{},
 	}
 	if err := store.Save(context.Background(), runState); err != nil {
 		t.Fatalf("save initial state: %v", err)
@@ -69,12 +69,18 @@ func TestExecuteRetryThenSuccess(t *testing.T) {
 	}
 
 	status := runState.Stages["flaky"]
-	if status.Status != string(stages.StatusSuccess) {
+	if status.Status != stages.StatusSuccess {
 		t.Fatalf("expected success status, got %q", status.Status)
 	}
 	if status.Attempts != 2 {
 		t.Fatalf("expected attempts=2, got %d", status.Attempts)
 	}
+}
+
+func decisionSetWithNodeToolchain(toolchain stages.NodeToolchain) stages.DecisionSet {
+	decisions := stages.DefaultDecisions()
+	decisions.NodeToolchain = toolchain
+	return decisions
 }
 
 func TestExecuteSkipAfterFailure(t *testing.T) {
@@ -83,8 +89,8 @@ func TestExecuteSkipAfterFailure(t *testing.T) {
 		RunID:        state.NewRunID(time.Now()),
 		StartAt:      time.Now().UTC(),
 		Mode:         "normal",
-		ResolvedPlan: []string{"fails", "next"},
-		Stages:       map[string]state.StageStatus{},
+		ResolvedPlan: []state.StageID{"fails", "next"},
+		Stages:       map[state.StageID]state.StageStatus{},
 	}
 	if err := store.Save(context.Background(), runState); err != nil {
 		t.Fatalf("save initial state: %v", err)
@@ -134,10 +140,10 @@ func TestExecuteSkipAfterFailure(t *testing.T) {
 		t.Fatalf("execute returned error: %v", err)
 	}
 
-	if status := runState.Stages["fails"]; status.Status != string(stages.StatusSkipped) {
+	if status := runState.Stages["fails"]; status.Status != stages.StatusSkipped {
 		t.Fatalf("expected skipped status for failed stage, got %q", status.Status)
 	}
-	if status := runState.Stages["next"]; status.Status != string(stages.StatusSuccess) {
+	if status := runState.Stages["next"]; status.Status != stages.StatusSuccess {
 		t.Fatalf("expected next stage success, got %q", status.Status)
 	}
 }
@@ -148,8 +154,8 @@ func TestExecuteAbortOnFailure(t *testing.T) {
 		RunID:        state.NewRunID(time.Now()),
 		StartAt:      time.Now().UTC(),
 		Mode:         "normal",
-		ResolvedPlan: []string{"fails"},
-		Stages:       map[string]state.StageStatus{},
+		ResolvedPlan: []state.StageID{"fails"},
+		Stages:       map[state.StageID]state.StageStatus{},
 	}
 	if err := store.Save(context.Background(), runState); err != nil {
 		t.Fatalf("save initial state: %v", err)
@@ -190,7 +196,7 @@ func TestExecuteAbortOnFailure(t *testing.T) {
 	}
 
 	status := runState.Stages["fails"]
-	if status.Status != string(stages.StatusFailed) {
+	if status.Status != stages.StatusFailed {
 		t.Fatalf("expected failed status, got %q", status.Status)
 	}
 }
@@ -201,8 +207,8 @@ func TestExecuteDryRunUsesSimulate(t *testing.T) {
 		RunID:        state.NewRunID(time.Now()),
 		StartAt:      time.Now().UTC(),
 		Mode:         "dry-run",
-		ResolvedPlan: []string{"simulate_only"},
-		Stages:       map[string]state.StageStatus{},
+		ResolvedPlan: []state.StageID{"simulate_only"},
+		Stages:       map[state.StageID]state.StageStatus{},
 	}
 	if err := store.Save(context.Background(), runState); err != nil {
 		t.Fatalf("save initial state: %v", err)
@@ -251,7 +257,7 @@ func TestExecuteDryRunUsesSimulate(t *testing.T) {
 	if simulateCalls != 1 {
 		t.Fatalf("expected simulate path once, got simulateCalls=%d", simulateCalls)
 	}
-	if status := runState.Stages["simulate_only"]; status.Status != string(stages.StatusSimulatedSuccess) {
+	if status := runState.Stages["simulate_only"]; status.Status != stages.StatusSimulatedSuccess {
 		t.Fatalf("expected simulated_success status, got %q", status.Status)
 	}
 }
@@ -262,8 +268,8 @@ func TestExecuteRejectsUnknownStageBeforeStartingRun(t *testing.T) {
 		RunID:        state.NewRunID(time.Now()),
 		StartAt:      time.Now().UTC(),
 		Mode:         "normal",
-		ResolvedPlan: []string{"missing"},
-		Stages:       map[string]state.StageStatus{},
+		ResolvedPlan: []state.StageID{"missing"},
+		Stages:       map[state.StageID]state.StageStatus{},
 	}
 
 	catalog := []stages.Stage{
@@ -309,8 +315,8 @@ func TestExecuteDryRunAppliesStageDelayBeforeSimulate(t *testing.T) {
 		RunID:        state.NewRunID(time.Now()),
 		StartAt:      time.Now().UTC(),
 		Mode:         "dry-run",
-		ResolvedPlan: []string{"simulate_only"},
-		Stages:       map[string]state.StageStatus{},
+		ResolvedPlan: []state.StageID{"simulate_only"},
+		Stages:       map[state.StageID]state.StageStatus{},
 	}
 	if err := store.Save(context.Background(), runState); err != nil {
 		t.Fatalf("save initial state: %v", err)
@@ -381,9 +387,9 @@ func TestExecuteResumeSkipsTerminalStages(t *testing.T) {
 		RunID:        state.NewRunID(time.Now()),
 		StartAt:      time.Now().UTC(),
 		Mode:         "normal",
-		ResolvedPlan: []string{"done", "pending"},
-		Stages: map[string]state.StageStatus{
-			"done": {Status: string(stages.StatusSuccess), Attempts: 1},
+		ResolvedPlan: []state.StageID{"done", "pending"},
+		Stages: map[state.StageID]state.StageStatus{
+			"done": {Status: stages.StatusSuccess, Attempts: 1},
 		},
 	}
 	if err := store.Save(context.Background(), runState); err != nil {
@@ -443,7 +449,7 @@ func TestExecuteResumeSkipsTerminalStages(t *testing.T) {
 	if pendingCalls != 1 {
 		t.Fatalf("expected pending stage to run once, got pendingCalls=%d", pendingCalls)
 	}
-	if status := runState.Stages["pending"]; status.Status != string(stages.StatusSuccess) {
+	if status := runState.Stages["pending"]; status.Status != stages.StatusSuccess {
 		t.Fatalf("expected pending stage success, got %q", status.Status)
 	}
 }
@@ -454,8 +460,8 @@ func TestExecuteSkipDeniedForNonSkippableStage(t *testing.T) {
 		RunID:        state.NewRunID(time.Now()),
 		StartAt:      time.Now().UTC(),
 		Mode:         "normal",
-		ResolvedPlan: []string{"cannot_skip"},
-		Stages:       map[string]state.StageStatus{},
+		ResolvedPlan: []state.StageID{"cannot_skip"},
+		Stages:       map[state.StageID]state.StageStatus{},
 	}
 	if err := store.Save(context.Background(), runState); err != nil {
 		t.Fatalf("save initial state: %v", err)
@@ -497,7 +503,7 @@ func TestExecuteSkipDeniedForNonSkippableStage(t *testing.T) {
 	if !strings.Contains(err.Error(), "cannot be skipped") {
 		t.Fatalf("expected non-skippable error, got %v", err)
 	}
-	if status := runState.Stages["cannot_skip"]; status.Status != string(stages.StatusFailed) {
+	if status := runState.Stages["cannot_skip"]; status.Status != stages.StatusFailed {
 		t.Fatalf("expected failed status to persist, got %q", status.Status)
 	}
 }
@@ -508,17 +514,15 @@ func TestExecutePassesPersistedDecisionsToStageContext(t *testing.T) {
 		RunID:        state.NewRunID(time.Now()),
 		StartAt:      time.Now().UTC(),
 		Mode:         "normal",
-		ResolvedPlan: []string{"decision_stage"},
-		Decisions: map[string]any{
-			stages.DecisionNodeToolchain: stages.NodeToolchainNvmPnpm,
-		},
-		Stages: map[string]state.StageStatus{},
+		ResolvedPlan: []state.StageID{"decision_stage"},
+		Decisions:    decisionSetWithNodeToolchain(stages.NodeToolchainNvmPnpm),
+		Stages:       map[state.StageID]state.StageStatus{},
 	}
 	if err := store.Save(context.Background(), runState); err != nil {
 		t.Fatalf("save initial state: %v", err)
 	}
 
-	seenValue := ""
+	var seenValue stages.NodeToolchain
 	catalog := []stages.Stage{
 		{
 			ID:      "decision_stage",
@@ -561,11 +565,9 @@ func TestExecuteResumeAfterFailureUsesPersistedPlanAndDecisions(t *testing.T) {
 		RunID:        state.NewRunID(time.Now()),
 		StartAt:      time.Now().UTC(),
 		Mode:         "normal",
-		ResolvedPlan: []string{"first", "second", "third"},
-		Decisions: map[string]any{
-			stages.DecisionNodeToolchain: stages.NodeToolchainNvmPnpm,
-		},
-		Stages: map[string]state.StageStatus{},
+		ResolvedPlan: []state.StageID{"first", "second", "third"},
+		Decisions:    decisionSetWithNodeToolchain(stages.NodeToolchainNvmPnpm),
+		Stages:       map[state.StageID]state.StageStatus{},
 	}
 	if err := store.Save(context.Background(), runState); err != nil {
 		t.Fatalf("save initial state: %v", err)
@@ -575,7 +577,7 @@ func TestExecuteResumeAfterFailureUsesPersistedPlanAndDecisions(t *testing.T) {
 	firstCalls := 0
 	secondCalls := 0
 	thirdCalls := 0
-	seenDecision := ""
+	var seenDecision stages.NodeToolchain
 	catalog := []stages.Stage{
 		{
 			ID:      "first",
@@ -648,10 +650,10 @@ func TestExecuteResumeAfterFailureUsesPersistedPlanAndDecisions(t *testing.T) {
 	if persisted == nil {
 		t.Fatal("expected persisted run state after failure")
 	}
-	if status := persisted.Stages["first"].Status; status != string(stages.StatusSuccess) {
+	if status := persisted.Stages["first"].Status; status != stages.StatusSuccess {
 		t.Fatalf("expected first stage success before resume, got %q", status)
 	}
-	if status := persisted.Stages["second"].Status; status != string(stages.StatusFailed) {
+	if status := persisted.Stages["second"].Status; status != stages.StatusFailed {
 		t.Fatalf("expected second stage failed before resume, got %q", status)
 	}
 
@@ -684,10 +686,10 @@ func TestExecuteResumeAfterFailureUsesPersistedPlanAndDecisions(t *testing.T) {
 	if seenDecision != stages.NodeToolchainNvmPnpm {
 		t.Fatalf("expected resumed stage to read persisted decision, got %q", seenDecision)
 	}
-	if status := persisted.Stages["second"].Status; status != string(stages.StatusSuccess) {
+	if status := persisted.Stages["second"].Status; status != stages.StatusSuccess {
 		t.Fatalf("expected second stage success after resume, got %q", status)
 	}
-	if status := persisted.Stages["third"].Status; status != string(stages.StatusSuccess) {
+	if status := persisted.Stages["third"].Status; status != stages.StatusSuccess {
 		t.Fatalf("expected third stage success after resume, got %q", status)
 	}
 }

@@ -294,10 +294,8 @@ func TestResolveSelectedBrewIDs(t *testing.T) {
 func TestRunNodeToolchainInstallUsesViteChoice(t *testing.T) {
 	runnerStub := &recordingRunner{}
 	err := runNodeToolchainInstall(context.Background(), ExecutionContext{
-		Runner: runnerStub,
-		Decisions: map[string]any{
-			DecisionNodeToolchain: NodeToolchainVitePlus,
-		},
+		Runner:    runnerStub,
+		Decisions: DefaultDecisions(),
 	})
 	if err != nil {
 		t.Fatalf("runNodeToolchainInstall returned error: %v", err)
@@ -315,8 +313,13 @@ func TestRunNodeToolchainInstallUsesNvmAndPnpmChoice(t *testing.T) {
 	runnerStub := &recordingRunner{}
 	err := runNodeToolchainInstall(context.Background(), ExecutionContext{
 		Runner: runnerStub,
-		Decisions: map[string]any{
-			DecisionNodeToolchain: NodeToolchainNvmPnpm,
+		Decisions: DecisionSet{
+			NodeToolchain:       NodeToolchainNvmPnpm,
+			DockerRuntime:       DockerRuntimeColima,
+			ShellInstallOhMyZsh: true,
+			ShellApplyZshrc:     true,
+			ShellApplyStarship:  true,
+			GitConfigMode:       GitConfigModeTemplate,
 		},
 	})
 	if err != nil {
@@ -356,10 +359,13 @@ func TestRunShellSetupRespectsShellDecisions(t *testing.T) {
 		Runner:   runnerStub,
 		RepoRoot: repoRoot,
 		HomeDir:  homeDir,
-		Decisions: map[string]any{
-			DecisionShellInstallOhMyZsh: false,
-			DecisionShellApplyZshrc:     true,
-			DecisionShellApplyStarship:  false,
+		Decisions: DecisionSet{
+			NodeToolchain:       NodeToolchainVitePlus,
+			DockerRuntime:       DockerRuntimeColima,
+			ShellInstallOhMyZsh: false,
+			ShellApplyZshrc:     true,
+			ShellApplyStarship:  false,
+			GitConfigMode:       GitConfigModeTemplate,
 		},
 	})
 	if err != nil {
@@ -400,10 +406,15 @@ func TestRunGitConfigCustomIdentityWritesUserValues(t *testing.T) {
 	err := runGitConfig(context.Background(), ExecutionContext{
 		RepoRoot: repoRoot,
 		HomeDir:  homeDir,
-		Decisions: map[string]any{
-			DecisionGitConfigMode: GitConfigModeCustom,
-			DecisionGitUserName:   "Alice",
-			DecisionGitUserEmail:  "alice@example.com",
+		Decisions: DecisionSet{
+			NodeToolchain:       NodeToolchainVitePlus,
+			DockerRuntime:       DockerRuntimeColima,
+			ShellInstallOhMyZsh: true,
+			ShellApplyZshrc:     true,
+			ShellApplyStarship:  true,
+			GitConfigMode:       GitConfigModeCustom,
+			GitUserName:         "Alice",
+			GitUserEmail:        "alice@example.com",
 		},
 	})
 	if err != nil {
@@ -440,10 +451,15 @@ func TestRunGitConfigTemplateWritesEnteredIdentity(t *testing.T) {
 	err := runGitConfig(context.Background(), ExecutionContext{
 		RepoRoot: repoRoot,
 		HomeDir:  homeDir,
-		Decisions: map[string]any{
-			DecisionGitConfigMode: GitConfigModeTemplate,
-			DecisionGitUserName:   "Ada",
-			DecisionGitUserEmail:  "ada@example.com",
+		Decisions: DecisionSet{
+			NodeToolchain:       NodeToolchainVitePlus,
+			DockerRuntime:       DockerRuntimeColima,
+			ShellInstallOhMyZsh: true,
+			ShellApplyZshrc:     true,
+			ShellApplyStarship:  true,
+			GitConfigMode:       GitConfigModeTemplate,
+			GitUserName:         "Ada",
+			GitUserEmail:        "ada@example.com",
 		},
 	})
 	if err != nil {
@@ -484,10 +500,15 @@ func TestRunGitConfigOverwritesExistingGitConfig(t *testing.T) {
 	err := runGitConfig(context.Background(), ExecutionContext{
 		RepoRoot: repoRoot,
 		HomeDir:  homeDir,
-		Decisions: map[string]any{
-			DecisionGitConfigMode: "existing",
-			DecisionGitUserName:   "Grace",
-			DecisionGitUserEmail:  "grace@example.com",
+		Decisions: DecisionSet{
+			NodeToolchain:       NodeToolchainVitePlus,
+			DockerRuntime:       DockerRuntimeColima,
+			ShellInstallOhMyZsh: true,
+			ShellApplyZshrc:     true,
+			ShellApplyStarship:  true,
+			GitConfigMode:       GitConfigModeTemplate,
+			GitUserName:         "Grace",
+			GitUserEmail:        "grace@example.com",
 		},
 	})
 	if err != nil {
@@ -548,7 +569,7 @@ func TestRunCommandLogsOutputAndLifecycleOnSuccess(t *testing.T) {
 		if event.EventType != expectedTypes[idx] {
 			t.Fatalf("event %d type mismatch: got=%s want=%s", idx, event.EventType, expectedTypes[idx])
 		}
-		if event.StageID != execCtx.StageID {
+		if event.StageID != execCtx.StageID.String() {
 			t.Fatalf("event %d stage mismatch: got=%s want=%s", idx, event.StageID, execCtx.StageID)
 		}
 		if event.Attempt != execCtx.Attempt {
