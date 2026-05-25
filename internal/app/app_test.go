@@ -85,73 +85,98 @@ func (r *noOpCommandRunner) Run(context.Context, runner.Command) (runner.Result,
 	return runner.Result{}, nil
 }
 
+type fakePathResolver struct {
+	workingDir       string
+	homeDir          string
+	defaultStatePath string
+	runsDir          string
+}
+
+func (r fakePathResolver) WorkingDir() (string, error) {
+	return r.workingDir, nil
+}
+
+func (r fakePathResolver) HomeDir() (string, error) {
+	return r.homeDir, nil
+}
+
+func (r fakePathResolver) DefaultStatePath() (string, error) {
+	return r.defaultStatePath, nil
+}
+
+func (r fakePathResolver) RunDir(runID state.RunID) (string, error) {
+	return filepath.Join(r.runsDir, runID.String()), nil
+}
+
+type staticTTYDetector bool
+
+func (d staticTTYDetector) CanPrompt() (bool, error) {
+	return bool(d), nil
+}
+
 func TestRunNonInteractiveEndToEndPath(t *testing.T) {
 	homeDir := t.TempDir()
 	repoRoot := t.TempDir()
-	t.Setenv("HOME", homeDir)
+	templatesDir := filepath.Join(repoRoot, "templates")
+	if err := os.MkdirAll(templatesDir, 0o755); err != nil {
+		t.Fatalf("create templates directory: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(templatesDir, "Brewfile"), []byte("brew \"go\"\ncask \"warp\"\n"), 0o644); err != nil {
+		t.Fatalf("write Brewfile template: %v", err)
+	}
 
 	statePath := filepath.Join(t.TempDir(), "state.json")
 	store := state.NewStore(statePath)
 
-	origCatalogFn := defaultCatalogFn
-	origResolveSelected := resolveSelectedBrewIDs
-	origNewRunner := newCommandRunner
-	origGetwd := getwd
-	origHome := userHomeDirectory
-	t.Cleanup(func() {
-		defaultCatalogFn = origCatalogFn
-		resolveSelectedBrewIDs = origResolveSelected
-		newCommandRunner = origNewRunner
-		getwd = origGetwd
-		userHomeDirectory = origHome
-	})
-
 	firstRunCalls := 0
 	secondRunCalls := 0
-	defaultCatalogFn = func() []stages.Stage {
-		return []stages.Stage{
-			{
-				ID:      "first",
-				Title:   "First",
-				CanSkip: true,
-				Precheck: func(context.Context, stages.ExecutionContext) (stages.CheckResult, error) {
-					return stages.CheckResult{Satisfied: false}, nil
-				},
-				Run: func(context.Context, stages.ExecutionContext) error {
-					firstRunCalls++
-					return nil
-				},
-				Simulate: func(context.Context, stages.ExecutionContext) error { return nil },
-			},
-			{
-				ID:      "second",
-				Title:   "Second",
-				CanSkip: true,
-				Precheck: func(context.Context, stages.ExecutionContext) (stages.CheckResult, error) {
-					return stages.CheckResult{Satisfied: true, Message: "already configured"}, nil
-				},
-				Run: func(context.Context, stages.ExecutionContext) error {
-					secondRunCalls++
-					return nil
-				},
-				Simulate: func(context.Context, stages.ExecutionContext) error { return nil },
-			},
-		}
+	paths := fakePathResolver{
+		workingDir:       repoRoot,
+		homeDir:          homeDir,
+		defaultStatePath: statePath,
+		runsDir:          filepath.Join(t.TempDir(), "runs"),
 	}
-	resolveSelectedBrewIDs = func(string) ([]string, error) {
-		return []string{"go", "warp"}, nil
-	}
-	newCommandRunner = func() runner.CommandRunner { return &noOpCommandRunner{} }
-	getwd = func() (string, error) { return repoRoot, nil }
-	userHomeDirectory = func() (string, error) { return homeDir, nil }
+	app := New(Dependencies{
+		Catalog: func() []stages.Stage {
+			return []stages.Stage{
+				{
+					ID:      "first",
+					Title:   "First",
+					CanSkip: true,
+					Precheck: func(context.Context, stages.ExecutionContext) (stages.CheckResult, error) {
+						return stages.CheckResult{Satisfied: false}, nil
+					},
+					Run: func(context.Context, stages.ExecutionContext) error {
+						firstRunCalls++
+						return nil
+					},
+					Simulate: func(context.Context, stages.ExecutionContext) error { return nil },
+				},
+				{
+					ID:      "second",
+					Title:   "Second",
+					CanSkip: true,
+					Precheck: func(context.Context, stages.ExecutionContext) (stages.CheckResult, error) {
+						return stages.CheckResult{Satisfied: true, Message: "already configured"}, nil
+					},
+					Run: func(context.Context, stages.ExecutionContext) error {
+						secondRunCalls++
+						return nil
+					},
+					Simulate: func(context.Context, stages.ExecutionContext) error { return nil },
+				},
+			}
+		},
+		CommandRunner: func() runner.CommandRunner { return &noOpCommandRunner{} },
+		Paths:         paths,
+		RunLogs:       filesystemRunLogFactory{Paths: paths},
+		TTY:           staticTTYDetector(false),
+	})
 
 	var stdout bytes.Buffer
-	err := runNonInteractive(context.Background(), config{
-		yes:       true,
-		statePath: statePath,
-	}, store, nil, &stdout)
+	err := app.Run(context.Background(), []string{"--yes", "--state-file", statePath}, &stdout, &bytes.Buffer{})
 	if err != nil {
-		t.Fatalf("runNonInteractive returned error: %v", err)
+		t.Fatalf("App.Run returned error: %v", err)
 	}
 
 	if firstRunCalls != 1 {
@@ -185,7 +210,7 @@ func TestRunNonInteractiveEndToEndPath(t *testing.T) {
 		t.Fatalf("default node toolchain mismatch: %q", got)
 	}
 
-	runDir, err := state.RunDir(loaded.RunID)
+	runDir, err := paths.RunDir(loaded.RunID)
 	if err != nil {
 		t.Fatalf("resolve run dir: %v", err)
 	}
@@ -203,31 +228,24 @@ func TestRunNonInteractiveResumeRejectsUnknownStageID(t *testing.T) {
 	statePath := filepath.Join(t.TempDir(), "state.json")
 	store := state.NewStore(statePath)
 
-	origCatalogFn := defaultCatalogFn
-	origGetwd := getwd
-	origHome := userHomeDirectory
-	t.Cleanup(func() {
-		defaultCatalogFn = origCatalogFn
-		getwd = origGetwd
-		userHomeDirectory = origHome
-	})
-
-	defaultCatalogFn = func() []stages.Stage {
-		return []stages.Stage{
-			{
-				ID:      "known",
-				Title:   "Known",
-				CanSkip: true,
-				Precheck: func(context.Context, stages.ExecutionContext) (stages.CheckResult, error) {
-					return stages.CheckResult{}, nil
+	paths := fakePathResolver{workingDir: repoRoot, homeDir: homeDir, defaultStatePath: statePath, runsDir: filepath.Join(t.TempDir(), "runs")}
+	app := New(Dependencies{
+		Catalog: func() []stages.Stage {
+			return []stages.Stage{
+				{
+					ID:      "known",
+					Title:   "Known",
+					CanSkip: true,
+					Precheck: func(context.Context, stages.ExecutionContext) (stages.CheckResult, error) {
+						return stages.CheckResult{}, nil
+					},
+					Run:      func(context.Context, stages.ExecutionContext) error { return nil },
+					Simulate: func(context.Context, stages.ExecutionContext) error { return nil },
 				},
-				Run:      func(context.Context, stages.ExecutionContext) error { return nil },
-				Simulate: func(context.Context, stages.ExecutionContext) error { return nil },
-			},
-		}
-	}
-	getwd = func() (string, error) { return repoRoot, nil }
-	userHomeDirectory = func() (string, error) { return homeDir, nil }
+			}
+		},
+		Paths: paths,
+	})
 
 	current := &state.RunState{
 		RunID:        "run-1",
@@ -237,7 +255,7 @@ func TestRunNonInteractiveResumeRejectsUnknownStageID(t *testing.T) {
 	}
 
 	var stdout bytes.Buffer
-	err := runNonInteractive(context.Background(), config{
+	err := app.runNonInteractive(context.Background(), config{
 		yes:       true,
 		resume:    true,
 		statePath: statePath,
@@ -256,31 +274,24 @@ func TestRunNonInteractiveResumeRejectsNormalRunAsDryRun(t *testing.T) {
 	statePath := filepath.Join(t.TempDir(), "state.json")
 	store := state.NewStore(statePath)
 
-	origCatalogFn := defaultCatalogFn
-	origGetwd := getwd
-	origHome := userHomeDirectory
-	t.Cleanup(func() {
-		defaultCatalogFn = origCatalogFn
-		getwd = origGetwd
-		userHomeDirectory = origHome
-	})
-
-	defaultCatalogFn = func() []stages.Stage {
-		return []stages.Stage{
-			{
-				ID:      "known",
-				Title:   "Known",
-				CanSkip: true,
-				Precheck: func(context.Context, stages.ExecutionContext) (stages.CheckResult, error) {
-					return stages.CheckResult{}, nil
+	paths := fakePathResolver{workingDir: repoRoot, homeDir: homeDir, defaultStatePath: statePath, runsDir: filepath.Join(t.TempDir(), "runs")}
+	app := New(Dependencies{
+		Catalog: func() []stages.Stage {
+			return []stages.Stage{
+				{
+					ID:      "known",
+					Title:   "Known",
+					CanSkip: true,
+					Precheck: func(context.Context, stages.ExecutionContext) (stages.CheckResult, error) {
+						return stages.CheckResult{}, nil
+					},
+					Run:      func(context.Context, stages.ExecutionContext) error { return nil },
+					Simulate: func(context.Context, stages.ExecutionContext) error { return nil },
 				},
-				Run:      func(context.Context, stages.ExecutionContext) error { return nil },
-				Simulate: func(context.Context, stages.ExecutionContext) error { return nil },
-			},
-		}
-	}
-	getwd = func() (string, error) { return repoRoot, nil }
-	userHomeDirectory = func() (string, error) { return homeDir, nil }
+			}
+		},
+		Paths: paths,
+	})
 
 	current := &state.RunState{
 		RunID:        "run-1",
@@ -290,7 +301,7 @@ func TestRunNonInteractiveResumeRejectsNormalRunAsDryRun(t *testing.T) {
 	}
 
 	var stdout bytes.Buffer
-	err := runNonInteractive(context.Background(), config{
+	err := app.runNonInteractive(context.Background(), config{
 		yes:       true,
 		resume:    true,
 		dryRun:    true,

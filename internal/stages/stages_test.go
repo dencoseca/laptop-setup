@@ -41,6 +41,21 @@ func (l *recordingEventLogger) Log(event runner.Event) error {
 	return nil
 }
 
+type recordingPackageManager struct {
+	availableCalls int
+	bundlePaths    []string
+}
+
+func (m *recordingPackageManager) HomebrewAvailable(context.Context) error {
+	m.availableCalls++
+	return nil
+}
+
+func (m *recordingPackageManager) RunBrewBundle(_ context.Context, _ ExecutionContext, brewfilePath string) error {
+	m.bundlePaths = append(m.bundlePaths, brewfilePath)
+	return nil
+}
+
 func TestLoadBrewEntries(t *testing.T) {
 	brewfile := filepath.Join(t.TempDir(), "Brewfile")
 	content := strings.Join([]string{
@@ -230,6 +245,42 @@ func TestRunBrewBundleFailsWhenBrewMissing(t *testing.T) {
 	}
 	if len(runnerStub.commands) != 0 {
 		t.Fatalf("expected no command execution when brew is missing, got %d commands", len(runnerStub.commands))
+	}
+}
+
+func TestRunBrewBundleUsesInjectedPackageManager(t *testing.T) {
+	repoRoot := t.TempDir()
+	runDir := t.TempDir()
+	templatesDir := filepath.Join(repoRoot, "templates")
+	if err := os.MkdirAll(templatesDir, 0o755); err != nil {
+		t.Fatalf("create templates directory: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(templatesDir, "Brewfile"), []byte(`brew "go"`+"\n"), 0o644); err != nil {
+		t.Fatalf("write template Brewfile: %v", err)
+	}
+
+	t.Setenv("PATH", t.TempDir())
+	packages := &recordingPackageManager{}
+	generatedPath := ""
+	err := runBrewBundle(context.Background(), ExecutionContext{
+		RepoRoot:       repoRoot,
+		RunDir:         runDir,
+		PackageManager: packages,
+		SetGeneratedBrewfilePath: func(path string) {
+			generatedPath = path
+		},
+	})
+	if err != nil {
+		t.Fatalf("runBrewBundle returned error: %v", err)
+	}
+	if packages.availableCalls != 1 {
+		t.Fatalf("expected one availability check, got %d", packages.availableCalls)
+	}
+	if len(packages.bundlePaths) != 1 {
+		t.Fatalf("expected one bundle execution, got %d", len(packages.bundlePaths))
+	}
+	if generatedPath == "" || packages.bundlePaths[0] != generatedPath {
+		t.Fatalf("bundle path mismatch: generated=%q bundle=%v", generatedPath, packages.bundlePaths)
 	}
 }
 

@@ -45,18 +45,25 @@ type Hooks struct {
 
 type DryRunStageDelayFunc func(ctx context.Context, execCtx stages.ExecutionContext) error
 
+type StateRepository interface {
+	Save(context.Context, *state.RunState) error
+}
+
 type Options struct {
-	Store         *state.Store
-	RunState      *state.RunState
-	Catalog       []stages.Stage
-	DryRun        bool
-	DryRunDelay   DryRunStageDelayFunc
-	RepoRoot      string
-	HomeDir       string
-	RunDir        string
-	CommandRunner runner.CommandRunner
-	Logger        *runner.EventLogger
-	Hooks         Hooks
+	Store          StateRepository
+	RunState       *state.RunState
+	Catalog        []stages.Stage
+	DryRun         bool
+	DryRunDelay    DryRunStageDelayFunc
+	RepoRoot       string
+	HomeDir        string
+	RunDir         string
+	CommandRunner  runner.CommandRunner
+	FileSystem     stages.FileSystem
+	TemplateStore  stages.TemplateStore
+	PackageManager stages.PackageManager
+	Logger         *runner.EventLogger
+	Hooks          Hooks
 }
 
 type hookLogger struct {
@@ -165,6 +172,9 @@ func Execute(ctx context.Context, options Options) error {
 				RunDir:                options.RunDir,
 				RepoRoot:              options.RepoRoot,
 				HomeDir:               options.HomeDir,
+				FileSystem:            options.FileSystem,
+				TemplateStore:         options.TemplateStore,
+				PackageManager:        options.PackageManager,
 				Decisions:             runState.Decisions,
 				SelectedBrewIDs:       runState.SelectedIDs,
 				GeneratedBrewfilePath: runState.GeneratedFile,

@@ -43,7 +43,7 @@ type Config struct {
 
 type Options struct {
 	Config    Config
-	Store     *state.Store
+	Store     execution.StateRepository
 	Current   *state.RunState
 	Catalog   []stages.Stage
 	RepoRoot  string
@@ -169,7 +169,7 @@ type model struct {
 	cancel context.CancelFunc
 
 	config   Config
-	store    *state.Store
+	store    execution.StateRepository
 	current  *state.RunState
 	catalog  []stages.Stage
 	stageMap map[string]stages.Stage
@@ -1537,7 +1537,7 @@ func startExecutionWorker(
 	ctx context.Context,
 	updates chan<- tea.Msg,
 	setup executionSetup,
-	store *state.Store,
+	store execution.StateRepository,
 	catalog []stages.Stage,
 	repoRoot string,
 	homeDir string,

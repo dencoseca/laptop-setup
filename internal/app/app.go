@@ -6,8 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -28,19 +26,20 @@ type config struct {
 	statePath string
 }
 
-var (
-	defaultCatalogFn       = stages.DefaultCatalog
-	resolveSelectedBrewIDs = stages.ResolveSelectedBrewIDs
-	newCommandRunner       = func() runner.CommandRunner { return runner.NewOSCommandRunner() }
-	uiRun                  = ui.Run
-	executeRun             = execution.Execute
-	getwd                  = os.Getwd
-	userHomeDirectory      = os.UserHomeDir
-	dryRunStageDelay       = execution.RandomDryRunStageDelay(2*time.Second, 5*time.Second)
-)
+type App struct {
+	deps Dependencies
+}
+
+func New(deps Dependencies) *App {
+	return &App{deps: deps.withDefaults()}
+}
 
 func Run(ctx context.Context, args []string, stdout io.Writer, stderr io.Writer) error {
-	cfg, err := parseConfig(args, stderr)
+	return New(DefaultDependencies()).Run(ctx, args, stdout, stderr)
+}
+
+func (a *App) Run(ctx context.Context, args []string, stdout io.Writer, stderr io.Writer) error {
+	cfg, err := parseConfigWithDefaultPath(args, stderr, a.deps.Paths.DefaultStatePath)
 	if err != nil {
 		return err
 	}
@@ -51,7 +50,7 @@ func Run(ctx context.Context, args []string, stdout io.Writer, stderr io.Writer)
 		}
 	}
 
-	store := state.NewStore(cfg.statePath)
+	store := a.deps.StateRepositories.Open(cfg.statePath)
 	current, err := store.Load(ctx)
 	if err != nil {
 		return err
@@ -61,13 +60,13 @@ func Run(ctx context.Context, args []string, stdout io.Writer, stderr io.Writer)
 		return errors.New("no previous run state found for --resume")
 	}
 	if cfg.resume {
-		catalog := defaultCatalogFn()
+		catalog := a.deps.Catalog()
 		if err := validateResumeRequest(current, catalog, cfg.dryRun); err != nil {
 			return err
 		}
 	}
 
-	promptEnabled, err := canPrompt()
+	promptEnabled, err := a.deps.TTY.CanPrompt()
 	if err != nil {
 		return err
 	}
@@ -77,16 +76,16 @@ func Run(ctx context.Context, args []string, stdout io.Writer, stderr io.Writer)
 			return errors.New("interactive mode requires a TTY; rerun with --yes for non-interactive execution")
 		}
 
-		repoRoot, err := getwd()
+		repoRoot, err := a.deps.Paths.WorkingDir()
 		if err != nil {
 			return fmt.Errorf("resolve repository root: %w", err)
 		}
-		homeDir, err := userHomeDirectory()
+		homeDir, err := a.deps.Paths.HomeDir()
 		if err != nil {
 			return fmt.Errorf("resolve home directory: %w", err)
 		}
 
-		return uiRun(ctx, ui.Options{
+		return a.deps.UI.Run(ctx, ui.Options{
 			Config: ui.Config{
 				Resume: cfg.resume,
 				DryRun: cfg.dryRun,
@@ -96,33 +95,34 @@ func Run(ctx context.Context, args []string, stdout io.Writer, stderr io.Writer)
 			},
 			Store:     store,
 			Current:   current,
-			Catalog:   defaultCatalogFn(),
+			Catalog:   a.deps.Catalog(),
 			RepoRoot:  repoRoot,
 			HomeDir:   homeDir,
 			Out:       stdout,
-			Commander: newCommandRunner(),
+			Commander: a.deps.CommandRunner(),
 		})
 	}
 
-	return runNonInteractive(ctx, cfg, store, current, stdout)
+	return a.runNonInteractive(ctx, cfg, store, current, stdout)
 }
 
-func runNonInteractive(
+func (a *App) runNonInteractive(
 	ctx context.Context,
 	cfg config,
-	store *state.Store,
+	store StateRepository,
 	current *state.RunState,
 	stdout io.Writer,
 ) error {
-	catalog := defaultCatalogFn()
-	repoRoot, err := getwd()
+	catalog := a.deps.Catalog()
+	repoRoot, err := a.deps.Paths.WorkingDir()
 	if err != nil {
 		return fmt.Errorf("resolve repository root: %w", err)
 	}
-	homeDir, err := userHomeDirectory()
+	homeDir, err := a.deps.Paths.HomeDir()
 	if err != nil {
 		return fmt.Errorf("resolve home directory: %w", err)
 	}
+	templateStore := a.deps.TemplateStores.New(repoRoot, a.deps.FileSystem)
 
 	effectiveDryRun := cfg.dryRun
 	var runState *state.RunState
@@ -142,7 +142,7 @@ func runNonInteractive(
 		if resolveErr != nil {
 			return resolveErr
 		}
-		selectedIDs, selectErr := resolveSelectedBrewIDs(repoRoot)
+		selectedIDs, selectErr := stages.ResolveSelectedBrewIDsFromStore(templateStore)
 		if selectErr != nil {
 			return selectErr
 		}
@@ -167,7 +167,7 @@ func runNonInteractive(
 		return fmt.Errorf("validate decisions: %w", err)
 	}
 	if len(runState.SelectedIDs) == 0 {
-		selectedIDs, selectErr := resolveSelectedBrewIDs(repoRoot)
+		selectedIDs, selectErr := stages.ResolveSelectedBrewIDsFromStore(templateStore)
 		if selectErr != nil {
 			return selectErr
 		}
@@ -178,42 +178,29 @@ func runNonInteractive(
 		return err
 	}
 
-	runDir, err := state.RunDir(runState.RunID)
+	logs, err := a.deps.RunLogs.Open(runState.RunID)
 	if err != nil {
 		return err
 	}
-	if err = os.MkdirAll(runDir, 0o755); err != nil {
-		return fmt.Errorf("create run directory: %w", err)
-	}
+	defer logs.HumanLog.Close()
+	defer logs.EventLog.Close()
 
-	humanLogPath := filepath.Join(runDir, "run.log")
-	eventsPath := filepath.Join(runDir, "events.jsonl")
+	logger := runner.NewEventLogger(io.MultiWriter(stdout, logs.HumanLog), logs.EventLog)
 
-	humanLog, err := os.OpenFile(humanLogPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
-	if err != nil {
-		return fmt.Errorf("open run log: %w", err)
-	}
-	defer humanLog.Close()
-
-	eventLog, err := os.OpenFile(eventsPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
-	if err != nil {
-		return fmt.Errorf("open event log: %w", err)
-	}
-	defer eventLog.Close()
-
-	logger := runner.NewEventLogger(io.MultiWriter(stdout, humanLog), eventLog)
-
-	return executeRun(ctx, execution.Options{
-		Store:         store,
-		RunState:      runState,
-		Catalog:       catalog,
-		DryRun:        effectiveDryRun,
-		DryRunDelay:   dryRunStageDelay,
-		RepoRoot:      repoRoot,
-		HomeDir:       homeDir,
-		RunDir:        runDir,
-		CommandRunner: newCommandRunner(),
-		Logger:        logger,
+	return a.deps.Executor.Execute(ctx, execution.Options{
+		Store:          store,
+		RunState:       runState,
+		Catalog:        catalog,
+		DryRun:         effectiveDryRun,
+		DryRunDelay:    a.deps.DryRunStageDelay,
+		RepoRoot:       repoRoot,
+		HomeDir:        homeDir,
+		RunDir:         logs.RunDir,
+		CommandRunner:  a.deps.CommandRunner(),
+		FileSystem:     a.deps.FileSystem,
+		TemplateStore:  templateStore,
+		PackageManager: a.deps.PackageManager,
+		Logger:         logger,
 	})
 }
 
@@ -229,6 +216,10 @@ func validateResumeRequest(runState *state.RunState, catalog []stages.Stage, req
 }
 
 func parseConfig(args []string, stderr io.Writer) (config, error) {
+	return parseConfigWithDefaultPath(args, stderr, state.DefaultPath)
+}
+
+func parseConfigWithDefaultPath(args []string, stderr io.Writer, defaultStatePath func() (string, error)) (config, error) {
 	fs := flag.NewFlagSet("laptop-setup", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 
@@ -255,7 +246,7 @@ func parseConfig(args []string, stderr io.Writer) (config, error) {
 	cfg.skip = parseCSV(skipRaw)
 
 	if cfg.statePath == "" {
-		defaultPath, err := state.DefaultPath()
+		defaultPath, err := defaultStatePath()
 		if err != nil {
 			return config{}, err
 		}
@@ -288,12 +279,4 @@ func parseCSV(raw string) []string {
 		out = append(out, value)
 	}
 	return out
-}
-
-func canPrompt() (bool, error) {
-	stat, err := os.Stdin.Stat()
-	if err != nil {
-		return false, fmt.Errorf("inspect stdin: %w", err)
-	}
-	return (stat.Mode() & os.ModeCharDevice) != 0, nil
 }
