@@ -63,6 +63,104 @@ func TestStoreLoadMissingStateReturnsNil(t *testing.T) {
 	}
 }
 
+func TestStoreLoadRejectsInvalidPersistedState(t *testing.T) {
+	cases := []struct {
+		name    string
+		payload string
+		want    string
+	}{
+		{
+			name:    "invalid json",
+			payload: `{`,
+			want:    "invalid JSON",
+		},
+		{
+			name: "invalid mode",
+			payload: `{
+				"run_id": "run-1",
+				"mode": "turbo",
+				"resolved_plan": ["a"],
+				"stages": {}
+			}`,
+			want: "field mode",
+		},
+		{
+			name: "unknown status",
+			payload: `{
+				"run_id": "run-1",
+				"mode": "normal",
+				"resolved_plan": ["a"],
+				"stages": {
+					"a": {"status": "mystery", "attempts": 1}
+				}
+			}`,
+			want: "field stages.a.status",
+		},
+		{
+			name: "path traversal run id",
+			payload: `{
+				"run_id": "../x",
+				"mode": "normal",
+				"resolved_plan": ["a"],
+				"stages": {}
+			}`,
+			want: "field run_id",
+		},
+		{
+			name: "empty plan",
+			payload: `{
+				"run_id": "run-1",
+				"mode": "normal",
+				"resolved_plan": [],
+				"stages": {}
+			}`,
+			want: "field resolved_plan",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			store := NewStore(filepath.Join(t.TempDir(), "state.json"))
+			if err := os.WriteFile(store.Path(), []byte(tc.payload), 0o644); err != nil {
+				t.Fatalf("write state payload: %v", err)
+			}
+
+			loaded, err := store.Load(context.Background())
+			if err == nil {
+				t.Fatalf("expected load error, got state %+v", loaded)
+			}
+			if !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("expected error to contain %q, got %v", tc.want, err)
+			}
+		})
+	}
+}
+
+func TestStoreLoadRejectsGeneratedFileOutsideRunDir(t *testing.T) {
+	homeDir := t.TempDir()
+	t.Setenv("HOME", homeDir)
+
+	store := NewStore(filepath.Join(t.TempDir(), "state.json"))
+	payload := `{
+		"run_id": "run-1",
+		"mode": "normal",
+		"resolved_plan": ["brew_bundle"],
+		"stages": {},
+		"generated_file": "/tmp/Brewfile.generated"
+	}`
+	if err := os.WriteFile(store.Path(), []byte(payload), 0o644); err != nil {
+		t.Fatalf("write state payload: %v", err)
+	}
+
+	loaded, err := store.Load(context.Background())
+	if err == nil {
+		t.Fatalf("expected load error, got state %+v", loaded)
+	}
+	if !strings.Contains(err.Error(), "field generated_file") {
+		t.Fatalf("expected generated_file validation error, got %v", err)
+	}
+}
+
 func TestRunDirRequiresRunID(t *testing.T) {
 	_, err := RunDir("")
 	if err == nil {

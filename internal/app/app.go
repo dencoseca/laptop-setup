@@ -60,8 +60,11 @@ func Run(ctx context.Context, args []string, stdout io.Writer, stderr io.Writer)
 	if cfg.resume && current == nil {
 		return errors.New("no previous run state found for --resume")
 	}
-	if cfg.resume && cfg.dryRun && current != nil && current.Mode != "dry-run" {
-		return errors.New("cannot resume a normal run as dry-run")
+	if cfg.resume {
+		catalog := defaultCatalogFn()
+		if err := validateResumeRequest(current, catalog, cfg.dryRun); err != nil {
+			return err
+		}
 	}
 
 	promptEnabled, err := canPrompt()
@@ -127,6 +130,9 @@ func runNonInteractive(
 	if cfg.resume {
 		runState = current
 		effectiveDryRun = runState.Mode == "dry-run"
+		if err := validateResumeRequest(runState, catalog, cfg.dryRun); err != nil {
+			return err
+		}
 	} else {
 		plan, resolveErr := stages.ResolvePlan(catalog, stages.PlanOptions{
 			FromID:  cfg.from,
@@ -209,6 +215,17 @@ func runNonInteractive(
 		CommandRunner: newCommandRunner(),
 		Logger:        logger,
 	})
+}
+
+func validateResumeRequest(runState *state.RunState, catalog []stages.Stage, requestedDryRun bool) error {
+	if runState == nil {
+		return errors.New("no previous run state found for --resume")
+	}
+	if requestedDryRun && runState.Mode != "dry-run" {
+		return errors.New("cannot resume a normal run as dry-run")
+	}
+	effectiveDryRun := runState.Mode == "dry-run"
+	return execution.ValidateRunStateForCatalog(runState, catalog, effectiveDryRun)
 }
 
 func parseConfig(args []string, stderr io.Writer) (config, error) {

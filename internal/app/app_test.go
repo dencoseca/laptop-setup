@@ -196,3 +196,110 @@ func TestRunNonInteractiveEndToEndPath(t *testing.T) {
 		t.Fatalf("expected events log to exist: %v", err)
 	}
 }
+
+func TestRunNonInteractiveResumeRejectsUnknownStageID(t *testing.T) {
+	homeDir := t.TempDir()
+	repoRoot := t.TempDir()
+	statePath := filepath.Join(t.TempDir(), "state.json")
+	store := state.NewStore(statePath)
+
+	origCatalogFn := defaultCatalogFn
+	origGetwd := getwd
+	origHome := userHomeDirectory
+	t.Cleanup(func() {
+		defaultCatalogFn = origCatalogFn
+		getwd = origGetwd
+		userHomeDirectory = origHome
+	})
+
+	defaultCatalogFn = func() []stages.Stage {
+		return []stages.Stage{
+			{
+				ID:      "known",
+				Title:   "Known",
+				CanSkip: true,
+				Precheck: func(context.Context, stages.ExecutionContext) (stages.CheckResult, error) {
+					return stages.CheckResult{}, nil
+				},
+				Run:      func(context.Context, stages.ExecutionContext) error { return nil },
+				Simulate: func(context.Context, stages.ExecutionContext) error { return nil },
+			},
+		}
+	}
+	getwd = func() (string, error) { return repoRoot, nil }
+	userHomeDirectory = func() (string, error) { return homeDir, nil }
+
+	current := &state.RunState{
+		RunID:        "run-1",
+		Mode:         "normal",
+		ResolvedPlan: []string{"missing"},
+		Stages:       map[string]state.StageStatus{},
+	}
+
+	var stdout bytes.Buffer
+	err := runNonInteractive(context.Background(), config{
+		yes:       true,
+		resume:    true,
+		statePath: statePath,
+	}, store, current, &stdout)
+	if err == nil {
+		t.Fatal("expected resume validation error")
+	}
+	if !strings.Contains(err.Error(), `resolved_plan[0]`) || !strings.Contains(err.Error(), `unknown stage id "missing"`) {
+		t.Fatalf("unexpected resume validation error: %v", err)
+	}
+}
+
+func TestRunNonInteractiveResumeRejectsNormalRunAsDryRun(t *testing.T) {
+	homeDir := t.TempDir()
+	repoRoot := t.TempDir()
+	statePath := filepath.Join(t.TempDir(), "state.json")
+	store := state.NewStore(statePath)
+
+	origCatalogFn := defaultCatalogFn
+	origGetwd := getwd
+	origHome := userHomeDirectory
+	t.Cleanup(func() {
+		defaultCatalogFn = origCatalogFn
+		getwd = origGetwd
+		userHomeDirectory = origHome
+	})
+
+	defaultCatalogFn = func() []stages.Stage {
+		return []stages.Stage{
+			{
+				ID:      "known",
+				Title:   "Known",
+				CanSkip: true,
+				Precheck: func(context.Context, stages.ExecutionContext) (stages.CheckResult, error) {
+					return stages.CheckResult{}, nil
+				},
+				Run:      func(context.Context, stages.ExecutionContext) error { return nil },
+				Simulate: func(context.Context, stages.ExecutionContext) error { return nil },
+			},
+		}
+	}
+	getwd = func() (string, error) { return repoRoot, nil }
+	userHomeDirectory = func() (string, error) { return homeDir, nil }
+
+	current := &state.RunState{
+		RunID:        "run-1",
+		Mode:         "normal",
+		ResolvedPlan: []string{"known"},
+		Stages:       map[string]state.StageStatus{},
+	}
+
+	var stdout bytes.Buffer
+	err := runNonInteractive(context.Background(), config{
+		yes:       true,
+		resume:    true,
+		dryRun:    true,
+		statePath: statePath,
+	}, store, current, &stdout)
+	if err == nil {
+		t.Fatal("expected dry-run compatibility error")
+	}
+	if err.Error() != "cannot resume a normal run as dry-run" {
+		t.Fatalf("unexpected compatibility error: %v", err)
+	}
+}

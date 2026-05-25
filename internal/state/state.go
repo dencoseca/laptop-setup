@@ -24,6 +24,21 @@ var (
 	runIDFallbackSeq  atomic.Uint64
 )
 
+var validRunModes = map[string]struct{}{
+	"normal":  {},
+	"dry-run": {},
+}
+
+var validStageStatuses = map[string]struct{}{
+	"pending":           {},
+	"running":           {},
+	"success":           {},
+	"skipped":           {},
+	"failed":            {},
+	"already_done":      {},
+	"simulated_success": {},
+}
+
 type StageStatus struct {
 	Status    string `json:"status"`
 	Attempts  int    `json:"attempts"`
@@ -107,6 +122,77 @@ func validateRunID(runID string) error {
 	return nil
 }
 
+func ValidateRunState(run *RunState) error {
+	if run == nil {
+		return errors.New("field run_state: is required")
+	}
+	if err := validateRunID(run.RunID); err != nil {
+		return fmt.Errorf("field run_id: %w", err)
+	}
+	if _, ok := validRunModes[run.Mode]; !ok {
+		return fmt.Errorf("field mode: unknown value %q", run.Mode)
+	}
+	if len(run.ResolvedPlan) == 0 {
+		return errors.New("field resolved_plan: must contain at least one stage id")
+	}
+	seenPlanIDs := make(map[string]struct{}, len(run.ResolvedPlan))
+	for index, stageID := range run.ResolvedPlan {
+		normalized := strings.TrimSpace(stageID)
+		if normalized == "" {
+			return fmt.Errorf("field resolved_plan[%d]: stage id is required", index)
+		}
+		if normalized != stageID {
+			return fmt.Errorf("field resolved_plan[%d]: stage id must not have surrounding whitespace", index)
+		}
+		if _, seen := seenPlanIDs[stageID]; seen {
+			return fmt.Errorf("field resolved_plan[%d]: duplicate stage id %q", index, stageID)
+		}
+		seenPlanIDs[stageID] = struct{}{}
+	}
+	for stageID, status := range run.Stages {
+		if strings.TrimSpace(stageID) == "" {
+			return errors.New("field stages: stage id is required")
+		}
+		if strings.TrimSpace(status.Status) == "" {
+			return fmt.Errorf("field stages.%s.status: status is required", stageID)
+		}
+		if _, ok := validStageStatuses[status.Status]; !ok {
+			return fmt.Errorf("field stages.%s.status: unknown value %q", stageID, status.Status)
+		}
+		if status.Attempts < 0 {
+			return fmt.Errorf("field stages.%s.attempts: must be non-negative", stageID)
+		}
+	}
+	if strings.TrimSpace(run.GeneratedFile) != "" {
+		if err := validateGeneratedFile(run.RunID, run.GeneratedFile); err != nil {
+			return fmt.Errorf("field generated_file: %w", err)
+		}
+	}
+	return nil
+}
+
+func validateGeneratedFile(runID string, path string) error {
+	if !filepath.IsAbs(path) {
+		return fmt.Errorf("must be an absolute path inside the run directory: %q", path)
+	}
+	cleanPath := filepath.Clean(path)
+	if cleanPath != path {
+		return fmt.Errorf("must be clean: %q", path)
+	}
+	runDir, err := RunDir(runID)
+	if err != nil {
+		return err
+	}
+	rel, err := filepath.Rel(runDir, cleanPath)
+	if err != nil {
+		return fmt.Errorf("compare to run directory: %w", err)
+	}
+	if rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
+		return fmt.Errorf("must be inside run directory %q: %q", runDir, path)
+	}
+	return nil
+}
+
 func (s *Store) Path() string {
 	return s.path
 }
@@ -132,7 +218,22 @@ func (s *Store) Load(ctx context.Context) (*RunState, error) {
 
 	var state RunState
 	if err = json.Unmarshal(payload, &state); err != nil {
+		var syntaxErr *json.SyntaxError
+		if errors.As(err, &syntaxErr) {
+			return nil, fmt.Errorf("decode state file: invalid JSON at byte %d: %w", syntaxErr.Offset, err)
+		}
+		var typeErr *json.UnmarshalTypeError
+		if errors.As(err, &typeErr) {
+			field := typeErr.Field
+			if field == "" {
+				field = typeErr.Value
+			}
+			return nil, fmt.Errorf("decode state file: invalid field %s at byte %d: %w", field, typeErr.Offset, err)
+		}
 		return nil, fmt.Errorf("decode state file: %w", err)
+	}
+	if err = ValidateRunState(&state); err != nil {
+		return nil, fmt.Errorf("validate state file: %w", err)
 	}
 	return &state, nil
 }

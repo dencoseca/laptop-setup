@@ -1285,6 +1285,9 @@ func (m *model) prepareExecutionSetup() (executionSetup, error) {
 		}
 		runState = m.current
 		dryRun = runState.Mode == "dry-run"
+		if err := execution.ValidateRunStateForCatalog(runState, m.catalog, dryRun); err != nil {
+			return executionSetup{}, err
+		}
 	} else {
 		dryRun = m.config.DryRun
 		runState = &state.RunState{

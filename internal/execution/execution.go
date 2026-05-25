@@ -84,6 +84,9 @@ func Execute(ctx context.Context, options Options) error {
 	if options.Logger == nil {
 		return errors.New("event logger is required")
 	}
+	if err := ValidateRunStateForCatalog(options.RunState, options.Catalog, options.DryRun); err != nil {
+		return err
+	}
 
 	runState := options.RunState
 	if runState.Stages == nil {
@@ -260,6 +263,56 @@ func Execute(ctx context.Context, options Options) error {
 		Message:   "All planned stages processed",
 	}); err != nil {
 		return err
+	}
+
+	return nil
+}
+
+func ValidateRunStateForCatalog(runState *state.RunState, catalog []stages.Stage, dryRun bool) error {
+	if err := state.ValidateRunState(runState); err != nil {
+		return fmt.Errorf("resume state: %w", err)
+	}
+	if (runState.Mode == "dry-run") != dryRun {
+		return fmt.Errorf("resume state field mode: saved mode %q is incompatible with requested dry-run=%t", runState.Mode, dryRun)
+	}
+	if len(catalog) == 0 {
+		return errors.New("resume state: catalog is empty")
+	}
+
+	stageIndex := make(map[string]stages.Stage, len(catalog))
+	for index, stage := range catalog {
+		if stage.ID == "" {
+			return fmt.Errorf("resume state: catalog stage at index %d has empty id", index)
+		}
+		if _, exists := stageIndex[stage.ID]; exists {
+			return fmt.Errorf("resume state: catalog contains duplicate stage id %q", stage.ID)
+		}
+		stageIndex[stage.ID] = stage
+	}
+
+	for index, stageID := range runState.ResolvedPlan {
+		stage, ok := stageIndex[stageID]
+		if !ok {
+			return fmt.Errorf("resume state field resolved_plan[%d]: unknown stage id %q", index, stageID)
+		}
+		if stage.Precheck == nil {
+			return fmt.Errorf("resume state field resolved_plan[%d]: stage %q has no precheck", index, stageID)
+		}
+		if dryRun {
+			if stage.Simulate == nil {
+				return fmt.Errorf("resume state field resolved_plan[%d]: stage %q has no dry-run simulation", index, stageID)
+			}
+			continue
+		}
+		if stage.Run == nil {
+			return fmt.Errorf("resume state field resolved_plan[%d]: stage %q has no runner", index, stageID)
+		}
+	}
+
+	for stageID := range runState.Stages {
+		if _, ok := stageIndex[stageID]; !ok {
+			return fmt.Errorf("resume state field stages.%s: unknown stage id %q", stageID, stageID)
+		}
 	}
 
 	return nil

@@ -256,6 +256,53 @@ func TestExecuteDryRunUsesSimulate(t *testing.T) {
 	}
 }
 
+func TestExecuteRejectsUnknownStageBeforeStartingRun(t *testing.T) {
+	store := state.NewStore(filepath.Join(t.TempDir(), "state.json"))
+	runState := &state.RunState{
+		RunID:        state.NewRunID(time.Now()),
+		StartAt:      time.Now().UTC(),
+		Mode:         "normal",
+		ResolvedPlan: []string{"missing"},
+		Stages:       map[string]state.StageStatus{},
+	}
+
+	catalog := []stages.Stage{
+		{
+			ID:      "known",
+			Title:   "Known",
+			CanSkip: true,
+			Precheck: func(context.Context, stages.ExecutionContext) (stages.CheckResult, error) {
+				return stages.CheckResult{}, nil
+			},
+			Run:      func(context.Context, stages.ExecutionContext) error { return nil },
+			Simulate: func(context.Context, stages.ExecutionContext) error { return nil },
+		},
+	}
+
+	var humanLog bytes.Buffer
+	logger := runner.NewEventLogger(&humanLog, &bytes.Buffer{})
+	err := Execute(context.Background(), Options{
+		Store:         store,
+		RunState:      runState,
+		Catalog:       catalog,
+		DryRun:        false,
+		RepoRoot:      t.TempDir(),
+		HomeDir:       t.TempDir(),
+		RunDir:        t.TempDir(),
+		CommandRunner: runner.NewOSCommandRunner(),
+		Logger:        logger,
+	})
+	if err == nil {
+		t.Fatal("expected unknown stage validation error")
+	}
+	if !strings.Contains(err.Error(), `resolved_plan[0]`) || !strings.Contains(err.Error(), `unknown stage id "missing"`) {
+		t.Fatalf("unexpected validation error: %v", err)
+	}
+	if strings.Contains(humanLog.String(), "run_started") {
+		t.Fatalf("expected validation to fail before run_started event, got log %q", humanLog.String())
+	}
+}
+
 func TestExecuteDryRunAppliesStageDelayBeforeSimulate(t *testing.T) {
 	store := state.NewStore(filepath.Join(t.TempDir(), "state.json"))
 	runState := &state.RunState{
