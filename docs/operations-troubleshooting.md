@@ -1,9 +1,9 @@
 # laptop-setup Troubleshooting
 
 This runbook is for operators validating or supporting the Go-based setup flow during migration.
-Default production entrypoint is `bootstrap.sh` (binary-first). `go run` workflows are for local repository validation.
-`bootstrap.sh` intentionally has no `setup.sh` fallback path; it only runs verified release binaries and exits on bootstrap errors.
-`bootstrap.sh` defaults to pinned release tag `v0.1.0`; override with `LAPTOP_SETUP_RELEASE_TAG` (for example `v0.1.1` or `latest`) when operators need to target a different release.
+Default production entrypoint is `bootstrap.sh`. It builds the latest `main` version with `go install`, then runs the built binary.
+`go run` workflows are for local repository validation.
+`bootstrap.sh` intentionally has no `setup.sh` fallback path; it exits on bootstrap errors.
 
 ## Runtime Artifacts
 
@@ -40,9 +40,8 @@ Use the latest `run_id` from `state.json` to locate the active run directory.
 Symptom:
 - `bootstrap error:` includes one of:
   - unsupported host OS/arch
-  - release artifact download failure
-  - checksum lookup/mismatch
-  - missing checksum tool (`shasum` or `sha256sum`)
+  - missing Go toolchain
+  - `go install` download/build failure
 
 Action:
 1. Use the exact error text to fix the root cause.
@@ -50,7 +49,7 @@ Action:
    ```shell
    sh bootstrap.sh [flags]
    ```
-3. Do not expect fallback to legacy scripts; bootstrap intentionally fails fast until verification passes.
+3. Do not expect fallback to legacy scripts; bootstrap intentionally fails fast until host and build prerequisites pass.
 
 ### No interactive TTY
 

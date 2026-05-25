@@ -2,12 +2,13 @@
 
 Use this checklist on a clean macOS VM to validate migration behavior end-to-end.
 Use `bootstrap.sh` as the default execution path; use `go run ./cmd/laptop-setup` only when validating from a local checkout.
-Bootstrap is intentionally binary-only: there is no `setup.sh` fallback when bootstrap validation fails.
+Bootstrap builds the latest `main` binary with `go install`; there is no `setup.sh` fallback when bootstrap validation fails.
 
 ## Preconditions
 
 - Clean Apple Silicon macOS VM snapshot.
 - Network access enabled.
+- Go toolchain installed.
 - Local checkout of this repository.
 - Terminal with write access to `$HOME`.
 

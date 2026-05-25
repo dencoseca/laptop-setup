@@ -13,15 +13,8 @@ sh bootstrap.sh
 This project targets Apple Silicon MacBooks only. Intel Macs are not a supported
 runtime target.
 
-`bootstrap.sh` is the default entrypoint. It downloads the Apple Silicon macOS release binary, verifies SHA256 checksums, then executes `laptop-setup`.
-There is intentionally no `setup.sh` fallback path: bootstrap is binary-only and fails fast when download or verification prerequisites are not met.
-Bootstrap defaults to pinned GitHub release tag `v0.1.0`.
-Override it with `LAPTOP_SETUP_RELEASE_TAG` when needed (including `latest`):
-
-```shell
-LAPTOP_SETUP_RELEASE_TAG=v0.1.1 sh bootstrap.sh
-LAPTOP_SETUP_RELEASE_TAG=latest sh bootstrap.sh
-```
+`bootstrap.sh` is the default entrypoint. It builds the latest `main` version with `go install`, then executes `laptop-setup`.
+There is intentionally no `setup.sh` fallback path: bootstrap fails fast when host or build prerequisites are not met.
 
 Common flags:
 
