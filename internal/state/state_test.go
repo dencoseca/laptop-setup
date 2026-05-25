@@ -2,7 +2,9 @@ package state
 
 import (
 	"context"
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -65,5 +67,51 @@ func TestRunDirRequiresRunID(t *testing.T) {
 	_, err := RunDir("")
 	if err == nil {
 		t.Fatal("expected RunDir to fail with empty run id")
+	}
+}
+
+func TestNewRunIDDoesNotCollideForSameInstant(t *testing.T) {
+	now := time.Date(2026, 5, 25, 12, 34, 56, 789, time.UTC)
+	seen := make(map[string]struct{})
+
+	for range 1000 {
+		runID := NewRunID(now)
+		if _, exists := seen[runID]; exists {
+			t.Fatalf("NewRunID collided for same instant: %s", runID)
+		}
+		seen[runID] = struct{}{}
+
+		if !strings.HasPrefix(runID, "20260525T123456000000789Z-") {
+			t.Fatalf("generated run id missing UTC nanosecond timestamp prefix: %q", runID)
+		}
+		if _, err := RunDir(runID); err != nil {
+			t.Fatalf("generated run id rejected by RunDir: id=%q err=%v", runID, err)
+		}
+		if strings.ContainsAny(runID, `/\`) {
+			t.Fatalf("generated run id contains path separator: %q", runID)
+		}
+	}
+}
+
+func TestRunDirRejectsInvalidRunIDs(t *testing.T) {
+	invalidIDs := []string{
+		"",
+		"../x",
+		filepath.Join(string(os.PathSeparator), "tmp", "x"),
+		"a/b",
+		`a\b`,
+		".",
+		"..",
+		"run id",
+		"run:id",
+		"-starts-with-dash",
+	}
+
+	for _, runID := range invalidIDs {
+		t.Run(runID, func(t *testing.T) {
+			if _, err := RunDir(runID); err == nil {
+				t.Fatalf("expected RunDir to reject %q", runID)
+			}
+		})
 	}
 }

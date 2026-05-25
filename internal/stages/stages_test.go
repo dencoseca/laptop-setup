@@ -215,6 +215,53 @@ func TestRunBrewBundleUsesGeneratedBrewfileMatchingSelectedEntries(t *testing.T)
 	}
 }
 
+func TestRunBrewBundleFailsWhenBrewMissing(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+
+	runnerStub := &recordingRunner{}
+	err := runBrewBundle(context.Background(), ExecutionContext{
+		Runner: runnerStub,
+	})
+	if err == nil {
+		t.Fatal("expected runBrewBundle to fail when brew is missing")
+	}
+	if !strings.Contains(err.Error(), "brew executable not found") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(runnerStub.commands) != 0 {
+		t.Fatalf("expected no command execution when brew is missing, got %d commands", len(runnerStub.commands))
+	}
+}
+
+func TestSimulateBrewBundleDoesNotRequireBrew(t *testing.T) {
+	repoRoot := t.TempDir()
+	runDir := t.TempDir()
+	templatesDir := filepath.Join(repoRoot, "templates")
+	if err := os.MkdirAll(templatesDir, 0o755); err != nil {
+		t.Fatalf("create templates directory: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(templatesDir, "Brewfile"), []byte(`brew "go"`+"\n"), 0o644); err != nil {
+		t.Fatalf("write template Brewfile: %v", err)
+	}
+
+	t.Setenv("PATH", t.TempDir())
+	logger := &recordingEventLogger{}
+	err := simulateBrewBundle(context.Background(), ExecutionContext{
+		Logger:   logger,
+		RepoRoot: repoRoot,
+		RunDir:   runDir,
+	})
+	if err != nil {
+		t.Fatalf("simulateBrewBundle returned error: %v", err)
+	}
+	if len(logger.events) != 2 {
+		t.Fatalf("expected 2 simulation events, got %d", len(logger.events))
+	}
+	if _, err := os.Stat(filepath.Join(runDir, "Brewfile.generated")); !os.IsNotExist(err) {
+		t.Fatalf("expected dry-run simulation not to generate Brewfile, stat err=%v", err)
+	}
+}
+
 func TestResolveSelectedBrewIDs(t *testing.T) {
 	repoRoot := t.TempDir()
 	templatesDir := filepath.Join(repoRoot, "templates")

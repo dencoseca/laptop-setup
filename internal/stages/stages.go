@@ -392,7 +392,7 @@ func simulateHomebrewInstall(_ context.Context, execCtx ExecutionContext) error 
 
 func runBrewBundle(ctx context.Context, execCtx ExecutionContext) error {
 	if _, err := exec.LookPath("brew"); err != nil {
-		return logSimulation(execCtx, "brew not found, skipping brew bundle stage")
+		return fmt.Errorf("brew executable not found: %w", err)
 	}
 
 	brewfilePath := execCtx.GeneratedBrewfilePath

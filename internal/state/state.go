@@ -2,17 +2,26 @@ package state
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
+	"sync/atomic"
 	"time"
 )
 
 const (
 	relativeStateFile = ".laptop-setup/state.json"
 	relativeRunsDir   = ".laptop-setup/runs"
+)
+
+var (
+	validRunIDPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]*$`)
+	runIDFallbackSeq  atomic.Uint64
 )
 
 type StageStatus struct {
@@ -59,8 +68,8 @@ func RunsDir() (string, error) {
 }
 
 func RunDir(runID string) (string, error) {
-	if runID == "" {
-		return "", errors.New("run id is required")
+	if err := validateRunID(runID); err != nil {
+		return "", err
 	}
 	runsDir, err := RunsDir()
 	if err != nil {
@@ -70,7 +79,32 @@ func RunDir(runID string) (string, error) {
 }
 
 func NewRunID(now time.Time) string {
-	return now.UTC().Format("20060102T150405Z")
+	utc := now.UTC()
+	timestamp := fmt.Sprintf("%s%09dZ", utc.Format("20060102T150405"), utc.Nanosecond())
+	var suffix [8]byte
+	if _, err := rand.Read(suffix[:]); err != nil {
+		return fmt.Sprintf("%s-%016x", timestamp, runIDFallbackSeq.Add(1))
+	}
+	return fmt.Sprintf("%s-%x", timestamp, suffix)
+}
+
+func validateRunID(runID string) error {
+	if runID == "" {
+		return errors.New("run id is required")
+	}
+	if filepath.IsAbs(runID) {
+		return fmt.Errorf("run id must be relative: %q", runID)
+	}
+	if strings.Contains(runID, "/") || strings.Contains(runID, `\`) {
+		return fmt.Errorf("run id must not contain path separators: %q", runID)
+	}
+	if !validRunIDPattern.MatchString(runID) {
+		return fmt.Errorf("run id contains invalid characters: %q", runID)
+	}
+	if filepath.Clean(runID) != runID {
+		return fmt.Errorf("run id must be clean: %q", runID)
+	}
+	return nil
 }
 
 func (s *Store) Path() string {
