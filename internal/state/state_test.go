@@ -63,6 +63,46 @@ func TestStoreLoadMissingStateReturnsNil(t *testing.T) {
 	}
 }
 
+func TestStoreContractSaveLoadUpdateAndPath(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "nested", "state.json")
+	store := NewStore(path)
+	if store.Path() != path {
+		t.Fatalf("Path mismatch: got=%q want=%q", store.Path(), path)
+	}
+
+	run := &RunState{
+		RunID:        "run-1",
+		Mode:         "normal",
+		ResolvedPlan: []StageID{"stage_one"},
+		Decisions:    stages.DefaultDecisions().WithSelectedStageIDs([]StageID{"stage_one"}),
+		Stages: map[StageID]StageStatus{
+			"stage_one": {Status: StageStatusPending},
+		},
+	}
+	if err := store.Save(context.Background(), run); err != nil {
+		t.Fatalf("initial Save returned error: %v", err)
+	}
+
+	run.Stages["stage_one"] = StageStatus{Status: StageStatusSuccess, Attempts: 1}
+	if err := store.Save(context.Background(), run); err != nil {
+		t.Fatalf("update Save returned error: %v", err)
+	}
+
+	loaded, err := store.Load(context.Background())
+	if err != nil {
+		t.Fatalf("Load returned error: %v", err)
+	}
+	if loaded == nil {
+		t.Fatal("expected saved state")
+	}
+	if status := loaded.Stages["stage_one"]; status.Status != StageStatusSuccess || status.Attempts != 1 {
+		t.Fatalf("loaded status mismatch: %+v", status)
+	}
+	if _, err := os.Stat(path + ".tmp"); !os.IsNotExist(err) {
+		t.Fatalf("expected temporary state file to be absent after commit, got err=%v", err)
+	}
+}
+
 func TestStoreLoadRejectsInvalidPersistedState(t *testing.T) {
 	cases := []struct {
 		name    string

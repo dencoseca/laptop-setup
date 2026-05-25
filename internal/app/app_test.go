@@ -89,6 +89,21 @@ func (r *noOpCommandRunner) LookPath(context.Context, string) (string, error) {
 	return "/usr/local/bin/test-command", nil
 }
 
+type missingCommandRunner struct {
+	lookPathCalls []string
+	runCalls      int
+}
+
+func (r *missingCommandRunner) Run(context.Context, runner.Command) (runner.Result, error) {
+	r.runCalls++
+	return runner.Result{}, nil
+}
+
+func (r *missingCommandRunner) LookPath(_ context.Context, name string) (string, error) {
+	r.lookPathCalls = append(r.lookPathCalls, name)
+	return "", os.ErrNotExist
+}
+
 type fakePathResolver struct {
 	workingDir       string
 	homeDir          string
@@ -118,9 +133,8 @@ func (d staticTTYDetector) CanPrompt() (bool, error) {
 	return bool(d), nil
 }
 
-func TestRunNonInteractiveEndToEndPath(t *testing.T) {
-	homeDir := t.TempDir()
-	repoRoot := t.TempDir()
+func writeTestBrewfile(t *testing.T, repoRoot string) {
+	t.Helper()
 	templatesDir := filepath.Join(repoRoot, "templates")
 	if err := os.MkdirAll(templatesDir, 0o755); err != nil {
 		t.Fatalf("create templates directory: %v", err)
@@ -128,6 +142,12 @@ func TestRunNonInteractiveEndToEndPath(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(templatesDir, "Brewfile"), []byte("brew \"go\"\ncask \"warp\"\n"), 0o644); err != nil {
 		t.Fatalf("write Brewfile template: %v", err)
 	}
+}
+
+func TestRunNonInteractiveEndToEndPath(t *testing.T) {
+	homeDir := t.TempDir()
+	repoRoot := t.TempDir()
+	writeTestBrewfile(t, repoRoot)
 
 	statePath := filepath.Join(t.TempDir(), "state.json")
 	store := state.NewStore(statePath)
@@ -223,6 +243,142 @@ func TestRunNonInteractiveEndToEndPath(t *testing.T) {
 	}
 	if _, err = os.Stat(filepath.Join(runDir, "events.jsonl")); err != nil {
 		t.Fatalf("expected events log to exist: %v", err)
+	}
+}
+
+func TestRunNonInteractiveResumeContinuesFailedRun(t *testing.T) {
+	homeDir := t.TempDir()
+	repoRoot := t.TempDir()
+	writeTestBrewfile(t, repoRoot)
+
+	statePath := filepath.Join(t.TempDir(), "state.json")
+	store := state.NewStore(statePath)
+	runState := &state.RunState{
+		RunID:        "run-1",
+		Mode:         "normal",
+		ResolvedPlan: []state.StageID{"first", "second"},
+		Decisions:    stages.DefaultDecisions().WithSelectedStageIDs([]state.StageID{"first", "second"}),
+		Stages: map[state.StageID]state.StageStatus{
+			"first":  {Status: stages.StatusSuccess, Attempts: 1},
+			"second": {Status: stages.StatusFailed, Attempts: 1, LastError: "previous failure"},
+		},
+	}
+	if err := store.Save(context.Background(), runState); err != nil {
+		t.Fatalf("save resumable state: %v", err)
+	}
+
+	firstCalls := 0
+	secondCalls := 0
+	paths := fakePathResolver{
+		workingDir:       repoRoot,
+		homeDir:          homeDir,
+		defaultStatePath: statePath,
+		runsDir:          filepath.Join(t.TempDir(), "runs"),
+	}
+	app := New(Dependencies{
+		Catalog: func() []stages.Stage {
+			return []stages.Stage{
+				{
+					ID:      "first",
+					Title:   "First",
+					CanSkip: true,
+					Precheck: func(context.Context, stages.ExecutionContext) (stages.CheckResult, error) {
+						return stages.CheckResult{}, nil
+					},
+					Run: func(context.Context, stages.ExecutionContext) error {
+						firstCalls++
+						return nil
+					},
+					Simulate: func(context.Context, stages.ExecutionContext) error { return nil },
+				},
+				{
+					ID:      "second",
+					Title:   "Second",
+					CanSkip: true,
+					Precheck: func(context.Context, stages.ExecutionContext) (stages.CheckResult, error) {
+						return stages.CheckResult{}, nil
+					},
+					Run: func(context.Context, stages.ExecutionContext) error {
+						secondCalls++
+						return nil
+					},
+					Simulate: func(context.Context, stages.ExecutionContext) error { return nil },
+				},
+			}
+		},
+		CommandRunner: func() runner.CommandRunner { return &noOpCommandRunner{} },
+		Paths:         paths,
+		RunLogs:       filesystemRunLogFactory{Paths: paths},
+		TTY:           staticTTYDetector(false),
+	})
+
+	var stdout bytes.Buffer
+	err := app.Run(context.Background(), []string{"--yes", "--resume", "--state-file", statePath}, &stdout, &bytes.Buffer{})
+	if err != nil {
+		t.Fatalf("App.Run resume returned error: %v", err)
+	}
+
+	if firstCalls != 0 {
+		t.Fatalf("expected completed stage not to run during resume, got %d", firstCalls)
+	}
+	if secondCalls != 1 {
+		t.Fatalf("expected failed stage to retry once during resume, got %d", secondCalls)
+	}
+	loaded, err := store.Load(context.Background())
+	if err != nil {
+		t.Fatalf("load resumed state: %v", err)
+	}
+	if status := loaded.Stages["second"]; status.Status != stages.StatusSuccess || status.Attempts != 2 {
+		t.Fatalf("expected second stage success after resume with attempts=2, got %+v", status)
+	}
+}
+
+func TestRunNonInteractiveMissingPrerequisiteFailsStage(t *testing.T) {
+	homeDir := t.TempDir()
+	repoRoot := t.TempDir()
+	writeTestBrewfile(t, repoRoot)
+
+	statePath := filepath.Join(t.TempDir(), "state.json")
+	store := state.NewStore(statePath)
+	commandRunner := &missingCommandRunner{}
+	paths := fakePathResolver{
+		workingDir:       repoRoot,
+		homeDir:          homeDir,
+		defaultStatePath: statePath,
+		runsDir:          filepath.Join(t.TempDir(), "runs"),
+	}
+	app := New(Dependencies{
+		CommandRunner: func() runner.CommandRunner { return commandRunner },
+		Paths:         paths,
+		RunLogs:       filesystemRunLogFactory{Paths: paths},
+		TTY:           staticTTYDetector(false),
+	})
+
+	var stdout bytes.Buffer
+	err := app.Run(context.Background(), []string{"--yes", "--only", "brew_bundle", "--state-file", statePath}, &stdout, &bytes.Buffer{})
+	if err == nil {
+		t.Fatal("expected missing Homebrew prerequisite to fail")
+	}
+	if !strings.Contains(err.Error(), "brew executable not found") {
+		t.Fatalf("expected Homebrew availability error, got %v", err)
+	}
+	if !slices.Equal(commandRunner.lookPathCalls, []string{"brew", "brew"}) {
+		t.Fatalf("expected precheck and run availability checks through command runner, got %v", commandRunner.lookPathCalls)
+	}
+	if commandRunner.runCalls != 0 {
+		t.Fatalf("expected brew bundle command not to execute when brew is missing, got %d calls", commandRunner.runCalls)
+	}
+
+	loaded, loadErr := store.Load(context.Background())
+	if loadErr != nil {
+		t.Fatalf("load failed state: %v", loadErr)
+	}
+	status := loaded.Stages["brew_bundle"]
+	if status.Status != stages.StatusFailed {
+		t.Fatalf("expected brew_bundle failed status, got %q", status.Status)
+	}
+	if loaded.LastFailure == "" || !strings.Contains(loaded.LastFailure, "brew executable not found") {
+		t.Fatalf("expected last failure to record missing brew, got %q", loaded.LastFailure)
 	}
 }
 

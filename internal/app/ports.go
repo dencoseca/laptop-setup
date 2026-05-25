@@ -168,15 +168,16 @@ func (stdinTTYDetector) CanPrompt() (bool, error) {
 
 func DefaultDependencies() Dependencies {
 	paths := osPathResolver{}
+	commandRunner := runner.NewOSCommandRunner()
 	return Dependencies{
 		Catalog:           stages.DefaultCatalog,
-		CommandRunner:     func() runner.CommandRunner { return runner.NewOSCommandRunner() },
+		CommandRunner:     func() runner.CommandRunner { return commandRunner },
 		StateRepositories: stateStoreFactory{},
 		Paths:             paths,
 		RunLogs:           filesystemRunLogFactory{Paths: paths},
 		TemplateStores:    filesystemTemplateStoreFactory{},
 		FileSystem:        stages.OSFileSystem{},
-		PackageManager:    stages.HomebrewPackageManager{},
+		PackageManager:    stages.HomebrewPackageManager{Runner: commandRunner},
 		UI:                uiRunnerFunc(ui.Run),
 		Executor:          executorFunc(execution.Execute),
 		TTY:               stdinTTYDetector{},
@@ -208,7 +209,7 @@ func (deps Dependencies) withDefaults() Dependencies {
 		deps.FileSystem = defaults.FileSystem
 	}
 	if deps.PackageManager == nil {
-		deps.PackageManager = defaults.PackageManager
+		deps.PackageManager = stages.HomebrewPackageManager{Runner: deps.CommandRunner()}
 	}
 	if deps.UI == nil {
 		deps.UI = defaults.UI

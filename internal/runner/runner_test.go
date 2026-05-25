@@ -54,3 +54,27 @@ func TestOSCommandRunnerLookPathUsesEnvironment(t *testing.T) {
 		t.Fatalf("path mismatch: got=%q want=%q", path, commandPath)
 	}
 }
+
+func TestOSCommandRunnerContractExecutesWithDirAndEnv(t *testing.T) {
+	workDir := t.TempDir()
+	command := Command{
+		Name: "/bin/sh",
+		Args: []string{"-c", `printf "%s|%s" "$PWD" "$PORT_CONTRACT_VALUE"`},
+		Dir:  workDir,
+		Env:  []string{"PORT_CONTRACT_VALUE=ok"},
+	}
+
+	result, err := NewOSCommandRunner().Run(context.Background(), command)
+	if err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+	if result.ExitCode != 0 {
+		t.Fatalf("exit code mismatch: %d", result.ExitCode)
+	}
+	if result.Stdout != workDir+"|ok" {
+		t.Fatalf("stdout mismatch: got=%q want=%q", result.Stdout, workDir+"|ok")
+	}
+	if result.Stderr != "" {
+		t.Fatalf("expected empty stderr, got %q", result.Stderr)
+	}
+}
