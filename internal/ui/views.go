@@ -32,9 +32,9 @@ func (m model) View() string {
 	case screenShellOptions:
 		content = m.viewToggleOptions("Dev Tools: Shell Setup Options", m.shellOptions)
 	case screenGitName:
-		content = m.viewTextInput("Git Identity: user.name", "Enter git user.name, then press Enter.", m.gitNameInput)
+		content = m.viewTextInput("Git Identity: user.name", "Enter git user.name, or leave blank, then press Enter.", m.gitNameInput)
 	case screenGitEmail:
-		content = m.viewTextInput("Git Identity: user.email", "Enter git user.email, then press Enter.", m.gitEmailInput)
+		content = m.viewTextInput("Git Identity: user.email", "Enter git user.email, or leave blank, then press Enter.", m.gitEmailInput)
 	case screenManual:
 		content = m.viewToggleOptions("Manual Steps", m.manualOptions)
 	case screenReview:

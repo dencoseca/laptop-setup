@@ -241,18 +241,15 @@ func Run(ctx context.Context, options Options) error {
 	spin.Spinner = spinner.Dot
 	shortcutHelp := newShortcutHelp()
 	elapsed := stopwatch.NewWithInterval(time.Millisecond)
-	currentGitName, currentGitEmail := readGitIdentity(options.HomeDir)
 	gitNameInput := textinput.New()
 	gitNameInput.Placeholder = "Git user.name"
 	gitNameInput.CharLimit = 128
 	gitNameInput.Prompt = "> "
-	gitNameInput.SetValue(currentGitName)
 
 	gitEmailInput := textinput.New()
 	gitEmailInput.Placeholder = "Git user.email"
 	gitEmailInput.CharLimit = 128
 	gitEmailInput.Prompt = "> "
-	gitEmailInput.SetValue(currentGitEmail)
 
 	m := model{
 		ctx:              runCtx,
@@ -462,10 +459,6 @@ func (m model) updateKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case "enter":
 			name := strings.TrimSpace(m.gitNameInput.Value())
-			if name == "" {
-				m.inputError = "Git user.name is required."
-				return m, nil
-			}
 			m.inputError = ""
 			m.gitNameInput.SetValue(name)
 			m.gitNameInput.Blur()
@@ -486,10 +479,6 @@ func (m model) updateKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, textinput.Blink
 		case "enter":
 			email := strings.TrimSpace(m.gitEmailInput.Value())
-			if email == "" {
-				m.inputError = "Git user.email is required."
-				return m, nil
-			}
 			m.inputError = ""
 			m.gitEmailInput.SetValue(email)
 			m.gitEmailInput.Blur()

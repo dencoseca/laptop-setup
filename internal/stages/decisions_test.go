@@ -59,10 +59,23 @@ func TestDecisionSetFromMap(t *testing.T) {
 			wantErr: DecisionShellApplyZshrc,
 		},
 		{
-			name: "custom git identity requires name",
+			name: "blank custom git identity is accepted",
 			values: map[string]any{
 				DecisionGitConfigMode: string(GitConfigModeCustom),
-				DecisionGitUserEmail:  "alice@example.com",
+			},
+			want: DecisionSet{
+				NodeToolchain:       NodeToolchainVitePlus,
+				DockerRuntime:       DockerRuntimeColima,
+				ShellInstallOhMyZsh: true,
+				ShellApplyZshrc:     true,
+				ShellApplyStarship:  true,
+				GitConfigMode:       GitConfigModeCustom,
+			},
+		},
+		{
+			name: "git identity newline rejected",
+			values: map[string]any{
+				DecisionGitUserName: "Alice\nBob",
 			},
 			wantErr: DecisionGitUserName,
 		},

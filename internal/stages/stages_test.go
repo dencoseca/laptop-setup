@@ -720,6 +720,46 @@ func TestRunGitConfigTemplateWritesEnteredIdentity(t *testing.T) {
 	}
 }
 
+func TestRunGitConfigOmitsBlankIdentityFields(t *testing.T) {
+	repoRoot := t.TempDir()
+	homeDir := t.TempDir()
+	templatesDir := filepath.Join(repoRoot, "templates")
+	if err := os.MkdirAll(templatesDir, 0o755); err != nil {
+		t.Fatalf("create templates dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(templatesDir, "gitignore"), []byte("*.tmp\n"), 0o644); err != nil {
+		t.Fatalf("write gitignore template: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(templatesDir, "gitconfig"), []byte("[core]\n  autocrlf = input\n"), 0o644); err != nil {
+		t.Fatalf("write gitconfig template: %v", err)
+	}
+
+	err := runGitConfig(context.Background(), ExecutionContext{
+		RepoRoot: repoRoot,
+		HomeDir:  homeDir,
+		Decisions: DecisionSet{
+			NodeToolchain:       NodeToolchainVitePlus,
+			DockerRuntime:       DockerRuntimeColima,
+			ShellInstallOhMyZsh: true,
+			ShellApplyZshrc:     true,
+			ShellApplyStarship:  true,
+			GitConfigMode:       GitConfigModeTemplate,
+		},
+	})
+	if err != nil {
+		t.Fatalf("runGitConfig returned error: %v", err)
+	}
+
+	content, err := os.ReadFile(filepath.Join(homeDir, ".gitconfig"))
+	if err != nil {
+		t.Fatalf("read generated gitconfig: %v", err)
+	}
+	body := string(content)
+	if strings.Contains(body, "[user]") || strings.Contains(body, "name =") || strings.Contains(body, "email =") {
+		t.Fatalf("expected blank git identity to be omitted, got %q", body)
+	}
+}
+
 func TestRunGitConfigOverwritesExistingGitConfig(t *testing.T) {
 	repoRoot := t.TempDir()
 	homeDir := t.TempDir()

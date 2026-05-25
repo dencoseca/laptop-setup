@@ -1149,6 +1149,39 @@ func TestGitIdentityInputsAcceptAlphanumericCharacters(t *testing.T) {
 	})
 }
 
+func TestGitIdentityInputsAllowBlankEnter(t *testing.T) {
+	t.Run("blank name continues to email", func(t *testing.T) {
+		m := model{
+			screen:        screenGitName,
+			gitNameInput:  textinput.New(),
+			gitEmailInput: textinput.New(),
+		}
+
+		m = sendEnter(t, m)
+		if m.screen != screenGitEmail {
+			t.Fatalf("expected blank git name to continue to email screen, got %v", m.screen)
+		}
+		if m.inputError != "" {
+			t.Fatalf("expected no input error, got %q", m.inputError)
+		}
+	})
+
+	t.Run("blank email continues to manual", func(t *testing.T) {
+		m := model{
+			screen:        screenGitEmail,
+			gitEmailInput: textinput.New(),
+		}
+
+		m = sendEnter(t, m)
+		if m.screen != screenManual {
+			t.Fatalf("expected blank git email to continue to manual screen, got %v", m.screen)
+		}
+		if m.inputError != "" {
+			t.Fatalf("expected no input error, got %q", m.inputError)
+		}
+	})
+}
+
 func TestShellOptionsEnterSkipsOrCollectsGitIdentity(t *testing.T) {
 	t.Run("git stage skipped", func(t *testing.T) {
 		m := model{

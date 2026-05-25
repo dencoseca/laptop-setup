@@ -195,13 +195,11 @@ func (decisions DecisionSet) Validate() error {
 			return fmt.Errorf("%s[%d]: %w", DecisionSelectedStageIDs, index, err)
 		}
 	}
-	if decisions.GitConfigMode == GitConfigModeCustom {
-		if strings.TrimSpace(decisions.GitUserName) == "" {
-			return fmt.Errorf("%s: is required for custom git identity mode", DecisionGitUserName)
-		}
-		if strings.TrimSpace(decisions.GitUserEmail) == "" {
-			return fmt.Errorf("%s: is required for custom git identity mode", DecisionGitUserEmail)
-		}
+	if strings.ContainsAny(decisions.GitUserName, "\r\n") {
+		return fmt.Errorf("%s: cannot contain newlines", DecisionGitUserName)
+	}
+	if strings.ContainsAny(decisions.GitUserEmail, "\r\n") {
+		return fmt.Errorf("%s: cannot contain newlines", DecisionGitUserEmail)
 	}
 	return nil
 }

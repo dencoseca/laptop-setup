@@ -764,7 +764,10 @@ func simulateGitConfig(_ context.Context, execCtx ExecutionContext) error {
 	if err := validateGitIdentity(name, email); err != nil {
 		return err
 	}
-	return logSimulation(execCtx, fmt.Sprintf("Would write templates/gitconfig and set git identity to %q <%s>", name, email))
+	if name == "" && email == "" {
+		return logSimulation(execCtx, "Would write templates/gitconfig without git user identity")
+	}
+	return logSimulation(execCtx, "Would write templates/gitconfig and set provided git identity fields")
 }
 
 func writeGitConfigFromTemplate(execCtx ExecutionContext, gitConfigPath string) error {
@@ -1057,7 +1060,19 @@ func gitConfigContent(execCtx ExecutionContext) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	configBody := strings.TrimRight(string(content), "\n") + "\n\n[user]\n  name = " + name + "\n  email = " + email + "\n"
+	configBody := strings.TrimRight(string(content), "\n") + "\n"
+	if name != "" || email != "" {
+		var builder strings.Builder
+		builder.WriteString(configBody)
+		builder.WriteString("\n[user]\n")
+		if name != "" {
+			builder.WriteString("  name = " + name + "\n")
+		}
+		if email != "" {
+			builder.WriteString("  email = " + email + "\n")
+		}
+		configBody = builder.String()
+	}
 	return []byte(configBody), nil
 }
 
@@ -1130,12 +1145,6 @@ func copyFileFS(fsys FileSystem, sourcePath, destinationPath string, perm fs.Fil
 }
 
 func validateGitIdentity(name, email string) error {
-	if strings.TrimSpace(name) == "" {
-		return errors.New("git user name is required for custom git identity mode")
-	}
-	if strings.TrimSpace(email) == "" {
-		return errors.New("git user email is required for custom git identity mode")
-	}
 	if strings.ContainsAny(name, "\r\n") {
 		return errors.New("git user name cannot contain newlines")
 	}
