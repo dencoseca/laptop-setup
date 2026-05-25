@@ -46,6 +46,35 @@ func (r *scriptedRunner) LookPath(_ context.Context, name string) (string, error
 	return filepath.Join("/usr/local/bin", name), nil
 }
 
+type defaultsRunner struct {
+	commands []runner.Command
+	values   map[string]string
+}
+
+func (r *defaultsRunner) Run(_ context.Context, command runner.Command) (runner.Result, error) {
+	r.commands = append(r.commands, command)
+	if command.Name != "defaults" || len(command.Args) < 3 {
+		return runner.Result{}, nil
+	}
+	action := command.Args[0]
+	key := command.Args[1] + "\x00" + command.Args[2]
+	switch action {
+	case "read":
+		value, ok := r.values[key]
+		if !ok {
+			return runner.Result{ExitCode: 1}, errors.New("not found")
+		}
+		return runner.Result{Stdout: value + "\n"}, nil
+	case "write":
+		r.values[key] = command.Args[4]
+	}
+	return runner.Result{}, nil
+}
+
+func (r *defaultsRunner) LookPath(_ context.Context, name string) (string, error) {
+	return filepath.Join("/usr/local/bin", name), nil
+}
+
 type recordingEventLogger struct {
 	events []runner.Event
 }
@@ -359,8 +388,37 @@ func TestResolveSelectedBrewIDs(t *testing.T) {
 	}
 }
 
+func TestRunMacOSDefaultsSkipsMatchingDefaults(t *testing.T) {
+	values := make(map[string]string, len(macOSDefaults))
+	for _, setting := range macOSDefaults {
+		values[setting.Domain+"\x00"+setting.Key] = setting.Value
+	}
+	runnerStub := &defaultsRunner{values: values}
+	execCtx := ExecutionContext{Runner: runnerStub}
+
+	check, err := precheckMacOSDefaults(context.Background(), execCtx)
+	if err != nil {
+		t.Fatalf("precheckMacOSDefaults returned error: %v", err)
+	}
+	if !check.Satisfied {
+		t.Fatal("expected macOS defaults precheck to be satisfied")
+	}
+
+	if err := runMacOSDefaults(context.Background(), execCtx); err != nil {
+		t.Fatalf("runMacOSDefaults returned error: %v", err)
+	}
+	for _, command := range runnerStub.commands {
+		if command.Name == "defaults" && len(command.Args) > 0 && command.Args[0] == "write" {
+			t.Fatalf("expected matching defaults not to be rewritten, got command %q", command.String())
+		}
+		if command.Name == "killall" {
+			t.Fatalf("expected matching defaults not to restart processes, got command %q", command.String())
+		}
+	}
+}
+
 func TestRunNodeToolchainInstallUsesViteChoice(t *testing.T) {
-	runnerStub := &recordingRunner{}
+	runnerStub := &recordingRunner{lookPathErr: errors.New("not found")}
 	err := runNodeToolchainInstall(context.Background(), ExecutionContext{
 		Runner:    runnerStub,
 		Decisions: DefaultDecisions(),
@@ -378,7 +436,7 @@ func TestRunNodeToolchainInstallUsesViteChoice(t *testing.T) {
 }
 
 func TestRunNodeToolchainInstallUsesNvmAndPnpmChoice(t *testing.T) {
-	runnerStub := &recordingRunner{}
+	runnerStub := &recordingRunner{lookPathErr: errors.New("not found")}
 	err := runNodeToolchainInstall(context.Background(), ExecutionContext{
 		Runner: runnerStub,
 		Decisions: DecisionSet{
@@ -443,9 +501,12 @@ func TestRunShellSetupRespectsShellDecisions(t *testing.T) {
 	if len(runnerStub.commands) != 0 {
 		t.Fatalf("expected no command execution, got %d commands", len(runnerStub.commands))
 	}
-	backupPath := filepath.Join(homeDir, ".zshrc.bak")
-	if _, err := os.Stat(backupPath); err != nil {
-		t.Fatalf("expected zshrc backup to exist: %v", err)
+	backups, err := filepath.Glob(filepath.Join(homeDir, ".zshrc.backup.*"))
+	if err != nil {
+		t.Fatalf("glob zshrc backups: %v", err)
+	}
+	if len(backups) != 1 {
+		t.Fatalf("expected one timestamped zshrc backup, got %v", backups)
 	}
 	if content, err := os.ReadFile(filepath.Join(homeDir, ".zshrc")); err != nil {
 		t.Fatalf("read resulting zshrc: %v", err)
@@ -454,6 +515,118 @@ func TestRunShellSetupRespectsShellDecisions(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(homeDir, ".config", "starship.toml")); !os.IsNotExist(err) {
 		t.Fatalf("expected no starship config when disabled, got err=%v", err)
+	}
+}
+
+func TestRunShellSetupSecondRunSkipsInstalledToolsAndMatchingFiles(t *testing.T) {
+	repoRoot := t.TempDir()
+	homeDir := t.TempDir()
+	templatesDir := filepath.Join(repoRoot, "templates")
+	if err := os.MkdirAll(templatesDir, 0o755); err != nil {
+		t.Fatalf("create templates dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(templatesDir, "zshrc"), []byte("new-zshrc\n"), 0o644); err != nil {
+		t.Fatalf("write zshrc template: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(templatesDir, "starship.toml"), []byte("starship\n"), 0o644); err != nil {
+		t.Fatalf("write starship template: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(homeDir, ".zshrc"), []byte("old-zshrc\n"), 0o644); err != nil {
+		t.Fatalf("write existing zshrc: %v", err)
+	}
+	if err := os.MkdirAll(filepath.Join(homeDir, ".oh-my-zsh"), 0o755); err != nil {
+		t.Fatalf("create existing oh-my-zsh dir: %v", err)
+	}
+
+	runnerStub := &recordingRunner{}
+	execCtx := ExecutionContext{
+		Runner:   runnerStub,
+		RepoRoot: repoRoot,
+		HomeDir:  homeDir,
+		Decisions: DecisionSet{
+			NodeToolchain:       NodeToolchainVitePlus,
+			DockerRuntime:       DockerRuntimeColima,
+			ShellInstallOhMyZsh: true,
+			ShellApplyZshrc:     true,
+			ShellApplyStarship:  true,
+			GitConfigMode:       GitConfigModeTemplate,
+		},
+	}
+
+	if err := runShellSetup(context.Background(), execCtx); err != nil {
+		t.Fatalf("first runShellSetup returned error: %v", err)
+	}
+	firstBackups := mustGlob(t, filepath.Join(homeDir, ".zshrc.backup.*"))
+	if len(firstBackups) != 1 {
+		t.Fatalf("expected one zshrc backup after first run, got %v", firstBackups)
+	}
+	if len(runnerStub.commands) != 0 {
+		t.Fatalf("expected installed oh-my-zsh to skip installer, got %d commands", len(runnerStub.commands))
+	}
+
+	if err := runShellSetup(context.Background(), execCtx); err != nil {
+		t.Fatalf("second runShellSetup returned error: %v", err)
+	}
+	secondBackups := mustGlob(t, filepath.Join(homeDir, ".zshrc.backup.*"))
+	if len(secondBackups) != 1 {
+		t.Fatalf("expected second run not to create another backup, got %v", secondBackups)
+	}
+	if len(runnerStub.commands) != 0 {
+		t.Fatalf("expected second run not to install oh-my-zsh, got %d commands", len(runnerStub.commands))
+	}
+
+	check, err := precheckShellSetup(context.Background(), execCtx)
+	if err != nil {
+		t.Fatalf("precheckShellSetup returned error: %v", err)
+	}
+	if !check.Satisfied {
+		t.Fatal("expected shell setup precheck to be satisfied after first run")
+	}
+}
+
+func TestRunNodeToolchainInstallSkipsInstalledNvmAndPnpm(t *testing.T) {
+	homeDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(homeDir, ".nvm"), 0o755); err != nil {
+		t.Fatalf("create existing nvm dir: %v", err)
+	}
+
+	runnerStub := &recordingRunner{}
+	err := runNodeToolchainInstall(context.Background(), ExecutionContext{
+		Runner:  runnerStub,
+		HomeDir: homeDir,
+		Decisions: DecisionSet{
+			NodeToolchain:       NodeToolchainNvmPnpm,
+			DockerRuntime:       DockerRuntimeColima,
+			ShellInstallOhMyZsh: true,
+			ShellApplyZshrc:     true,
+			ShellApplyStarship:  true,
+			GitConfigMode:       GitConfigModeTemplate,
+		},
+	})
+	if err != nil {
+		t.Fatalf("runNodeToolchainInstall returned error: %v", err)
+	}
+	if len(runnerStub.commands) != 0 {
+		t.Fatalf("expected no installer commands when nvm and pnpm are detected, got %d", len(runnerStub.commands))
+	}
+
+	check, err := precheckNodeToolchain(context.Background(), ExecutionContext{
+		Runner:  runnerStub,
+		HomeDir: homeDir,
+		Decisions: DecisionSet{
+			NodeToolchain:       NodeToolchainNvmPnpm,
+			DockerRuntime:       DockerRuntimeColima,
+			ShellInstallOhMyZsh: true,
+			ShellApplyZshrc:     true,
+			ShellApplyStarship:  true,
+			GitConfigMode:       GitConfigModeTemplate,
+		},
+	})
+	if err != nil {
+		t.Fatalf("precheckNodeToolchain returned error: %v", err)
+	}
+	if !check.Satisfied {
+		t.Fatal("expected node toolchain precheck to be satisfied")
 	}
 }
 
@@ -599,6 +772,169 @@ func TestRunGitConfigOverwritesExistingGitConfig(t *testing.T) {
 	}
 }
 
+func TestRunGitConfigSecondRunDoesNotRewriteMatchingFiles(t *testing.T) {
+	repoRoot := t.TempDir()
+	homeDir := t.TempDir()
+	templatesDir := filepath.Join(repoRoot, "templates")
+	if err := os.MkdirAll(templatesDir, 0o755); err != nil {
+		t.Fatalf("create templates dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(templatesDir, "gitignore"), []byte("*.tmp\n"), 0o644); err != nil {
+		t.Fatalf("write gitignore template: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(templatesDir, "gitconfig"), []byte("[core]\n  autocrlf = input\n"), 0o644); err != nil {
+		t.Fatalf("write gitconfig template: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(homeDir, ".gitconfig"), []byte("[user]\n  name = Existing\n"), 0o644); err != nil {
+		t.Fatalf("write existing gitconfig: %v", err)
+	}
+
+	execCtx := ExecutionContext{
+		RepoRoot: repoRoot,
+		HomeDir:  homeDir,
+		Decisions: DecisionSet{
+			NodeToolchain:       NodeToolchainVitePlus,
+			DockerRuntime:       DockerRuntimeColima,
+			ShellInstallOhMyZsh: true,
+			ShellApplyZshrc:     true,
+			ShellApplyStarship:  true,
+			GitConfigMode:       GitConfigModeTemplate,
+			GitUserName:         "Grace",
+			GitUserEmail:        "grace@example.com",
+		},
+	}
+	if err := runGitConfig(context.Background(), execCtx); err != nil {
+		t.Fatalf("first runGitConfig returned error: %v", err)
+	}
+	firstBackups := mustGlob(t, filepath.Join(homeDir, ".gitconfig.backup.*"))
+	if len(firstBackups) != 1 {
+		t.Fatalf("expected one gitconfig backup after first run, got %v", firstBackups)
+	}
+
+	if err := runGitConfig(context.Background(), execCtx); err != nil {
+		t.Fatalf("second runGitConfig returned error: %v", err)
+	}
+	secondBackups := mustGlob(t, filepath.Join(homeDir, ".gitconfig.backup.*"))
+	if len(secondBackups) != 1 {
+		t.Fatalf("expected second run not to create another gitconfig backup, got %v", secondBackups)
+	}
+
+	check, err := precheckGitConfig(context.Background(), execCtx)
+	if err != nil {
+		t.Fatalf("precheckGitConfig returned error: %v", err)
+	}
+	if !check.Satisfied {
+		t.Fatal("expected git config precheck to be satisfied after first run")
+	}
+}
+
+func TestRunDockerConfigSecondRunDoesNotRewriteMatchingFile(t *testing.T) {
+	repoRoot := t.TempDir()
+	homeDir := t.TempDir()
+	templatesDir := filepath.Join(repoRoot, "templates")
+	if err := os.MkdirAll(templatesDir, 0o755); err != nil {
+		t.Fatalf("create templates dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(templatesDir, "docker-config.json"), []byte(`{"currentContext":"colima"}`+"\n"), 0o644); err != nil {
+		t.Fatalf("write docker config template: %v", err)
+	}
+	dockerDir := filepath.Join(homeDir, ".docker")
+	if err := os.MkdirAll(dockerDir, 0o755); err != nil {
+		t.Fatalf("create docker dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dockerDir, "config.json"), []byte(`{"old":true}`+"\n"), 0o644); err != nil {
+		t.Fatalf("write existing docker config: %v", err)
+	}
+
+	execCtx := ExecutionContext{
+		RepoRoot:   repoRoot,
+		HomeDir:    homeDir,
+		Decisions:  DefaultDecisions(),
+		FileSystem: OSFileSystem{},
+	}
+	if err := runDockerConfig(context.Background(), execCtx); err != nil {
+		t.Fatalf("first runDockerConfig returned error: %v", err)
+	}
+	firstBackups := mustGlob(t, filepath.Join(dockerDir, "config.json.backup.*"))
+	if len(firstBackups) != 1 {
+		t.Fatalf("expected one docker config backup after first run, got %v", firstBackups)
+	}
+
+	if err := runDockerConfig(context.Background(), execCtx); err != nil {
+		t.Fatalf("second runDockerConfig returned error: %v", err)
+	}
+	secondBackups := mustGlob(t, filepath.Join(dockerDir, "config.json.backup.*"))
+	if len(secondBackups) != 1 {
+		t.Fatalf("expected second run not to create another docker config backup, got %v", secondBackups)
+	}
+
+	check, err := precheckDockerConfig(context.Background(), execCtx)
+	if err != nil {
+		t.Fatalf("precheckDockerConfig returned error: %v", err)
+	}
+	if !check.Satisfied {
+		t.Fatal("expected docker config precheck to be satisfied after first run")
+	}
+}
+
+func TestDryRunSimulationsDoNotWriteUserConfig(t *testing.T) {
+	repoRoot := t.TempDir()
+	homeDir := t.TempDir()
+	templatesDir := filepath.Join(repoRoot, "templates")
+	if err := os.MkdirAll(templatesDir, 0o755); err != nil {
+		t.Fatalf("create templates dir: %v", err)
+	}
+	for name, payload := range map[string]string{
+		"gitignore":     "*.tmp\n",
+		"gitconfig":     "[core]\n  autocrlf = input\n",
+		"zshrc":         "zshrc\n",
+		"starship.toml": "starship\n",
+	} {
+		if err := os.WriteFile(filepath.Join(templatesDir, name), []byte(payload), 0o644); err != nil {
+			t.Fatalf("write template %s: %v", name, err)
+		}
+	}
+
+	logger := &recordingEventLogger{}
+	execCtx := ExecutionContext{
+		DryRun:   true,
+		Logger:   logger,
+		RepoRoot: repoRoot,
+		HomeDir:  homeDir,
+		Decisions: DecisionSet{
+			NodeToolchain:       NodeToolchainVitePlus,
+			DockerRuntime:       DockerRuntimeColima,
+			ShellInstallOhMyZsh: true,
+			ShellApplyZshrc:     true,
+			ShellApplyStarship:  true,
+			GitConfigMode:       GitConfigModeTemplate,
+			GitUserName:         "Ada",
+			GitUserEmail:        "ada@example.com",
+		},
+	}
+	if err := simulateShellSetup(context.Background(), execCtx); err != nil {
+		t.Fatalf("simulateShellSetup returned error: %v", err)
+	}
+	if err := simulateGitConfig(context.Background(), execCtx); err != nil {
+		t.Fatalf("simulateGitConfig returned error: %v", err)
+	}
+
+	for _, path := range []string{
+		filepath.Join(homeDir, ".zshrc"),
+		filepath.Join(homeDir, ".config", "starship.toml"),
+		filepath.Join(homeDir, ".gitignore"),
+		filepath.Join(homeDir, ".gitconfig"),
+		filepath.Join(homeDir, ".oh-my-zsh"),
+	} {
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Fatalf("expected dry-run simulation not to create %s, stat err=%v", path, err)
+		}
+	}
+	if len(logger.events) == 0 {
+		t.Fatal("expected dry-run simulation events")
+	}
+}
+
 func TestRunCommandLogsOutputAndLifecycleOnSuccess(t *testing.T) {
 	command := runner.Command{Name: "echo", Args: []string{"hello"}}
 	run := &scriptedRunner{
@@ -716,4 +1052,13 @@ func TestRunCommandLogsOutputAndFailureContext(t *testing.T) {
 	if !strings.Contains(completed.Message, "exit status 7") {
 		t.Fatalf("expected error details in completion message, got %q", completed.Message)
 	}
+}
+
+func mustGlob(t *testing.T, pattern string) []string {
+	t.Helper()
+	matches, err := filepath.Glob(pattern)
+	if err != nil {
+		t.Fatalf("glob %s: %v", pattern, err)
+	}
+	return matches
 }

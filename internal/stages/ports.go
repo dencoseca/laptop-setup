@@ -19,10 +19,13 @@ type FileSystem interface {
 	WriteFile(name string, data []byte, perm fs.FileMode) error
 	Stat(name string) (fs.FileInfo, error)
 	AppendFile(name string, data []byte, perm fs.FileMode) error
+	Rename(oldpath string, newpath string) error
+	Remove(name string) error
 }
 
 type TemplateStore interface {
 	LoadBrewEntries(name string) ([]BrewEntry, string, error)
+	Read(name string) ([]byte, string, error)
 	WriteGeneratedBrewfile(runDir string, sourcePath string, entries []BrewEntry) (string, error)
 	Copy(name string, destination string) error
 }
@@ -60,6 +63,14 @@ func (OSFileSystem) AppendFile(name string, data []byte, perm fs.FileMode) error
 	return err
 }
 
+func (OSFileSystem) Rename(oldpath string, newpath string) error {
+	return os.Rename(oldpath, newpath)
+}
+
+func (OSFileSystem) Remove(name string) error {
+	return os.Remove(name)
+}
+
 type FilesystemTemplateStore struct {
 	RepoRoot string
 	FS       FileSystem
@@ -75,6 +86,18 @@ func (s FilesystemTemplateStore) LoadBrewEntries(name string) ([]BrewEntry, stri
 		return nil, "", fmt.Errorf("read Brewfile: %w", err)
 	}
 	return parseBrewEntries(string(content)), path, nil
+}
+
+func (s FilesystemTemplateStore) Read(name string) ([]byte, string, error) {
+	path, err := s.templatePath(name)
+	if err != nil {
+		return nil, "", err
+	}
+	content, err := s.fileSystem().ReadFile(path)
+	if err != nil {
+		return nil, "", fmt.Errorf("read template %s: %w", name, err)
+	}
+	return content, path, nil
 }
 
 func (s FilesystemTemplateStore) WriteGeneratedBrewfile(runDir string, sourcePath string, entries []BrewEntry) (string, error) {
@@ -98,7 +121,7 @@ func (s FilesystemTemplateStore) WriteGeneratedBrewfile(runDir string, sourcePat
 		return "", fmt.Errorf("create run directory: %w", err)
 	}
 	path := filepath.Join(runDir, "Brewfile.generated")
-	if err := fs.WriteFile(path, []byte(builder.String()), 0o644); err != nil {
+	if _, err := writeFileSafely(fs, path, []byte(builder.String()), 0o644); err != nil {
 		return "", fmt.Errorf("write generated Brewfile: %w", err)
 	}
 	return path, nil
@@ -117,7 +140,7 @@ func (s FilesystemTemplateStore) Copy(name string, destination string) error {
 	if err != nil {
 		return fmt.Errorf("read source file: %w", err)
 	}
-	if err = fs.WriteFile(destination, payload, 0o644); err != nil {
+	if _, err = writeFileSafely(fs, destination, payload, 0o644); err != nil {
 		return fmt.Errorf("write destination file: %w", err)
 	}
 	return nil
