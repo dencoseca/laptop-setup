@@ -1729,20 +1729,20 @@ func isLogLevel(value string) bool {
 
 func isEventToken(value string) bool {
 	switch strings.TrimSpace(value) {
-	case "run_started",
-		"run_completed",
-		"stage_started",
-		"stage_already_done",
-		"stage_completed",
-		"stage_failed",
-		"stage_retry",
-		"stage_skipped",
-		"command_started",
-		"command_completed",
-		"command_stdout",
-		"command_stderr",
-		"simulation",
-		"stage_message":
+	case string(runner.EventTypeRunStarted),
+		string(runner.EventTypeRunCompleted),
+		string(runner.EventTypeStageStarted),
+		string(runner.EventTypeStageAlreadyDone),
+		string(runner.EventTypeStageCompleted),
+		string(runner.EventTypeStageFailed),
+		string(runner.EventTypeStageRetry),
+		string(runner.EventTypeStageSkipped),
+		string(runner.EventTypeCommandStarted),
+		string(runner.EventTypeCommandCompleted),
+		string(runner.EventTypeCommandStdout),
+		string(runner.EventTypeCommandStderr),
+		string(runner.EventTypeSimulation),
+		string(runner.EventTypeStageMessage):
 		return true
 	default:
 		return false

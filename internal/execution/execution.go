@@ -122,7 +122,7 @@ func Execute(ctx context.Context, options Options) error {
 	if err := logger.Log(runner.Event{
 		RunID:     runState.RunID.String(),
 		Mode:      runState.Mode.String(),
-		EventType: "run_started",
+		EventType: runner.EventTypeRunStarted,
 		Message:   "Starting stage execution",
 	}); err != nil {
 		return err
@@ -155,7 +155,7 @@ func Execute(ctx context.Context, options Options) error {
 				StageID:   stageID.String(),
 				Attempt:   progress.Attempts,
 				Mode:      runState.Mode.String(),
-				EventType: "stage_started",
+				EventType: runner.EventTypeStageStarted,
 				Message:   stage.Title,
 			}); err != nil {
 				return err
@@ -210,7 +210,7 @@ func Execute(ctx context.Context, options Options) error {
 					StageID:   stageID.String(),
 					Attempt:   progress.Attempts,
 					Mode:      runState.Mode.String(),
-					EventType: "stage_already_done",
+					EventType: runner.EventTypeStageAlreadyDone,
 					Message:   checkResult.Message,
 				}); err != nil {
 					return err
@@ -260,7 +260,7 @@ func Execute(ctx context.Context, options Options) error {
 				StageID:   stageID.String(),
 				Attempt:   progress.Attempts,
 				Mode:      runState.Mode.String(),
-				EventType: "stage_completed",
+				EventType: runner.EventTypeStageCompleted,
 				Message:   progress.Status.String(),
 			}); err != nil {
 				return err
@@ -278,7 +278,7 @@ func Execute(ctx context.Context, options Options) error {
 	if err := logger.Log(runner.Event{
 		RunID:     runState.RunID.String(),
 		Mode:      runState.Mode.String(),
-		EventType: "run_completed",
+		EventType: runner.EventTypeRunCompleted,
 		Message:   "All planned stages processed",
 	}); err != nil {
 		return err
@@ -361,7 +361,7 @@ func processFailure(
 		StageID:   stageID.String(),
 		Attempt:   progress.Attempts,
 		Mode:      options.RunState.Mode.String(),
-		EventType: "stage_failed",
+		EventType: runner.EventTypeStageFailed,
 		Message:   stageErr.Error(),
 	}); err != nil {
 		return ActionAbort, err
@@ -391,7 +391,7 @@ func processFailure(
 			StageID:   stageID.String(),
 			Attempt:   progress.Attempts,
 			Mode:      options.RunState.Mode.String(),
-			EventType: "stage_retry",
+			EventType: runner.EventTypeStageRetry,
 			Message:   "Retrying failed stage",
 		}); err != nil {
 			return ActionAbort, err
@@ -412,7 +412,7 @@ func processFailure(
 			StageID:   stageID.String(),
 			Attempt:   progress.Attempts,
 			Mode:      options.RunState.Mode.String(),
-			EventType: "stage_skipped",
+			EventType: runner.EventTypeStageSkipped,
 			Message:   "Skipped after failure",
 		}); err != nil {
 			return ActionAbort, err

@@ -9,6 +9,25 @@ import (
 	"time"
 )
 
+type EventType string
+
+const (
+	EventTypeRunStarted       EventType = "run_started"
+	EventTypeRunCompleted     EventType = "run_completed"
+	EventTypeStageStarted     EventType = "stage_started"
+	EventTypeStageAlreadyDone EventType = "stage_already_done"
+	EventTypeStageCompleted   EventType = "stage_completed"
+	EventTypeStageFailed      EventType = "stage_failed"
+	EventTypeStageRetry       EventType = "stage_retry"
+	EventTypeStageSkipped     EventType = "stage_skipped"
+	EventTypeCommandStarted   EventType = "command_started"
+	EventTypeCommandCompleted EventType = "command_completed"
+	EventTypeCommandStdout    EventType = "command_stdout"
+	EventTypeCommandStderr    EventType = "command_stderr"
+	EventTypeSimulation       EventType = "simulation"
+	EventTypeStageMessage     EventType = "stage_message"
+)
+
 type Event struct {
 	Timestamp time.Time `json:"timestamp"`
 	Level     string    `json:"level"`
@@ -16,7 +35,7 @@ type Event struct {
 	StageID   string    `json:"stage_id,omitempty"`
 	Attempt   int       `json:"attempt,omitempty"`
 	Mode      string    `json:"mode,omitempty"`
-	EventType string    `json:"event_type"`
+	EventType EventType `json:"event_type"`
 	Command   string    `json:"command,omitempty"`
 	ExitCode  *int      `json:"exit_code,omitempty"`
 	Message   string    `json:"message,omitempty"`
@@ -77,7 +96,7 @@ func formatHuman(event Event) string {
 		parts = append(parts, fmt.Sprintf("attempt=%d", event.Attempt))
 	}
 	if event.EventType != "" {
-		parts = append(parts, event.EventType)
+		parts = append(parts, string(event.EventType))
 	}
 	if event.Command != "" {
 		parts = append(parts, event.Command)

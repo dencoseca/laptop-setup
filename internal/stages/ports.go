@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -138,10 +137,15 @@ func (s FilesystemTemplateStore) fileSystem() FileSystem {
 	return OSFileSystem{}
 }
 
-type HomebrewPackageManager struct{}
+type HomebrewPackageManager struct {
+	Runner runner.CommandRunner
+}
 
-func (HomebrewPackageManager) HomebrewAvailable(context.Context) error {
-	if _, err := exec.LookPath("brew"); err != nil {
+func (m HomebrewPackageManager) HomebrewAvailable(ctx context.Context) error {
+	if m.Runner == nil {
+		return errors.New("runner is required")
+	}
+	if _, err := m.Runner.LookPath(ctx, "brew"); err != nil {
 		return fmt.Errorf("brew executable not found: %w", err)
 	}
 	return nil
@@ -190,5 +194,5 @@ func (execCtx ExecutionContext) packageManager() PackageManager {
 	if execCtx.PackageManager != nil {
 		return execCtx.PackageManager
 	}
-	return HomebrewPackageManager{}
+	return HomebrewPackageManager{Runner: execCtx.Runner}
 }

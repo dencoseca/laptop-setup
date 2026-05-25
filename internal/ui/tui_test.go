@@ -963,6 +963,10 @@ func (r *noOpRunner) Run(context.Context, runner.Command) (runner.Result, error)
 	return runner.Result{}, nil
 }
 
+func (r *noOpRunner) LookPath(context.Context, string) (string, error) {
+	return "/usr/local/bin/test-command", nil
+}
+
 func sendEnter(t *testing.T, m model) model {
 	t.Helper()
 	next, _ := m.updateKey(tea.KeyMsg{Type: tea.KeyEnter})

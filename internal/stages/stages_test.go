@@ -13,12 +13,22 @@ import (
 )
 
 type recordingRunner struct {
-	commands []runner.Command
+	commands      []runner.Command
+	lookPathCalls []string
+	lookPathErr   error
 }
 
 func (r *recordingRunner) Run(_ context.Context, command runner.Command) (runner.Result, error) {
 	r.commands = append(r.commands, command)
 	return runner.Result{}, nil
+}
+
+func (r *recordingRunner) LookPath(_ context.Context, name string) (string, error) {
+	r.lookPathCalls = append(r.lookPathCalls, name)
+	if r.lookPathErr != nil {
+		return "", r.lookPathErr
+	}
+	return filepath.Join("/usr/local/bin", name), nil
 }
 
 type scriptedRunner struct {
@@ -30,6 +40,10 @@ type scriptedRunner struct {
 func (r *scriptedRunner) Run(_ context.Context, command runner.Command) (runner.Result, error) {
 	r.commands = append(r.commands, command)
 	return r.result, r.err
+}
+
+func (r *scriptedRunner) LookPath(_ context.Context, name string) (string, error) {
+	return filepath.Join("/usr/local/bin", name), nil
 }
 
 type recordingEventLogger struct {
@@ -233,7 +247,7 @@ func TestRunBrewBundleUsesGeneratedBrewfileMatchingSelectedEntries(t *testing.T)
 func TestRunBrewBundleFailsWhenBrewMissing(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
 
-	runnerStub := &recordingRunner{}
+	runnerStub := &recordingRunner{lookPathErr: errors.New("not found")}
 	err := runBrewBundle(context.Background(), ExecutionContext{
 		Runner: runnerStub,
 	})
@@ -245,6 +259,9 @@ func TestRunBrewBundleFailsWhenBrewMissing(t *testing.T) {
 	}
 	if len(runnerStub.commands) != 0 {
 		t.Fatalf("expected no command execution when brew is missing, got %d commands", len(runnerStub.commands))
+	}
+	if !slices.Equal(runnerStub.lookPathCalls, []string{"brew"}) {
+		t.Fatalf("expected brew availability check through runner, got %v", runnerStub.lookPathCalls)
 	}
 }
 
@@ -609,12 +626,12 @@ func TestRunCommandLogsOutputAndLifecycleOnSuccess(t *testing.T) {
 		t.Fatalf("expected 5 log events, got %d", len(logger.events))
 	}
 
-	expectedTypes := []string{
-		"command_started",
-		"command_stdout",
-		"command_stdout",
-		"command_stderr",
-		"command_completed",
+	expectedTypes := []runner.EventType{
+		runner.EventTypeCommandStarted,
+		runner.EventTypeCommandStdout,
+		runner.EventTypeCommandStdout,
+		runner.EventTypeCommandStderr,
+		runner.EventTypeCommandCompleted,
 	}
 	for idx, event := range logger.events {
 		if event.EventType != expectedTypes[idx] {
@@ -684,7 +701,7 @@ func TestRunCommandLogsOutputAndFailureContext(t *testing.T) {
 		t.Fatalf("expected 4 log events, got %d", len(logger.events))
 	}
 	completed := logger.events[3]
-	if completed.EventType != "command_completed" {
+	if completed.EventType != runner.EventTypeCommandCompleted {
 		t.Fatalf("expected command_completed event, got %q", completed.EventType)
 	}
 	if completed.Level != "error" {

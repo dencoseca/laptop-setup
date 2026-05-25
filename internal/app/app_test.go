@@ -85,6 +85,10 @@ func (r *noOpCommandRunner) Run(context.Context, runner.Command) (runner.Result,
 	return runner.Result{}, nil
 }
 
+func (r *noOpCommandRunner) LookPath(context.Context, string) (string, error) {
+	return "/usr/local/bin/test-command", nil
+}
+
 type fakePathResolver struct {
 	workingDir       string
 	homeDir          string

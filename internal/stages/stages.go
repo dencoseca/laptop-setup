@@ -599,7 +599,7 @@ func runCommand(ctx context.Context, execCtx ExecutionContext, command runner.Co
 			StageID:   execCtx.StageID.String(),
 			Attempt:   execCtx.Attempt,
 			Mode:      execCtx.Mode.String(),
-			EventType: "command_started",
+			EventType: runner.EventTypeCommandStarted,
 			Command:   command.String(),
 		}); err != nil {
 			return err
@@ -608,10 +608,10 @@ func runCommand(ctx context.Context, execCtx ExecutionContext, command runner.Co
 
 	result, err := execCtx.Runner.Run(ctx, command)
 	if execCtx.Logger != nil {
-		if logErr := logCommandOutput(execCtx, "command_stdout", result.Stdout); logErr != nil {
+		if logErr := logCommandOutput(execCtx, runner.EventTypeCommandStdout, result.Stdout); logErr != nil {
 			return logErr
 		}
-		if logErr := logCommandOutput(execCtx, "command_stderr", result.Stderr); logErr != nil {
+		if logErr := logCommandOutput(execCtx, runner.EventTypeCommandStderr, result.Stderr); logErr != nil {
 			return logErr
 		}
 
@@ -621,7 +621,7 @@ func runCommand(ctx context.Context, execCtx ExecutionContext, command runner.Co
 			StageID:   execCtx.StageID.String(),
 			Attempt:   execCtx.Attempt,
 			Mode:      execCtx.Mode.String(),
-			EventType: "command_completed",
+			EventType: runner.EventTypeCommandCompleted,
 			Command:   command.String(),
 			ExitCode:  &exitCode,
 		}
@@ -637,12 +637,22 @@ func runCommand(ctx context.Context, execCtx ExecutionContext, command runner.Co
 	}
 
 	if err != nil {
-		return fmt.Errorf("command failed (exit=%d): %s: %w", result.ExitCode, command.String(), err)
+		var commandErr *runner.CommandError
+		if errors.As(err, &commandErr) {
+			return commandErr
+		}
+		return &runner.CommandError{
+			Command:  command,
+			ExitCode: result.ExitCode,
+			Stdout:   result.Stdout,
+			Stderr:   result.Stderr,
+			Err:      err,
+		}
 	}
 	return nil
 }
 
-func logCommandOutput(execCtx ExecutionContext, eventType string, output string) error {
+func logCommandOutput(execCtx ExecutionContext, eventType runner.EventType, output string) error {
 	if execCtx.Logger == nil || output == "" {
 		return nil
 	}
@@ -659,7 +669,7 @@ func logCommandOutput(execCtx ExecutionContext, eventType string, output string)
 			EventType: eventType,
 			Message:   message,
 		}
-		if eventType == "command_stderr" {
+		if eventType == runner.EventTypeCommandStderr {
 			event.Level = "warn"
 		}
 		if err := execCtx.Logger.Log(event); err != nil {
@@ -692,7 +702,7 @@ func logSimulation(execCtx ExecutionContext, message string) error {
 		StageID:   execCtx.StageID.String(),
 		Attempt:   execCtx.Attempt,
 		Mode:      execCtx.Mode.String(),
-		EventType: "simulation",
+		EventType: runner.EventTypeSimulation,
 		Message:   message,
 	})
 }
@@ -706,7 +716,7 @@ func logStageMessage(execCtx ExecutionContext, message string) error {
 		StageID:   execCtx.StageID.String(),
 		Attempt:   execCtx.Attempt,
 		Mode:      execCtx.Mode.String(),
-		EventType: "stage_message",
+		EventType: runner.EventTypeStageMessage,
 		Message:   message,
 	})
 }

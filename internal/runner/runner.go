@@ -35,8 +35,34 @@ type Result struct {
 	Stderr   string
 }
 
+type CommandError struct {
+	Command  Command
+	ExitCode int
+	Stdout   string
+	Stderr   string
+	Err      error
+}
+
+func (e *CommandError) Error() string {
+	if e == nil {
+		return ""
+	}
+	if e.Err == nil {
+		return fmt.Sprintf("command failed (exit=%d): %s", e.ExitCode, e.Command.String())
+	}
+	return fmt.Sprintf("command failed (exit=%d): %s: %v", e.ExitCode, e.Command.String(), e.Err)
+}
+
+func (e *CommandError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.Err
+}
+
 type CommandRunner interface {
 	Run(context.Context, Command) (Result, error)
+	LookPath(context.Context, string) (string, error)
 }
 
 type OSCommandRunner struct{}
@@ -78,5 +104,25 @@ func (r *OSCommandRunner) Run(ctx context.Context, command Command) (Result, err
 		result.ExitCode = -1
 	}
 
-	return result, fmt.Errorf("command failed: %s: %w", command.String(), err)
+	return result, &CommandError{
+		Command:  command,
+		ExitCode: result.ExitCode,
+		Stdout:   result.Stdout,
+		Stderr:   result.Stderr,
+		Err:      err,
+	}
+}
+
+func (r *OSCommandRunner) LookPath(ctx context.Context, name string) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(name) == "" {
+		return "", errors.New("command name is required")
+	}
+	path, err := exec.LookPath(name)
+	if err != nil {
+		return "", fmt.Errorf("command %q not found: %w", name, err)
+	}
+	return path, nil
 }
