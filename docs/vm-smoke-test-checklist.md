@@ -2,14 +2,13 @@
 
 Use this checklist on a clean macOS VM to validate migration behavior end-to-end.
 Use `bootstrap.sh` as the default execution path; use `go run ./cmd/laptop-setup` only when validating from a local checkout.
-Bootstrap builds the latest `main` binary with `go install`; there is no `setup.sh` fallback when bootstrap validation fails.
+Bootstrap downloads the latest Apple Silicon release binary and runs it. There is no `setup.sh` fallback when bootstrap validation fails.
 
 ## Preconditions
 
 - Clean Apple Silicon macOS VM snapshot.
 - Network access enabled.
-- Go toolchain installed.
-- Local checkout of this repository.
+- Published GitHub release with `laptop-setup-darwin-arm64` attached.
 - Terminal with write access to `$HOME`.
 
 ## Test Matrix
@@ -24,21 +23,21 @@ Mark each item pass/fail and capture `run_id` plus log path.
    - manual apps summary
 4. Interactive run with `--only` stage filtering:
    ```shell
-   go run ./cmd/laptop-setup --only brew_bundle
+   sh bootstrap.sh --only brew_bundle
    ```
 5. Interrupted run and resume:
    - start run
    - interrupt after at least one completed stage
    - resume with:
      ```shell
-     go run ./cmd/laptop-setup --resume
+     sh bootstrap.sh --resume
      ```
 6. Failure handling path:
    - force a stage failure (for example, temporarily break connectivity for a network stage)
    - verify retry/skip/abort behavior
 7. Dry-run walkthrough:
    ```shell
-   go run ./cmd/laptop-setup --dry-run
+   sh bootstrap.sh --dry-run
    ```
    - verify stage statuses are `simulated_success`
    - verify no system-mutating side effects

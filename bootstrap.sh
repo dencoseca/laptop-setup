@@ -3,10 +3,9 @@
 set -eu
 
 REPO_SLUG="dencoseca/laptop-setup"
-CLI_PACKAGE="github.com/dencoseca/laptop-setup/cmd/laptop-setup"
-CLI_REF="main"
+ASSET_NAME="laptop-setup-darwin-arm64"
 TMP_DIR=""
-BUILT_BINARY=""
+DOWNLOADED_BINARY=""
 SHOW_HELP=0
 BOOTSTRAP_ERROR=""
 
@@ -20,11 +19,12 @@ Common flags:
   --dry-run                       Simulate stages without system mutation
   -h, --help                      Show usage
 
-All flags are forwarded to the built `laptop-setup` binary.
+All flags are forwarded to the downloaded `laptop-setup` binary.
 Supported host: Apple Silicon macOS.
 EOF
   cat <<'EOF'
-Bootstrap builds the latest `main` version with `go install` before running it.
+Bootstrap downloads the latest release binary and runs it.
+Set LAPTOP_SETUP_VERSION to a tag such as v1.2.3 to pin a release.
 EOF
 }
 
@@ -81,31 +81,51 @@ validate_host() {
   esac
 }
 
-build_latest_binary() {
-  if ! command -v go >/dev/null 2>&1; then
-    set_bootstrap_error "Missing prerequisite: go is required to build $REPO_SLUG from main."
+require_command() {
+  name=$1
+  if ! command -v "$name" >/dev/null 2>&1; then
+    set_bootstrap_error "Missing required macOS command: $name."
+    return 1
+  fi
+  return 0
+}
+
+ensure_tmp_dir() {
+  if [ -z "$TMP_DIR" ]; then
+    TMP_DIR=$(mktemp -d 2>/dev/null || mktemp -d -t laptop-setup-bootstrap)
+  fi
+}
+
+download_binary() {
+  if ! require_command curl; then
+    return 1
+  fi
+  if ! require_command chmod; then
     return 1
   fi
 
-  if ! validate_host; then
-    return 1
-  fi
-
-  TMP_DIR=$(mktemp -d 2>/dev/null || mktemp -d -t laptop-setup-bootstrap)
+  ensure_tmp_dir
   binary_path=$TMP_DIR/laptop-setup
 
-  log "Building latest laptop-setup from main."
-  if ! env GOPROXY=direct GOBIN="$TMP_DIR" go install "$CLI_PACKAGE@$CLI_REF"; then
-    set_bootstrap_error "Build failed: unable to install $CLI_PACKAGE@$CLI_REF."
+  version=${LAPTOP_SETUP_VERSION:-latest}
+  if [ "$version" = "latest" ]; then
+    url="https://github.com/$REPO_SLUG/releases/latest/download/$ASSET_NAME"
+  else
+    url="https://github.com/$REPO_SLUG/releases/download/$version/$ASSET_NAME"
+  fi
+
+  log "Downloading laptop-setup binary from $url."
+  if ! curl -fL --retry 3 --retry-delay 2 "$url" -o "$binary_path"; then
+    set_bootstrap_error "Download failed: unable to fetch $ASSET_NAME from $REPO_SLUG releases."
     return 1
   fi
 
-  if [ ! -x "$binary_path" ]; then
-    set_bootstrap_error "Build failed: expected binary was not created at $binary_path."
+  if ! chmod +x "$binary_path"; then
+    set_bootstrap_error "Download failed: unable to make $binary_path executable."
     return 1
   fi
 
-  BUILT_BINARY=$binary_path
+  DOWNLOADED_BINARY=$binary_path
   return 0
 }
 
@@ -117,9 +137,13 @@ if [ "$SHOW_HELP" -eq 1 ]; then
   exit 0
 fi
 
-if build_latest_binary; then
+if ! validate_host; then
+  fail "$BOOTSTRAP_ERROR"
+fi
+
+if download_binary; then
   log "Starting laptop-setup."
-  "$BUILT_BINARY" "$@"
+  "$DOWNLOADED_BINARY" "$@"
   exit $?
 fi
 
@@ -127,4 +151,4 @@ if [ -n "$BOOTSTRAP_ERROR" ]; then
   fail "$BOOTSTRAP_ERROR"
 fi
 
-fail "unable to build laptop-setup binary"
+fail "unable to download laptop-setup binary"

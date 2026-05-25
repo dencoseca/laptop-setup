@@ -2,7 +2,6 @@ package ui
 
 import (
 	"fmt"
-	"path/filepath"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/list"
@@ -193,7 +192,11 @@ func (m *model) updateOptionListFilter(key tea.KeyMsg) (tea.Cmd, bool) {
 }
 
 func (m *model) reloadBrewEntries() error {
-	entries, err := stages.LoadBrewEntries(filepath.Join(m.repoRoot, "templates", "Brewfile"))
+	store := m.templates
+	if store == nil {
+		store = stages.FilesystemTemplateStore{RepoRoot: m.repoRoot}
+	}
+	entries, _, err := store.LoadBrewEntries("Brewfile")
 	if err != nil {
 		return err
 	}

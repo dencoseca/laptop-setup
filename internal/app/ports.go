@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
+	laptopsetup "github.com/dencoseca/laptop-setup"
 	"github.com/dencoseca/laptop-setup/internal/execution"
 	"github.com/dencoseca/laptop-setup/internal/runner"
 	"github.com/dencoseca/laptop-setup/internal/stages"
@@ -144,6 +145,16 @@ func (filesystemTemplateStoreFactory) New(repoRoot string, fs stages.FileSystem)
 	return stages.FilesystemTemplateStore{RepoRoot: repoRoot, FS: fs}
 }
 
+type embeddedTemplateStoreFactory struct{}
+
+func (embeddedTemplateStoreFactory) New(_ string, fs stages.FileSystem) stages.TemplateStore {
+	return stages.FSTemplateStore{
+		FS:         laptopsetup.TemplateFS(),
+		SourceName: "embedded templates",
+		FileSystem: fs,
+	}
+}
+
 type uiRunnerFunc func(context.Context, ui.Options) error
 
 func (f uiRunnerFunc) Run(ctx context.Context, options ui.Options) error {
@@ -175,7 +186,7 @@ func DefaultDependencies() Dependencies {
 		StateRepositories: stateStoreFactory{},
 		Paths:             paths,
 		RunLogs:           filesystemRunLogFactory{Paths: paths},
-		TemplateStores:    filesystemTemplateStoreFactory{},
+		TemplateStores:    embeddedTemplateStoreFactory{},
 		FileSystem:        stages.OSFileSystem{},
 		PackageManager:    stages.HomebrewPackageManager{Runner: commandRunner},
 		UI:                uiRunnerFunc(ui.Run),

@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"testing/fstest"
 )
 
 func TestFilesystemTemplateStoreContract(t *testing.T) {
@@ -44,6 +45,68 @@ func TestFilesystemTemplateStoreContract(t *testing.T) {
 		t.Fatalf("Read returned error: %v", err)
 	}
 	if readPath != filepath.Join(templatesDir, "zshrc") || string(payload) != "export TEST=1\n" {
+		t.Fatalf("unexpected Read result: path=%q payload=%q", readPath, payload)
+	}
+
+	generatedPath, err := store.WriteGeneratedBrewfile(runDir, sourcePath, entries[:1])
+	if err != nil {
+		t.Fatalf("WriteGeneratedBrewfile returned error: %v", err)
+	}
+	generatedEntries, err := LoadBrewEntries(generatedPath)
+	if err != nil {
+		t.Fatalf("load generated Brewfile: %v", err)
+	}
+	if len(generatedEntries) != 1 || generatedEntries[0].ID != "go" {
+		t.Fatalf("generated entries mismatch: %+v", generatedEntries)
+	}
+
+	destination := filepath.Join(t.TempDir(), ".zshrc")
+	if err := store.Copy("zshrc", destination); err != nil {
+		t.Fatalf("Copy returned error: %v", err)
+	}
+	copied, err := os.ReadFile(destination)
+	if err != nil {
+		t.Fatalf("read copied template: %v", err)
+	}
+	if string(copied) != "export TEST=1\n" {
+		t.Fatalf("copied template mismatch: %q", copied)
+	}
+}
+
+func TestFSTemplateStoreContract(t *testing.T) {
+	runDir := t.TempDir()
+	store := FSTemplateStore{
+		FS: fstest.MapFS{
+			"Brewfile": {
+				Data: []byte(strings.Join([]string{
+					`brew "go"`,
+					`cask "warp"`,
+					"",
+				}, "\n")),
+			},
+			"zshrc": {
+				Data: []byte("export TEST=1\n"),
+			},
+		},
+		SourceName: "test templates",
+	}
+
+	entries, sourcePath, err := store.LoadBrewEntries("Brewfile")
+	if err != nil {
+		t.Fatalf("LoadBrewEntries returned error: %v", err)
+	}
+	if sourcePath != "test templates:Brewfile" {
+		t.Fatalf("source path mismatch: got=%q", sourcePath)
+	}
+	if gotIDs := []string{entries[0].ID, entries[1].ID}; !slices.Equal(gotIDs, []string{"go", "warp"}) {
+		t.Fatalf("entry ids mismatch: %v", gotIDs)
+	}
+
+	payload, readPath, err := store.Read("zshrc")
+	if err != nil {
+		t.Fatalf("Read returned error: %v", err)
+	}
+	if readPath != "test templates:zshrc" || string(payload) != "export TEST=1\n" {
 		t.Fatalf("unexpected Read result: path=%q payload=%q", readPath, payload)
 	}
 

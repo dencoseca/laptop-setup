@@ -19,6 +19,7 @@ type tuiExecutionService struct {
 	repoRoot      string
 	homeDir       string
 	commandRunner runner.CommandRunner
+	templateStore stages.TemplateStore
 }
 
 func (s tuiExecutionService) PrepareExecution(ctx context.Context, request ui.ExecutionRequest) (ui.ExecutionRun, error) {
@@ -96,7 +97,7 @@ func (s tuiExecutionService) Execute(ctx context.Context, run ui.ExecutionRun, h
 		RunDir:         run.RunDir,
 		CommandRunner:  s.commandRunner,
 		FileSystem:     s.deps.FileSystem,
-		TemplateStore:  s.deps.TemplateStores.New(s.repoRoot, s.deps.FileSystem),
+		TemplateStore:  s.templateStore,
 		PackageManager: s.deps.PackageManager,
 		Logger:         logger,
 		Hooks: execution.Hooks{

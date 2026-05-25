@@ -82,6 +82,7 @@ func (a *App) Run(ctx context.Context, args []string, stdout io.Writer, stderr i
 	}
 	catalog := a.deps.Catalog()
 	commandRunner := a.deps.CommandRunner()
+	templateStore := a.deps.TemplateStores.New(repoRoot, a.deps.FileSystem)
 
 	return a.deps.UI.Run(ctx, ui.Options{
 		Config: ui.Config{
@@ -98,6 +99,7 @@ func (a *App) Run(ctx context.Context, args []string, stdout io.Writer, stderr i
 		HomeDir:   homeDir,
 		Out:       stdout,
 		Commander: commandRunner,
+		Templates: templateStore,
 		ExecutionService: tuiExecutionService{
 			deps:          a.deps,
 			store:         store,
@@ -105,6 +107,7 @@ func (a *App) Run(ctx context.Context, args []string, stdout io.Writer, stderr i
 			repoRoot:      repoRoot,
 			homeDir:       homeDir,
 			commandRunner: commandRunner,
+			templateStore: templateStore,
 		},
 	})
 }

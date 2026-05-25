@@ -5,6 +5,7 @@ This project is a Go command for planning, executing, and resuming a macOS lapto
 ## Package Boundaries
 
 - `cmd/laptop-setup`: CLI entrypoint. It delegates to `internal/app.Run`.
+- repository root package: embeds release-time assets such as setup templates for standalone binaries.
 - `internal/app`: application orchestration. It parses flags, opens state, validates resume requests, requires an interactive TTY, and wires production dependencies through explicit ports.
 - `internal/domain/setup`: typed domain values shared across packages, including run IDs, modes, stage IDs, and stage status values.
 - `internal/state`: JSON state persistence. It owns the on-disk state schema, run ID validation, state validation, and filesystem state store.
@@ -21,7 +22,7 @@ The main test seams are:
 
 - `app.StateRepository` and `state.Store` for state load/save.
 - `runner.CommandRunner` for command execution and executable lookup.
-- `stages.TemplateStore` for repository templates and generated run files.
+- `stages.TemplateStore` for embedded or repository templates and generated run files.
 - `stages.PackageManager` for Homebrew availability and bundle execution.
 - `app.PathResolver`, `app.RunLogFactory`, `app.Executor`, `app.UIRunner`, and `app.TTYDetector` for application-level orchestration tests.
 
@@ -116,7 +117,12 @@ Before a release:
 ```shell
 go test ./...
 go vet ./...
+GOOS=darwin GOARCH=arm64 go build -o laptop-setup-darwin-arm64 ./cmd/laptop-setup
 ```
+
+Attach `laptop-setup-darwin-arm64` to the GitHub release. `bootstrap.sh`
+downloads that asset directly; it does not install Go, clone the repository, or
+build on the target machine.
 
 Also run targeted tests for changed areas, for example:
 

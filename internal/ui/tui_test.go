@@ -119,7 +119,7 @@ func TestDetectAlreadyDoneStagesUsesDefaultDecisions(t *testing.T) {
 		},
 	}
 
-	statuses := detectAlreadyDoneStages(context.Background(), catalog, &noOpRunner{}, "/repo", "/home")
+	statuses := detectAlreadyDoneStages(context.Background(), catalog, &noOpRunner{}, nil, "/repo", "/home")
 	if got := statuses["docker_config"].Status; got != stages.StatusAlreadyDone {
 		t.Fatalf("expected docker_config to be marked already done, got %q", got)
 	}

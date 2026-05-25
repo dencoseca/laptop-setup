@@ -1,7 +1,7 @@
 # laptop-setup Troubleshooting
 
 This runbook is for operators validating or supporting the Go-based setup flow during migration.
-Default production entrypoint is `bootstrap.sh`. It builds the latest `main` version with `go install`, then runs the built binary.
+Default production entrypoint is `bootstrap.sh`. It downloads the latest Apple Silicon release binary and runs it.
 `go run` workflows are for local repository validation.
 `bootstrap.sh` intentionally has no `setup.sh` fallback path; it exits on bootstrap errors.
 
@@ -40,8 +40,9 @@ Use the latest `run_id` from `state.json` to locate the active run directory.
 Symptom:
 - `bootstrap error:` includes one of:
   - unsupported host OS/arch
-  - missing Go toolchain
-  - `go install` download/build failure
+  - missing system command such as `curl`
+  - release binary download failure
+  - downloaded binary permission failure
 
 Action:
 1. Use the exact error text to fix the root cause.
@@ -49,7 +50,7 @@ Action:
    ```shell
    sh bootstrap.sh [flags]
    ```
-3. Do not expect fallback to legacy scripts; bootstrap intentionally fails fast until host and build prerequisites pass.
+3. Do not expect fallback to legacy scripts; bootstrap intentionally fails fast until host validation and binary download pass.
 
 ### No interactive TTY
 

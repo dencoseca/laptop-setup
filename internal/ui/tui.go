@@ -50,6 +50,7 @@ type Options struct {
 	HomeDir          string
 	Out              io.Writer
 	Commander        runner.CommandRunner
+	Templates        stages.TemplateStore
 	ExecutionService ExecutionService
 }
 
@@ -125,6 +126,7 @@ type model struct {
 	catalog          []stages.Stage
 	stageMap         map[string]stages.Stage
 	runner           runner.CommandRunner
+	templates        stages.TemplateStore
 	executionService ExecutionService
 
 	repoRoot string
@@ -260,6 +262,7 @@ func Run(ctx context.Context, options Options) error {
 		catalog:          options.Catalog,
 		stageMap:         stageMap,
 		runner:           options.Commander,
+		templates:        options.Templates,
 		executionService: options.ExecutionService,
 		repoRoot:         options.RepoRoot,
 		homeDir:          options.HomeDir,
@@ -284,7 +287,7 @@ func Run(ctx context.Context, options Options) error {
 		brewSelected:  make(map[string]bool),
 		gitNameInput:  gitNameInput,
 		gitEmailInput: gitEmailInput,
-		stageStatuses: detectAlreadyDoneStages(runCtx, options.Catalog, options.Commander, options.RepoRoot, options.HomeDir),
+		stageStatuses: detectAlreadyDoneStages(runCtx, options.Catalog, options.Commander, options.Templates, options.RepoRoot, options.HomeDir),
 		spinner:       spin,
 		help:          shortcutHelp,
 		stopwatch:     elapsed,
@@ -1433,6 +1436,7 @@ func detectAlreadyDoneStages(
 	ctx context.Context,
 	catalog []stages.Stage,
 	commandRunner runner.CommandRunner,
+	templateStore stages.TemplateStore,
 	repoRoot string,
 	homeDir string,
 ) map[string]state.StageStatus {
@@ -1445,11 +1449,12 @@ func detectAlreadyDoneStages(
 			continue
 		}
 		result, err := stage.Precheck(ctx, stages.ExecutionContext{
-			Runner:    commandRunner,
-			StageID:   stage.ID,
-			RepoRoot:  repoRoot,
-			HomeDir:   homeDir,
-			Decisions: stages.DefaultDecisions(),
+			Runner:        commandRunner,
+			StageID:       stage.ID,
+			RepoRoot:      repoRoot,
+			HomeDir:       homeDir,
+			TemplateStore: templateStore,
+			Decisions:     stages.DefaultDecisions(),
 		})
 		if err != nil || !result.Satisfied {
 			continue

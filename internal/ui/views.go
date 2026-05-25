@@ -96,7 +96,7 @@ func (m model) viewBrewSelection() string {
 	fmt.Fprintf(&b, "%s\n\n", lipgloss.NewStyle().Bold(true).Render("Package & App Selection"))
 
 	if len(m.brewEntries) == 0 {
-		fmt.Fprintf(&b, "No package or app entries found in templates/Brewfile.\n")
+		fmt.Fprintf(&b, "No package or app entries found in the Brewfile template.\n")
 		return b.String()
 	}
 
