@@ -3,6 +3,7 @@ package ui
 import (
 	"context"
 	"fmt"
+	"io"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -18,22 +19,21 @@ import (
 	"github.com/dencoseca/laptop-setup/internal/state"
 )
 
-func TestPrepareExecutionSetupPersistsPhaseDecisions(t *testing.T) {
-	homeDir := t.TempDir()
-	t.Setenv("HOME", homeDir)
-
-	store := state.NewStore(filepath.Join(t.TempDir(), "state.json"))
+func TestReviewEnterPassesPhaseDecisionsToExecutionService(t *testing.T) {
 	catalog := []stages.Stage{
 		{ID: "node_toolchain"},
 		{ID: "docker_config"},
 		{ID: "shell_setup"},
 		{ID: "git_config"},
 	}
+	service := &recordingExecutionService{}
 	m := model{
-		ctx:     context.Background(),
-		store:   store,
-		catalog: catalog,
-		config:  Config{},
+		ctx:              context.Background(),
+		screen:           screenReview,
+		catalog:          catalog,
+		config:           Config{},
+		stageStatuses:    make(map[string]state.StageStatus),
+		executionService: service,
 		devOptions: []toggleOption{
 			{ID: "node_toolchain", Title: "Node Toolchain", Selected: true},
 			{ID: "docker_config", Title: "Docker Configuration", Selected: true},
@@ -60,14 +60,12 @@ func TestPrepareExecutionSetupPersistsPhaseDecisions(t *testing.T) {
 	m.gitNameInput.SetValue("Alice")
 	m.gitEmailInput.SetValue("alice@example.com")
 
-	setup, err := m.prepareExecutionSetup()
-	if err != nil {
-		t.Fatalf("prepareExecutionSetup returned error: %v", err)
+	next, _ := m.updateKey(tea.KeyMsg{Type: tea.KeyEnter})
+	if _, ok := next.(model); !ok {
+		t.Fatalf("expected model type after update, got %T", next)
 	}
-	defer setup.humanLog.Close()
-	defer setup.eventsLog.Close()
 
-	decisions := setup.runState.Decisions
+	decisions := service.request.Decisions
 	if got := stages.NodeToolchainFromDecisions(decisions); got != stages.NodeToolchainNvmPnpm {
 		t.Fatalf("node toolchain mismatch: got=%s", got)
 	}
@@ -967,6 +965,49 @@ func (r *noOpRunner) LookPath(context.Context, string) (string, error) {
 	return "/usr/local/bin/test-command", nil
 }
 
+type recordingExecutionService struct {
+	request ExecutionRequest
+}
+
+func (s *recordingExecutionService) PrepareExecution(_ context.Context, request ExecutionRequest) (ExecutionRun, error) {
+	s.request = request
+	runState := &state.RunState{
+		RunID:        state.RunID("test-run"),
+		StartAt:      time.Now().UTC(),
+		Mode:         modeName(request.DryRun),
+		ResolvedPlan: request.Plan,
+		Decisions:    request.Decisions,
+		SelectedIDs:  request.SelectedIDs,
+		Stages:       make(map[state.StageID]state.StageStatus, len(request.Plan)),
+	}
+	if request.Resume {
+		runState = request.Current
+	}
+	return ExecutionRun{
+		RunState:     runState,
+		DryRun:       request.DryRun,
+		RunDir:       tTempRunDir,
+		HumanLogPath: filepath.Join(tTempRunDir, "run.log"),
+		EventsPath:   filepath.Join(tTempRunDir, "events.jsonl"),
+		HumanLog:     discardWriteCloser{Writer: io.Discard},
+		EventsLog:    discardWriteCloser{Writer: io.Discard},
+	}, nil
+}
+
+func (s *recordingExecutionService) Execute(context.Context, ExecutionRun, ExecutionHooks) error {
+	return nil
+}
+
+type discardWriteCloser struct {
+	io.Writer
+}
+
+func (discardWriteCloser) Close() error {
+	return nil
+}
+
+const tTempRunDir = "/tmp/laptop-setup-test-run"
+
 func sendEnter(t *testing.T, m model) model {
 	t.Helper()
 	next, _ := m.updateKey(tea.KeyMsg{Type: tea.KeyEnter})
@@ -1304,14 +1345,15 @@ func TestReviewEnterConfirmsPlanAndStartsExecution(t *testing.T) {
 	}
 
 	m := model{
-		ctx:      context.Background(),
-		screen:   screenReview,
-		store:    store,
-		catalog:  catalog,
-		stageMap: stageMap,
-		runner:   &noOpRunner{},
-		repoRoot: t.TempDir(),
-		homeDir:  homeDir,
+		ctx:              context.Background(),
+		screen:           screenReview,
+		store:            store,
+		catalog:          catalog,
+		stageMap:         stageMap,
+		runner:           &noOpRunner{},
+		repoRoot:         t.TempDir(),
+		homeDir:          homeDir,
+		executionService: &recordingExecutionService{},
 		macOSOptions: []toggleOption{
 			{ID: "xcode_clt", Title: "Xcode", Selected: true},
 		},

@@ -84,6 +84,8 @@ func (a *App) Run(ctx context.Context, args []string, stdout io.Writer, stderr i
 		if err != nil {
 			return fmt.Errorf("resolve home directory: %w", err)
 		}
+		catalog := a.deps.Catalog()
+		commandRunner := a.deps.CommandRunner()
 
 		return a.deps.UI.Run(ctx, ui.Options{
 			Config: ui.Config{
@@ -95,11 +97,19 @@ func (a *App) Run(ctx context.Context, args []string, stdout io.Writer, stderr i
 			},
 			Store:     store,
 			Current:   current,
-			Catalog:   a.deps.Catalog(),
+			Catalog:   catalog,
 			RepoRoot:  repoRoot,
 			HomeDir:   homeDir,
 			Out:       stdout,
-			Commander: a.deps.CommandRunner(),
+			Commander: commandRunner,
+			ExecutionService: tuiExecutionService{
+				deps:          a.deps,
+				store:         store,
+				catalog:       catalog,
+				repoRoot:      repoRoot,
+				homeDir:       homeDir,
+				commandRunner: commandRunner,
+			},
 		})
 	}
 

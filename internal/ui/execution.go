@@ -1,0 +1,362 @@
+package ui
+
+import (
+	"context"
+	"errors"
+	"io"
+	"os"
+	"strings"
+	"time"
+
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/dencoseca/laptop-setup/internal/execution"
+	"github.com/dencoseca/laptop-setup/internal/runner"
+	"github.com/dencoseca/laptop-setup/internal/stages"
+	"github.com/dencoseca/laptop-setup/internal/state"
+)
+
+type ExecutionRequest struct {
+	Resume      bool
+	DryRun      bool
+	Current     *state.RunState
+	Plan        []state.StageID
+	Decisions   stages.DecisionSet
+	SelectedIDs []string
+}
+
+type ExecutionRun struct {
+	RunState     *state.RunState
+	DryRun       bool
+	RunDir       string
+	HumanLogPath string
+	EventsPath   string
+	HumanLog     io.WriteCloser
+	EventsLog    io.WriteCloser
+}
+
+type ExecutionHooks struct {
+	OnStageStatus func(state.StageID, state.StageStatus)
+	OnFailure     func(context.Context, execution.Failure) (execution.FailureAction, error)
+}
+
+type ExecutionService interface {
+	PrepareExecution(context.Context, ExecutionRequest) (ExecutionRun, error)
+	Execute(context.Context, ExecutionRun, ExecutionHooks) error
+}
+
+func (m *model) startExecutionFromReview() (tea.Model, tea.Cmd) {
+	plan, err := m.resolvePlan()
+	if err != nil {
+		m.planError = err.Error()
+		return *m, nil
+	}
+	if m.executionService == nil {
+		m.planError = "execution service is required"
+		return *m, nil
+	}
+
+	request := ExecutionRequest{
+		Resume:      m.resumeRun,
+		DryRun:      m.config.DryRun,
+		Current:     m.current,
+		Plan:        stringsToStageIDs(plan),
+		Decisions:   m.collectDecisions(),
+		SelectedIDs: m.selectedBrewIDs(),
+	}
+	if m.resumeRun && m.current != nil {
+		request.Decisions = m.current.Decisions
+		request.SelectedIDs = m.current.SelectedIDs
+	}
+
+	run, err := m.executionService.PrepareExecution(m.ctx, request)
+	if err != nil {
+		m.planError = err.Error()
+		return *m, nil
+	}
+
+	m.planError = ""
+	m.runState = run.RunState
+	m.humanLogPath = run.HumanLogPath
+	m.eventsLogPath = run.EventsPath
+	m.stageOrder = stageIDsToStrings(run.RunState.ResolvedPlan)
+	m.initialiseStageStatuses()
+
+	m.screen = screenExecuting
+	m.executing = true
+	m.tailedLogs = nil
+	m.logTailOffset = 0
+	m.logTailCarry = ""
+	m.updates = make(chan tea.Msg, 32)
+	return *m, tea.Batch(
+		startExecutionWorker(m.ctx, m.updates, run, m.executionService),
+		waitForExecutionUpdate(m.updates),
+		scheduleLogTailTick(),
+		m.spinner.Tick,
+		tea.Sequence(m.stopwatch.Reset(), m.stopwatch.Start()),
+	)
+}
+
+func (m *model) initialiseStageStatuses() {
+	if m.runState == nil {
+		return
+	}
+	for _, stageID := range m.stageOrder {
+		status := m.runState.Stages[state.StageID(stageID)]
+		if status.Status == "" {
+			status.Status = stages.StatusPending
+		}
+		m.stageStatuses[stageID] = status
+	}
+}
+
+func (m *model) abortExecutionIfNeeded(action execution.FailureAction) {
+	if m.failurePrompt != nil {
+		m.resolveFailure(action)
+	}
+	if m.executing {
+		m.cancel()
+	}
+}
+
+func (m *model) resolveFailure(action execution.FailureAction) {
+	if m.failurePrompt == nil {
+		return
+	}
+	select {
+	case m.failurePrompt.Response <- action:
+	default:
+	}
+	m.failurePrompt = nil
+}
+
+func startExecutionWorker(
+	ctx context.Context,
+	updates chan<- tea.Msg,
+	run ExecutionRun,
+	service ExecutionService,
+) tea.Cmd {
+	return func() tea.Msg {
+		go func() {
+			defer close(updates)
+			defer run.HumanLog.Close()
+			defer run.EventsLog.Close()
+
+			err := service.Execute(ctx, run, ExecutionHooks{
+				OnStageStatus: func(stageID state.StageID, status state.StageStatus) {
+					select {
+					case updates <- stageStatusMsg{StageID: stageID.String(), Status: status}:
+					case <-ctx.Done():
+					}
+				},
+				OnFailure: func(inner context.Context, failure execution.Failure) (execution.FailureAction, error) {
+					response := make(chan execution.FailureAction, 1)
+					request := failureRequest{
+						StageID:  failure.Stage.ID.String(),
+						Title:    failure.Stage.Title,
+						Attempt:  failure.Attempt,
+						CanSkip:  failure.Stage.CanSkip,
+						Message:  failure.Err.Error(),
+						Response: response,
+					}
+					select {
+					case updates <- failureRequestMsg{Request: request}:
+					case <-inner.Done():
+						return execution.ActionAbort, inner.Err()
+					}
+
+					select {
+					case action := <-response:
+						return action, nil
+					case <-inner.Done():
+						return execution.ActionAbort, inner.Err()
+					}
+				},
+			})
+
+			select {
+			case updates <- executionDoneMsg{Err: err}:
+			case <-ctx.Done():
+			}
+		}()
+		return nil
+	}
+}
+
+func waitForExecutionUpdate(updates <-chan tea.Msg) tea.Cmd {
+	if updates == nil {
+		return nil
+	}
+	return func() tea.Msg {
+		message, ok := <-updates
+		if !ok {
+			return nil
+		}
+		return message
+	}
+}
+
+func scheduleLogTailTick() tea.Cmd {
+	return tea.Tick(logTailPollInterval, func(at time.Time) tea.Msg {
+		return logTailTickMsg(at)
+	})
+}
+
+func (m *model) pollRunLog() {
+	if strings.TrimSpace(m.humanLogPath) == "" {
+		return
+	}
+
+	file, err := os.Open(m.humanLogPath)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return
+		}
+		return
+	}
+	defer file.Close()
+
+	info, err := file.Stat()
+	if err != nil {
+		return
+	}
+	if info.Size() < m.logTailOffset {
+		m.logTailOffset = 0
+		m.logTailCarry = ""
+	}
+	if _, err = file.Seek(m.logTailOffset, io.SeekStart); err != nil {
+		return
+	}
+
+	buffer := make([]byte, 4096)
+	for {
+		count, readErr := file.Read(buffer)
+		if count > 0 {
+			m.consumeLogTailChunk(string(buffer[:count]))
+		}
+		if readErr != nil {
+			if !errors.Is(readErr, io.EOF) {
+				return
+			}
+			break
+		}
+	}
+
+	offset, err := file.Seek(0, io.SeekCurrent)
+	if err != nil {
+		return
+	}
+	m.logTailOffset = offset
+}
+
+func (m *model) consumeLogTailChunk(chunk string) {
+	if chunk == "" {
+		return
+	}
+	payload := m.logTailCarry + chunk
+	lines := strings.Split(payload, "\n")
+	if strings.HasSuffix(payload, "\n") {
+		m.logTailCarry = ""
+	} else {
+		m.logTailCarry = lines[len(lines)-1]
+		lines = lines[:len(lines)-1]
+	}
+	for _, line := range lines {
+		parsed := parseRunLogLine(line)
+		if strings.TrimSpace(parsed.Line) == "" {
+			continue
+		}
+		m.tailedLogs = append(m.tailedLogs, parsed)
+	}
+	if len(m.tailedLogs) > bufferedLogLineLimit {
+		m.tailedLogs = append([]tailedLogLine(nil), m.tailedLogs[len(m.tailedLogs)-bufferedLogLineLimit:]...)
+	}
+}
+
+func parseRunLogLine(raw string) tailedLogLine {
+	line := strings.TrimSpace(raw)
+	if line == "" {
+		return tailedLogLine{}
+	}
+
+	parsed := tailedLogLine{Line: line}
+	parts := strings.Split(line, " | ")
+	if len(parts) < 4 {
+		return parsed
+	}
+	if !isLogLevel(parts[1]) {
+		return parsed
+	}
+
+	candidate := strings.TrimSpace(parts[2])
+	if candidate == "" || isEventToken(candidate) {
+		return parsed
+	}
+
+	parsed.StageID = candidate
+	return parsed
+}
+
+func isLogLevel(value string) bool {
+	switch strings.ToUpper(strings.TrimSpace(value)) {
+	case "INFO", "WARN", "ERROR", "DEBUG":
+		return true
+	default:
+		return false
+	}
+}
+
+func isEventToken(value string) bool {
+	switch strings.TrimSpace(value) {
+	case string(runner.EventTypeRunStarted),
+		string(runner.EventTypeRunCompleted),
+		string(runner.EventTypeStageStarted),
+		string(runner.EventTypeStageAlreadyDone),
+		string(runner.EventTypeStageCompleted),
+		string(runner.EventTypeStageFailed),
+		string(runner.EventTypeStageRetry),
+		string(runner.EventTypeStageSkipped),
+		string(runner.EventTypeCommandStarted),
+		string(runner.EventTypeCommandCompleted),
+		string(runner.EventTypeCommandStdout),
+		string(runner.EventTypeCommandStderr),
+		string(runner.EventTypeSimulation),
+		string(runner.EventTypeStageMessage):
+		return true
+	default:
+		return false
+	}
+}
+
+func currentLogStageID(stageOrder []string, statuses map[string]state.StageStatus) string {
+	for _, stageID := range stageOrder {
+		if statuses[stageID].Status == stages.StatusRunning {
+			return stageID
+		}
+	}
+	for idx := len(stageOrder) - 1; idx >= 0; idx-- {
+		stageID := stageOrder[idx]
+		status := statuses[stageID].Status
+		if status != "" && status != stages.StatusPending {
+			return stageID
+		}
+	}
+	return ""
+}
+
+func filteredLogLines(lines []tailedLogLine, stageID string, limit int) []string {
+	if limit <= 0 {
+		return nil
+	}
+
+	filtered := make([]string, 0, limit)
+	for _, line := range lines {
+		if stageID != "" && line.StageID != stageID {
+			continue
+		}
+		filtered = append(filtered, line.Line)
+	}
+	if len(filtered) <= limit {
+		return filtered
+	}
+	return append([]string(nil), filtered[len(filtered)-limit:]...)
+}
