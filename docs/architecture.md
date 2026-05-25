@@ -5,7 +5,7 @@ This project is a Go command for planning, executing, and resuming a macOS lapto
 ## Package Boundaries
 
 - `cmd/laptop-setup`: CLI entrypoint. It delegates to `internal/app.Run`.
-- `internal/app`: application orchestration. It parses flags, opens state, validates resume requests, chooses interactive or non-interactive execution, and wires production dependencies through explicit ports.
+- `internal/app`: application orchestration. It parses flags, opens state, validates resume requests, requires an interactive TTY, and wires production dependencies through explicit ports.
 - `internal/domain/setup`: typed domain values shared across packages, including run IDs, modes, stage IDs, and stage status values.
 - `internal/state`: JSON state persistence. It owns the on-disk state schema, run ID validation, state validation, and filesystem state store.
 - `internal/execution`: execution engine. It walks the resolved plan, calls stage prechecks and runners, persists status transitions, emits lifecycle events, and applies retry, skip, or abort failure actions.
@@ -127,8 +127,8 @@ go test ./internal/ui
 
 Manual checks:
 
-- Run `laptop-setup --yes --dry-run` from a local build.
-- Run a one-stage non-interactive path with `--only <stage-id>` for changed stages.
+- Run `laptop-setup --dry-run` from a local build.
+- Run a one-stage interactive path with `--only <stage-id>` for changed stages.
 - Validate `state.json`, `run.log`, and `events.jsonl` are created and readable.
 - Validate `--resume` after a forced failure.
 - Use [VM Smoke Test Checklist](vm-smoke-test-checklist.md) for full clean-machine validation.

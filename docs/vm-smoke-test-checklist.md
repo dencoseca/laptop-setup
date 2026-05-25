@@ -6,7 +6,7 @@ Bootstrap is intentionally binary-only: there is no `setup.sh` fallback when boo
 
 ## Preconditions
 
-- Clean macOS VM snapshot.
+- Clean Apple Silicon macOS VM snapshot.
 - Network access enabled.
 - Local checkout of this repository.
 - Terminal with write access to `$HOME`.
@@ -21,16 +21,16 @@ Mark each item pass/fail and capture `run_id` plus log path.
    - package/app selection
    - dev tools phase toggles
    - manual apps summary
-4. Non-interactive run:
+4. Interactive run with `--only` stage filtering:
    ```shell
-   go run ./cmd/laptop-setup --yes
+   go run ./cmd/laptop-setup --only brew_bundle
    ```
 5. Interrupted run and resume:
    - start run
    - interrupt after at least one completed stage
    - resume with:
      ```shell
-     go run ./cmd/laptop-setup --yes --resume
+     go run ./cmd/laptop-setup --resume
      ```
 6. Failure handling path:
    - force a stage failure (for example, temporarily break connectivity for a network stage)

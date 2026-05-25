@@ -7,17 +7,14 @@ import (
 	"fmt"
 	"io"
 	"strings"
-	"time"
 
 	"github.com/dencoseca/laptop-setup/internal/execution"
-	"github.com/dencoseca/laptop-setup/internal/runner"
 	"github.com/dencoseca/laptop-setup/internal/stages"
 	"github.com/dencoseca/laptop-setup/internal/state"
 	"github.com/dencoseca/laptop-setup/internal/ui"
 )
 
 type config struct {
-	yes       bool
 	resume    bool
 	dryRun    bool
 	from      string
@@ -71,59 +68,10 @@ func (a *App) Run(ctx context.Context, args []string, stdout io.Writer, stderr i
 		return err
 	}
 
-	if !cfg.yes {
-		if !promptEnabled {
-			return errors.New("interactive mode requires a TTY; rerun with --yes for non-interactive execution")
-		}
-
-		repoRoot, err := a.deps.Paths.WorkingDir()
-		if err != nil {
-			return fmt.Errorf("resolve repository root: %w", err)
-		}
-		homeDir, err := a.deps.Paths.HomeDir()
-		if err != nil {
-			return fmt.Errorf("resolve home directory: %w", err)
-		}
-		catalog := a.deps.Catalog()
-		commandRunner := a.deps.CommandRunner()
-
-		return a.deps.UI.Run(ctx, ui.Options{
-			Config: ui.Config{
-				Resume: cfg.resume,
-				DryRun: cfg.dryRun,
-				From:   cfg.from,
-				Only:   cfg.only,
-				Skip:   cfg.skip,
-			},
-			Store:     store,
-			Current:   current,
-			Catalog:   catalog,
-			RepoRoot:  repoRoot,
-			HomeDir:   homeDir,
-			Out:       stdout,
-			Commander: commandRunner,
-			ExecutionService: tuiExecutionService{
-				deps:          a.deps,
-				store:         store,
-				catalog:       catalog,
-				repoRoot:      repoRoot,
-				homeDir:       homeDir,
-				commandRunner: commandRunner,
-			},
-		})
+	if !promptEnabled {
+		return errors.New("laptop-setup requires an interactive TTY")
 	}
 
-	return a.runNonInteractive(ctx, cfg, store, current, stdout)
-}
-
-func (a *App) runNonInteractive(
-	ctx context.Context,
-	cfg config,
-	store StateRepository,
-	current *state.RunState,
-	stdout io.Writer,
-) error {
-	catalog := a.deps.Catalog()
 	repoRoot, err := a.deps.Paths.WorkingDir()
 	if err != nil {
 		return fmt.Errorf("resolve repository root: %w", err)
@@ -132,85 +80,32 @@ func (a *App) runNonInteractive(
 	if err != nil {
 		return fmt.Errorf("resolve home directory: %w", err)
 	}
-	templateStore := a.deps.TemplateStores.New(repoRoot, a.deps.FileSystem)
+	catalog := a.deps.Catalog()
+	commandRunner := a.deps.CommandRunner()
 
-	effectiveDryRun := cfg.dryRun
-	var runState *state.RunState
-
-	if cfg.resume {
-		runState = current
-		effectiveDryRun = runState.Mode.IsDryRun()
-		if err := validateResumeRequest(runState, catalog, cfg.dryRun); err != nil {
-			return err
-		}
-	} else {
-		plan, resolveErr := stages.ResolvePlan(catalog, stages.PlanOptions{
-			FromID:  cfg.from,
-			OnlyIDs: cfg.only,
-			SkipIDs: cfg.skip,
-		})
-		if resolveErr != nil {
-			return resolveErr
-		}
-		selectedIDs, selectErr := stages.ResolveSelectedBrewIDsFromStore(templateStore)
-		if selectErr != nil {
-			return selectErr
-		}
-		runState = &state.RunState{
-			RunID:        state.NewRunID(time.Now()),
-			StartAt:      time.Now().UTC(),
-			Mode:         modeName(effectiveDryRun),
-			ResolvedPlan: plan,
-			Decisions:    stages.DefaultDecisions().WithSelectedStageIDs(plan),
-			SelectedIDs:  selectedIDs,
-			Stages:       make(map[state.StageID]state.StageStatus, len(catalog)),
-		}
-	}
-
-	if runState.Decisions.IsZero() {
-		runState.Decisions = stages.DefaultDecisions().WithSelectedStageIDs(runState.ResolvedPlan)
-	}
-	if len(runState.Decisions.SelectedStageIDs) == 0 {
-		runState.Decisions = runState.Decisions.WithSelectedStageIDs(runState.ResolvedPlan)
-	}
-	if err = runState.Decisions.Validate(); err != nil {
-		return fmt.Errorf("validate decisions: %w", err)
-	}
-	if len(runState.SelectedIDs) == 0 {
-		selectedIDs, selectErr := stages.ResolveSelectedBrewIDsFromStore(templateStore)
-		if selectErr != nil {
-			return selectErr
-		}
-		runState.SelectedIDs = selectedIDs
-	}
-
-	if err = store.Save(ctx, runState); err != nil {
-		return err
-	}
-
-	logs, err := a.deps.RunLogs.Open(runState.RunID)
-	if err != nil {
-		return err
-	}
-	defer logs.HumanLog.Close()
-	defer logs.EventLog.Close()
-
-	logger := runner.NewEventLogger(io.MultiWriter(stdout, logs.HumanLog), logs.EventLog)
-
-	return a.deps.Executor.Execute(ctx, execution.Options{
-		Store:          store,
-		RunState:       runState,
-		Catalog:        catalog,
-		DryRun:         effectiveDryRun,
-		DryRunDelay:    a.deps.DryRunStageDelay,
-		RepoRoot:       repoRoot,
-		HomeDir:        homeDir,
-		RunDir:         logs.RunDir,
-		CommandRunner:  a.deps.CommandRunner(),
-		FileSystem:     a.deps.FileSystem,
-		TemplateStore:  templateStore,
-		PackageManager: a.deps.PackageManager,
-		Logger:         logger,
+	return a.deps.UI.Run(ctx, ui.Options{
+		Config: ui.Config{
+			Resume: cfg.resume,
+			DryRun: cfg.dryRun,
+			From:   cfg.from,
+			Only:   cfg.only,
+			Skip:   cfg.skip,
+		},
+		Store:     store,
+		Current:   current,
+		Catalog:   catalog,
+		RepoRoot:  repoRoot,
+		HomeDir:   homeDir,
+		Out:       stdout,
+		Commander: commandRunner,
+		ExecutionService: tuiExecutionService{
+			deps:          a.deps,
+			store:         store,
+			catalog:       catalog,
+			repoRoot:      repoRoot,
+			homeDir:       homeDir,
+			commandRunner: commandRunner,
+		},
 	})
 }
 
@@ -234,8 +129,6 @@ func parseConfigWithDefaultPath(args []string, stderr io.Writer, defaultStatePat
 	fs.SetOutput(stderr)
 
 	var cfg config
-	fs.BoolVar(&cfg.yes, "yes", false, "Run non-interactively")
-	fs.BoolVar(&cfg.yes, "y", false, "Run non-interactively")
 	fs.BoolVar(&cfg.resume, "resume", false, "Resume from existing run state")
 	fs.BoolVar(&cfg.dryRun, "dry-run", false, "Simulate execution without machine changes")
 	fs.StringVar(&cfg.from, "from", "", "Start execution from stage id")

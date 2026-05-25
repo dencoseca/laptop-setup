@@ -10,7 +10,10 @@ curl -fsSL https://raw.githubusercontent.com/dencoseca/laptop-setup/main/bootstr
 sh bootstrap.sh
 ```
 
-`bootstrap.sh` is the default entrypoint. It downloads the release binary for your macOS architecture, verifies SHA256 checksums, then executes `laptop-setup`.
+This project targets Apple Silicon MacBooks only. Intel Macs are not a supported
+runtime target.
+
+`bootstrap.sh` is the default entrypoint. It downloads the Apple Silicon macOS release binary, verifies SHA256 checksums, then executes `laptop-setup`.
 There is intentionally no `setup.sh` fallback path: bootstrap is binary-only and fails fast when download or verification prerequisites are not met.
 Bootstrap defaults to pinned GitHub release tag `v0.1.0`.
 Override it with `LAPTOP_SETUP_RELEASE_TAG` when needed (including `latest`):
@@ -20,16 +23,10 @@ LAPTOP_SETUP_RELEASE_TAG=v0.1.1 sh bootstrap.sh
 LAPTOP_SETUP_RELEASE_TAG=latest sh bootstrap.sh
 ```
 
-For non-interactive use:
-```shell
-sh bootstrap.sh --yes
-```
-
 Common flags:
 
 | Flag | Valid Values |
 |------|--------------|
-| `--yes`, `-y` | non-interactive mode |
 | `--resume` | resume previous run |
 | `--from <stage-id>` | start execution from a stage |
 | `--only <stage-id>[,<stage-id>...]` | run only specific stages |

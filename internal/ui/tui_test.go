@@ -106,6 +106,25 @@ func TestParseGitIdentity(t *testing.T) {
 	}
 }
 
+func TestDetectAlreadyDoneStagesUsesDefaultDecisions(t *testing.T) {
+	catalog := []stages.Stage{
+		{
+			ID: "docker_config",
+			Precheck: func(_ context.Context, execCtx stages.ExecutionContext) (stages.CheckResult, error) {
+				if got := stages.DockerRuntimeFromDecisions(execCtx.Decisions); got != stages.DockerRuntimeColima {
+					t.Fatalf("expected default docker runtime decision, got %q", got)
+				}
+				return stages.CheckResult{Satisfied: true}, nil
+			},
+		},
+	}
+
+	statuses := detectAlreadyDoneStages(context.Background(), catalog, &noOpRunner{}, "/repo", "/home")
+	if got := statuses["docker_config"].Status; got != stages.StatusAlreadyDone {
+		t.Fatalf("expected docker_config to be marked already done, got %q", got)
+	}
+}
+
 func TestParseRunLogLineExtractsStageID(t *testing.T) {
 	line := "2026-05-23T12:30:00Z | INFO | brew_bundle | stage_started | Brew Bundle"
 	parsed := parseRunLogLine(line)

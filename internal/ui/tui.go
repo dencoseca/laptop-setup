@@ -1456,10 +1456,11 @@ func detectAlreadyDoneStages(
 			continue
 		}
 		result, err := stage.Precheck(ctx, stages.ExecutionContext{
-			Runner:   commandRunner,
-			StageID:  stage.ID,
-			RepoRoot: repoRoot,
-			HomeDir:  homeDir,
+			Runner:    commandRunner,
+			StageID:   stage.ID,
+			RepoRoot:  repoRoot,
+			HomeDir:   homeDir,
+			Decisions: stages.DefaultDecisions(),
 		})
 		if err != nil || !result.Satisfied {
 			continue

@@ -16,12 +16,12 @@ Usage:
   sh bootstrap.sh [flags]
 
 Common flags:
-  -y, --yes                       Non-interactive mode
   --resume                        Resume an interrupted run
   --dry-run                       Simulate stages without system mutation
   -h, --help                      Show usage
 
 All flags are forwarded to the downloaded `laptop-setup` binary.
+Supported host: Apple Silicon macOS.
 EOF
   printf 'Default release tag: %s\n' "$DEFAULT_RELEASE_TAG"
   cat <<'EOF'
@@ -75,9 +75,6 @@ resolve_artifact_name() {
     arm64|aarch64)
       printf 'laptop-setup_darwin_arm64\n'
       ;;
-    x86_64|amd64)
-      printf 'laptop-setup_darwin_amd64\n'
-      ;;
     *)
       return 1
       ;;
@@ -115,7 +112,7 @@ download_and_verify_binary() {
   os_name=$(uname -s 2>/dev/null || printf 'unknown')
   machine_arch=$(uname -m 2>/dev/null || printf 'unknown')
   if ! artifact_name=$(resolve_artifact_name "$os_name" "$machine_arch"); then
-    set_bootstrap_error "Unsupported host: os=$os_name arch=$machine_arch. Supported targets: Darwin arm64/aarch64 and Darwin x86_64/amd64."
+    set_bootstrap_error "Unsupported host: os=$os_name arch=$machine_arch. Supported target: Apple Silicon macOS (Darwin arm64/aarch64)."
     return 1
   fi
   base_url=$(release_base_url)

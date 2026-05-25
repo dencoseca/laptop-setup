@@ -30,7 +30,7 @@ Use the latest `run_id` from `state.json` to locate the active run directory.
    ```
 4. Resume when appropriate:
    ```shell
-   laptop-setup --yes --resume
+   laptop-setup --resume
    ```
 
 ## Common Failure Cases
@@ -52,16 +52,13 @@ Action:
    ```
 3. Do not expect fallback to legacy scripts; bootstrap intentionally fails fast until verification passes.
 
-### No TTY in interactive mode
+### No interactive TTY
 
 Symptom:
-- Error indicates interactive mode requires a TTY.
+- Error indicates `laptop-setup` requires an interactive TTY.
 
 Action:
-- Re-run in non-interactive mode:
-  ```shell
-  laptop-setup --yes
-  ```
+- Re-run from a terminal session attached to a TTY. The setup flow is interactive-only.
 
 ### Resume blocked by mode mismatch
 
@@ -85,7 +82,7 @@ Action:
 2. Re-run the exact command from logs manually to confirm local brew issue.
 3. Fix brew/network/system issue, then resume:
    ```shell
-   laptop-setup --yes --resume
+   laptop-setup --resume
    ```
 
 ### Stage marked failed and skip not allowed
@@ -97,7 +94,7 @@ Action:
 - Fix the underlying issue and retry that stage by resuming.
 - For a one-stage investigation run, use:
   ```shell
-  laptop-setup --yes --only <stage-id>
+  laptop-setup --only <stage-id>
   ```
 
 ### Missing previous state for resume
@@ -108,7 +105,7 @@ Symptom:
 Action:
 - Start a new run:
   ```shell
-  laptop-setup --yes
+  laptop-setup
   ```
 
 ## Escalation Data to Collect
