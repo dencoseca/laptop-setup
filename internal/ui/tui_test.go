@@ -674,6 +674,18 @@ func TestDashboardStatusSplitsConfigurationAndExecutionProgress(t *testing.T) {
 	}
 }
 
+func TestConfigurationProgressStartsAtZeroAndEndsAtComplete(t *testing.T) {
+	welcomeStatus := model{screen: screenWelcome}.configurationDashboardStatus()
+	if welcomeStatus.ConfigurationProgressPct != 0 {
+		t.Fatalf("expected configuration progress to start at zero, got %d", welcomeStatus.ConfigurationProgressPct)
+	}
+
+	reviewStatus := model{screen: screenReview}.configurationDashboardStatus()
+	if reviewStatus.ConfigurationProgressPct != 100 {
+		t.Fatalf("expected configuration progress to be complete on review, got %d", reviewStatus.ConfigurationProgressPct)
+	}
+}
+
 func TestRenderDashboardPlacesShortcutHintBelowBody(t *testing.T) {
 	m := model{
 		width:  96,

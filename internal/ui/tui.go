@@ -1336,7 +1336,7 @@ func (m model) configurationDashboardStatus() dashboardStatus {
 		BadgeTone:                badgeTone,
 		Heading:                  screenTitle(m.screen),
 		Summary:                  fmt.Sprintf("%d of %d", stepIndex, totalSteps),
-		ConfigurationProgressPct: stepIndex * 100 / maxInt(1, totalSteps),
+		ConfigurationProgressPct: configurationProgressPercent(m.screen),
 		ExecutionProgressPct:     m.executionProgress().PercentComplete,
 		Hint:                     hint,
 	}
@@ -1501,6 +1501,16 @@ func configurationStepPosition(current screen) (int, int) {
 		}
 	}
 	return total, total
+}
+
+func configurationProgressPercent(current screen) int {
+	totalTransitions := maxInt(1, len(configurationScreenOrder)-1)
+	for index, candidate := range configurationScreenOrder {
+		if current == candidate {
+			return index * 100 / totalTransitions
+		}
+	}
+	return 100
 }
 
 func screenTitle(current screen) string {
