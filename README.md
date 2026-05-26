@@ -38,8 +38,6 @@ No voice output feature is implemented.
 ## Maintainers
 
 - Architecture and stage-extension notes: [docs/architecture.md](docs/architecture.md)
-- Troubleshooting runbook: [docs/operations-troubleshooting.md](docs/operations-troubleshooting.md)
-- Clean VM validation: [docs/vm-smoke-test-checklist.md](docs/vm-smoke-test-checklist.md)
 
 Before release, run:
 
