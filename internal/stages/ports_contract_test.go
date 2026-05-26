@@ -12,7 +12,7 @@ import (
 
 func TestFilesystemTemplateStoreContract(t *testing.T) {
 	repoRoot := t.TempDir()
-	runDir := t.TempDir()
+	runDir := filepath.Join(t.TempDir(), "runs", "run-1")
 	templatesDir := filepath.Join(repoRoot, "templates")
 	if err := os.MkdirAll(templatesDir, 0o755); err != nil {
 		t.Fatalf("create templates directory: %v", err)
@@ -59,6 +59,8 @@ func TestFilesystemTemplateStoreContract(t *testing.T) {
 	if len(generatedEntries) != 1 || generatedEntries[0].ID != "go" {
 		t.Fatalf("generated entries mismatch: %+v", generatedEntries)
 	}
+	assertPathPerm(t, runDir, 0o700)
+	assertPathPerm(t, generatedPath, 0o600)
 
 	destination := filepath.Join(t.TempDir(), ".zshrc")
 	if err := store.Copy("zshrc", destination); err != nil {
@@ -71,10 +73,11 @@ func TestFilesystemTemplateStoreContract(t *testing.T) {
 	if string(copied) != "export TEST=1\n" {
 		t.Fatalf("copied template mismatch: %q", copied)
 	}
+	assertPathPerm(t, destination, 0o600)
 }
 
 func TestFSTemplateStoreContract(t *testing.T) {
-	runDir := t.TempDir()
+	runDir := filepath.Join(t.TempDir(), "runs", "run-1")
 	store := FSTemplateStore{
 		FS: fstest.MapFS{
 			"Brewfile": {
@@ -121,6 +124,8 @@ func TestFSTemplateStoreContract(t *testing.T) {
 	if len(generatedEntries) != 1 || generatedEntries[0].ID != "go" {
 		t.Fatalf("generated entries mismatch: %+v", generatedEntries)
 	}
+	assertPathPerm(t, runDir, 0o700)
+	assertPathPerm(t, generatedPath, 0o600)
 
 	destination := filepath.Join(t.TempDir(), ".zshrc")
 	if err := store.Copy("zshrc", destination); err != nil {
@@ -132,6 +137,18 @@ func TestFSTemplateStoreContract(t *testing.T) {
 	}
 	if string(copied) != "export TEST=1\n" {
 		t.Fatalf("copied template mismatch: %q", copied)
+	}
+	assertPathPerm(t, destination, 0o600)
+}
+
+func assertPathPerm(t *testing.T, path string, want os.FileMode) {
+	t.Helper()
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat %s: %v", path, err)
+	}
+	if got := info.Mode().Perm(); got != want {
+		t.Fatalf("permissions for %s: got=%#o want=%#o", path, got, want)
 	}
 }
 

@@ -25,7 +25,6 @@ EOF
   cat <<'EOF'
 Bootstrap downloads the latest release binary and runs it.
 It uses the default macOS shell plus curl, chmod, mktemp, uname, and rm.
-Set LAPTOP_SETUP_VERSION to a tag such as v1.2.3 to pin a release.
 EOF
 }
 
@@ -110,16 +109,10 @@ download_binary() {
 
   ensure_tmp_dir
   binary_path=$TMP_DIR/laptop-setup
-
-  version=${LAPTOP_SETUP_VERSION:-latest}
-  if [ "$version" = "latest" ]; then
-    url="https://github.com/$REPO_SLUG/releases/latest/download/$ASSET_NAME"
-  else
-    url="https://github.com/$REPO_SLUG/releases/download/$version/$ASSET_NAME"
-  fi
+  url="https://github.com/$REPO_SLUG/releases/latest/download/$ASSET_NAME"
 
   log "Downloading laptop-setup binary from $url."
-  if ! curl -fL --retry 3 --retry-delay 2 "$url" -o "$binary_path"; then
+  if ! curl -fL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 "$url" -o "$binary_path"; then
     set_bootstrap_error "Download failed: unable to fetch $ASSET_NAME from $REPO_SLUG releases."
     return 1
   fi

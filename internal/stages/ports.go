@@ -13,6 +13,11 @@ import (
 	"github.com/dencoseca/laptop-setup/internal/runner"
 )
 
+const (
+	privateDirPerm  fs.FileMode = 0o700
+	privateFilePerm fs.FileMode = 0o600
+)
+
 type FileSystem interface {
 	MkdirAll(path string, perm fs.FileMode) error
 	ReadFile(name string) ([]byte, error)
@@ -123,11 +128,11 @@ func (s FilesystemTemplateStore) WriteGeneratedBrewfile(runDir string, sourcePat
 	}
 
 	fs := s.fileSystem()
-	if err := fs.MkdirAll(runDir, 0o755); err != nil {
+	if err := fs.MkdirAll(runDir, privateDirPerm); err != nil {
 		return "", fmt.Errorf("create run directory: %w", err)
 	}
 	path := filepath.Join(runDir, "Brewfile.generated")
-	if _, err := writeFileSafely(fs, path, []byte(builder.String()), 0o644); err != nil {
+	if _, err := writeFileSafely(fs, path, []byte(builder.String()), privateFilePerm); err != nil {
 		return "", fmt.Errorf("write generated Brewfile: %w", err)
 	}
 	return path, nil
@@ -139,14 +144,14 @@ func (s FilesystemTemplateStore) Copy(name string, destination string) error {
 		return err
 	}
 	fs := s.fileSystem()
-	if err := fs.MkdirAll(filepath.Dir(destination), 0o755); err != nil {
+	if err := fs.MkdirAll(filepath.Dir(destination), privateDirPerm); err != nil {
 		return fmt.Errorf("create destination directory: %w", err)
 	}
 	payload, err := fs.ReadFile(sourcePath)
 	if err != nil {
 		return fmt.Errorf("read source file: %w", err)
 	}
-	if _, err = writeFileSafely(fs, destination, payload, 0o644); err != nil {
+	if _, err = writeFileSafely(fs, destination, payload, privateFilePerm); err != nil {
 		return fmt.Errorf("write destination file: %w", err)
 	}
 	return nil
@@ -199,11 +204,11 @@ func (s FSTemplateStore) WriteGeneratedBrewfile(runDir string, sourcePath string
 	}
 
 	fsys := s.fileSystem()
-	if err := fsys.MkdirAll(runDir, 0o755); err != nil {
+	if err := fsys.MkdirAll(runDir, privateDirPerm); err != nil {
 		return "", fmt.Errorf("create run directory: %w", err)
 	}
 	path := filepath.Join(runDir, "Brewfile.generated")
-	if _, err := writeFileSafely(fsys, path, []byte(builder.String()), 0o644); err != nil {
+	if _, err := writeFileSafely(fsys, path, []byte(builder.String()), privateFilePerm); err != nil {
 		return "", fmt.Errorf("write generated Brewfile: %w", err)
 	}
 	return path, nil
@@ -215,10 +220,10 @@ func (s FSTemplateStore) Copy(name string, destination string) error {
 		return fmt.Errorf("read source file: %w", err)
 	}
 	fsys := s.fileSystem()
-	if err := fsys.MkdirAll(filepath.Dir(destination), 0o755); err != nil {
+	if err := fsys.MkdirAll(filepath.Dir(destination), privateDirPerm); err != nil {
 		return fmt.Errorf("create destination directory: %w", err)
 	}
-	if _, err = writeFileSafely(fsys, destination, payload, 0o644); err != nil {
+	if _, err = writeFileSafely(fsys, destination, payload, privateFilePerm); err != nil {
 		return fmt.Errorf("write destination file: %w", err)
 	}
 	return nil

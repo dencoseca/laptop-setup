@@ -50,6 +50,14 @@ func TestStoreSaveLoadRoundTrip(t *testing.T) {
 	if loaded.Stages["a"].Status != "success" {
 		t.Fatalf("stage status mismatch for a: %+v", loaded.Stages["a"])
 	}
+
+	info, err := os.Stat(store.Path())
+	if err != nil {
+		t.Fatalf("stat state file: %v", err)
+	}
+	if got := info.Mode().Perm(); got != 0o600 {
+		t.Fatalf("state file permissions: got=%#o want=%#o", got, os.FileMode(0o600))
+	}
 }
 
 func TestStoreLoadMissingStateReturnsNil(t *testing.T) {
@@ -100,6 +108,13 @@ func TestStoreContractSaveLoadUpdateAndPath(t *testing.T) {
 	}
 	if _, err := os.Stat(path + ".tmp"); !os.IsNotExist(err) {
 		t.Fatalf("expected temporary state file to be absent after commit, got err=%v", err)
+	}
+	info, err := os.Stat(filepath.Dir(path))
+	if err != nil {
+		t.Fatalf("stat state directory: %v", err)
+	}
+	if got := info.Mode().Perm(); got != 0o700 {
+		t.Fatalf("state directory permissions: got=%#o want=%#o", got, os.FileMode(0o700))
 	}
 }
 

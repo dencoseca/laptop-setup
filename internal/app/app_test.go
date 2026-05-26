@@ -3,6 +3,7 @@ package app
 import (
 	"bytes"
 	"context"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -206,6 +207,33 @@ func TestRunStartsInteractiveUIWithConfig(t *testing.T) {
 	}
 	if uiRunner.options.ExecutionService == nil {
 		t.Fatal("expected execution service to be wired")
+	}
+}
+
+func TestFilesystemRunLogFactoryCreatesPrivateArtifacts(t *testing.T) {
+	runID := state.RunID("run-1")
+	paths := fakePathResolver{runsDir: filepath.Join(t.TempDir(), "runs")}
+	logs, err := (filesystemRunLogFactory{Paths: paths}).Open(runID)
+	if err != nil {
+		t.Fatalf("Open returned error: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = logs.HumanLog.Close()
+		_ = logs.EventLog.Close()
+	})
+
+	for path, want := range map[string]os.FileMode{
+		logs.RunDir:       0o700,
+		logs.HumanLogPath: 0o600,
+		logs.EventsPath:   0o600,
+	} {
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatalf("stat %s: %v", path, err)
+		}
+		if got := info.Mode().Perm(); got != want {
+			t.Fatalf("permissions for %s: got=%#o want=%#o", path, got, want)
+		}
 	}
 }
 

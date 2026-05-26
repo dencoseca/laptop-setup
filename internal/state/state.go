@@ -17,6 +17,8 @@ import (
 const (
 	relativeStateFile = ".laptop-setup/state.json"
 	relativeRunsDir   = ".laptop-setup/runs"
+	privateDirPerm    = 0o700
+	privateFilePerm   = 0o600
 )
 
 type RunID = setup.RunID
@@ -238,7 +240,8 @@ func (s *Store) Save(ctx context.Context, run *RunState) error {
 		return errors.New("run state is nil")
 	}
 
-	if err := os.MkdirAll(filepath.Dir(s.path), 0o755); err != nil {
+	stateDir := filepath.Dir(s.path)
+	if err := os.MkdirAll(stateDir, privateDirPerm); err != nil {
 		return fmt.Errorf("create state directory: %w", err)
 	}
 
@@ -247,8 +250,23 @@ func (s *Store) Save(ctx context.Context, run *RunState) error {
 		return fmt.Errorf("encode state: %w", err)
 	}
 
-	tempPath := s.path + ".tmp"
-	if err = os.WriteFile(tempPath, payload, 0o644); err != nil {
+	tempFile, err := os.CreateTemp(stateDir, "."+filepath.Base(s.path)+".*.tmp")
+	if err != nil {
+		return fmt.Errorf("create temporary state file: %w", err)
+	}
+	tempPath := tempFile.Name()
+	defer func() {
+		_ = os.Remove(tempPath)
+	}()
+	if err = tempFile.Chmod(privateFilePerm); err != nil {
+		_ = tempFile.Close()
+		return fmt.Errorf("secure temporary state file: %w", err)
+	}
+	if _, err = tempFile.Write(payload); err != nil {
+		_ = tempFile.Close()
+		return fmt.Errorf("write temporary state file: %w", err)
+	}
+	if err = tempFile.Close(); err != nil {
 		return fmt.Errorf("write temporary state file: %w", err)
 	}
 	if err = os.Rename(tempPath, s.path); err != nil {

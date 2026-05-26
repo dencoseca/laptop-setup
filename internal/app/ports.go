@@ -113,18 +113,18 @@ func (f filesystemRunLogFactory) Open(runID state.RunID) (RunLogs, error) {
 	if err != nil {
 		return RunLogs{}, err
 	}
-	if err = os.MkdirAll(runDir, 0o755); err != nil {
+	if err = os.MkdirAll(runDir, 0o700); err != nil {
 		return RunLogs{}, fmt.Errorf("create run directory: %w", err)
 	}
 
 	humanLogPath := filepath.Join(runDir, "run.log")
 	eventsPath := filepath.Join(runDir, "events.jsonl")
 
-	humanLog, err := os.OpenFile(humanLogPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+	humanLog, err := os.OpenFile(humanLogPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
 	if err != nil {
 		return RunLogs{}, fmt.Errorf("open run log: %w", err)
 	}
-	eventLog, err := os.OpenFile(eventsPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+	eventLog, err := os.OpenFile(eventsPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
 	if err != nil {
 		_ = humanLog.Close()
 		return RunLogs{}, fmt.Errorf("open event log: %w", err)

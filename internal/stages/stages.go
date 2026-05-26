@@ -775,7 +775,7 @@ func writeGitConfigFromTemplate(execCtx ExecutionContext, gitConfigPath string) 
 	if err != nil {
 		return err
 	}
-	if _, err = writeFileSafely(execCtx.fileSystem(), gitConfigPath, configBody, 0o644); err != nil {
+	if _, err = writeFileSafely(execCtx.fileSystem(), gitConfigPath, configBody, privateFilePerm); err != nil {
 		return fmt.Errorf("write gitconfig identity: %w", err)
 	}
 	return nil
@@ -938,7 +938,7 @@ func ensureBrewShellenv(execCtx ExecutionContext) error {
 		return nil
 	}
 
-	if err = fsys.MkdirAll(filepath.Dir(zprofilePath), 0o755); err != nil {
+	if err = fsys.MkdirAll(filepath.Dir(zprofilePath), privateDirPerm); err != nil {
 		return fmt.Errorf("create .zprofile directory: %w", err)
 	}
 
@@ -947,7 +947,7 @@ func ensureBrewShellenv(execCtx ExecutionContext) error {
 		builder.WriteString("\n")
 	}
 	builder.WriteString(commentLine + "\n" + shellenvLine + "\n")
-	if err = fsys.AppendFile(zprofilePath, []byte(builder.String()), 0o644); err != nil {
+	if err = fsys.AppendFile(zprofilePath, []byte(builder.String()), privateFilePerm); err != nil {
 		return fmt.Errorf("append brew shellenv to .zprofile: %w", err)
 	}
 	return nil
@@ -1085,7 +1085,7 @@ func writeFileSafely(fsys FileSystem, destination string, payload []byte, perm f
 	if strings.TrimSpace(destination) == "" {
 		return safeWriteResult{}, errors.New("destination path is required")
 	}
-	if err := fsys.MkdirAll(filepath.Dir(destination), 0o755); err != nil {
+	if err := fsys.MkdirAll(filepath.Dir(destination), privateDirPerm); err != nil {
 		return safeWriteResult{}, fmt.Errorf("create destination directory: %w", err)
 	}
 
@@ -1130,7 +1130,7 @@ func copyFromTemplates(execCtx ExecutionContext, sourceName, destination string)
 }
 
 func copyFile(sourcePath, destinationPath string) error {
-	return copyFileFS(OSFileSystem{}, sourcePath, destinationPath, 0o644)
+	return copyFileFS(OSFileSystem{}, sourcePath, destinationPath, privateFilePerm)
 }
 
 func copyFileFS(fsys FileSystem, sourcePath, destinationPath string, perm fs.FileMode) error {
