@@ -24,6 +24,7 @@ Supported host: Apple Silicon macOS.
 EOF
   cat <<'EOF'
 Bootstrap downloads the latest release binary and runs it.
+It uses the default macOS shell plus curl, chmod, mktemp, uname, and rm.
 Set LAPTOP_SETUP_VERSION to a tag such as v1.2.3 to pin a release.
 EOF
 }
@@ -101,6 +102,9 @@ download_binary() {
     return 1
   fi
   if ! require_command chmod; then
+    return 1
+  fi
+  if ! require_command mktemp; then
     return 1
   fi
 
