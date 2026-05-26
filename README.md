@@ -34,19 +34,3 @@ Common flags:
 
 Package/app selection is configured interactively in the TUI.
 No voice output feature is implemented.
-
-## Maintainers
-
-- Architecture and stage-extension notes: [docs/architecture.md](docs/architecture.md)
-
-Before release, run:
-
-```shell
-go test ./...
-go vet ./...
-GOOS=darwin GOARCH=arm64 go build -o laptop-setup-darwin-arm64 ./cmd/laptop-setup
-```
-
-Publish the built binary as the GitHub release asset
-`laptop-setup-darwin-arm64`; `bootstrap.sh` downloads that asset from the latest
-release by default.
