@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -35,8 +36,9 @@ type ExecutionRun struct {
 }
 
 type ExecutionHooks struct {
-	OnStageStatus func(state.StageID, state.StageStatus)
-	OnFailure     func(context.Context, execution.Failure) (execution.FailureAction, error)
+	OnStageStatus        func(state.StageID, state.StageStatus)
+	OnFailure            func(context.Context, execution.Failure) (execution.FailureAction, error)
+	OnInteractiveCommand func(context.Context, runner.Command) (runner.Result, error)
 }
 
 type ExecutionService interface {
@@ -113,6 +115,16 @@ func (m *model) abortExecutionIfNeeded(action execution.FailureAction) {
 	if m.failurePrompt != nil {
 		m.resolveFailure(action)
 	}
+	if m.interactivePrompt != nil {
+		select {
+		case m.interactivePrompt.Response <- interactiveCommandResult{
+			Result: runner.Result{ExitCode: -1},
+			Err:    context.Canceled,
+		}:
+		default:
+		}
+		m.interactivePrompt = nil
+	}
 	if m.executing {
 		m.cancel()
 	}
@@ -171,6 +183,25 @@ func startExecutionWorker(
 						return execution.ActionAbort, inner.Err()
 					}
 				},
+				OnInteractiveCommand: func(inner context.Context, command runner.Command) (runner.Result, error) {
+					response := make(chan interactiveCommandResult, 1)
+					request := interactiveCommandRequest{
+						Command:  command,
+						Response: response,
+					}
+					select {
+					case updates <- interactiveCommandRequestMsg{Request: request}:
+					case <-inner.Done():
+						return runner.Result{ExitCode: -1}, inner.Err()
+					}
+
+					select {
+					case result := <-response:
+						return result.Result, result.Err
+					case <-inner.Done():
+						return runner.Result{ExitCode: -1}, inner.Err()
+					}
+				},
 			})
 
 			select {
@@ -180,6 +211,38 @@ func startExecutionWorker(
 		}()
 		return nil
 	}
+}
+
+func runInteractiveCommand(request interactiveCommandRequest) tea.Cmd {
+	command := request.Command
+	cmd := exec.Command(command.Name, command.Args...)
+	cmd.Dir = command.Dir
+	if len(command.Env) > 0 {
+		cmd.Env = append(cmd.Environ(), command.Env...)
+	}
+	return tea.ExecProcess(cmd, func(err error) tea.Msg {
+		result := runner.Result{ExitCode: 0}
+		if err != nil {
+			result.ExitCode = commandExitCode(err)
+			err = &runner.CommandError{
+				Command:  command,
+				ExitCode: result.ExitCode,
+				Err:      err,
+			}
+		}
+		return interactiveCommandFinishedMsg{
+			Request: request,
+			Result:  interactiveCommandResult{Result: result, Err: err},
+		}
+	})
+}
+
+func commandExitCode(err error) int {
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		return exitErr.ExitCode()
+	}
+	return -1
 }
 
 func waitForExecutionUpdate(updates <-chan tea.Msg) tea.Cmd {

@@ -54,6 +54,7 @@ type EventLogger interface {
 type ExecutionContext struct {
 	DryRun                   bool
 	Runner                   runner.CommandRunner
+	InteractiveRunner        runner.InteractiveRunner
 	Logger                   EventLogger
 	RunID                    setup.RunID
 	Mode                     setup.Mode
@@ -502,8 +503,10 @@ if [ -z "$version" ]; then
 fi
 softwareupdate -i "$version" --verbose`
 	return runCommand(ctx, execCtx, runner.Command{
-		Name: "/bin/sh",
-		Args: []string{"-c", script},
+		Name:        "/bin/sh",
+		Args:        []string{"-c", script},
+		Interactive: true,
+		Prompt:      "Installing Xcode Command Line Tools may ask macOS for administrator authorization.",
 	})
 }
 
@@ -552,8 +555,10 @@ func runHomebrewInstall(ctx context.Context, execCtx ExecutionContext) error {
 		return ensureBrewShellenv(execCtx)
 	}
 	if err := runCommand(ctx, execCtx, runner.Command{
-		Name: "/bin/bash",
-		Args: []string{"-c", "NONINTERACTIVE=1 /bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\""},
+		Name:        "/bin/bash",
+		Args:        []string{"-c", "NONINTERACTIVE=1 /bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\""},
+		Interactive: true,
+		Prompt:      "Installing Homebrew may ask for your macOS administrator password.",
 	}); err != nil {
 		return err
 	}
@@ -808,7 +813,11 @@ func runCommand(ctx context.Context, execCtx ExecutionContext, command runner.Co
 		}
 	}
 
-	result, err := execCtx.Runner.Run(ctx, command)
+	run := execCtx.Runner.Run
+	if command.Interactive && execCtx.InteractiveRunner != nil {
+		run = execCtx.InteractiveRunner.RunInteractive
+	}
+	result, err := run(ctx, command)
 	if execCtx.Logger != nil {
 		if logErr := logCommandOutput(execCtx, runner.EventTypeCommandStdout, result.Stdout); logErr != nil {
 			return logErr

@@ -267,8 +267,10 @@ func (m HomebrewPackageManager) HomebrewAvailable(ctx context.Context) error {
 
 func (HomebrewPackageManager) RunBrewBundle(ctx context.Context, execCtx ExecutionContext, brewfilePath string) error {
 	return runCommand(ctx, execCtx, runner.Command{
-		Name: "brew",
-		Args: []string{"bundle", "install", "--file", brewfilePath},
+		Name:        "brew",
+		Args:        []string{"bundle", "install", "--file", brewfilePath},
+		Interactive: true,
+		Prompt:      "Homebrew may ask for administrator authorization while installing selected packages or apps.",
 	})
 }
 

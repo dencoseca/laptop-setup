@@ -1243,6 +1243,86 @@ func TestCtrlCRequiresConfirmationBeforeQuit(t *testing.T) {
 	}
 }
 
+func TestInteractiveCommandRequestShowsAuthorizationScreen(t *testing.T) {
+	response := make(chan interactiveCommandResult, 1)
+	m := model{
+		screen:        screenExecuting,
+		executing:     true,
+		stageOrder:    []string{"homebrew_install"},
+		stageStatuses: map[string]state.StageStatus{"homebrew_install": {Status: stages.StatusRunning}},
+		stageMap:      map[string]stages.Stage{"homebrew_install": {ID: "homebrew_install", Title: "Homebrew Install"}},
+	}
+
+	next, cmd := m.Update(interactiveCommandRequestMsg{Request: interactiveCommandRequest{
+		Command:  runner.Command{Name: "brew", Args: []string{"bundle", "install"}, Interactive: true, Prompt: "Homebrew may ask for your password."},
+		Response: response,
+	}})
+	updated, ok := next.(model)
+	if !ok {
+		t.Fatalf("expected model type after update, got %T", next)
+	}
+	if cmd != nil {
+		t.Fatal("expected request to render prompt without starting command")
+	}
+	if updated.screen != screenInteractive {
+		t.Fatalf("expected interactive screen, got %v", updated.screen)
+	}
+	if updated.interactivePrompt == nil {
+		t.Fatal("expected interactive prompt to be stored")
+	}
+	view := updated.View()
+	if !strings.Contains(view, "Terminal Authorization") || !strings.Contains(view, "brew bundle install") {
+		t.Fatalf("expected interactive authorization view, got %q", view)
+	}
+
+	next, cmd = updated.updateKey(tea.KeyMsg{Type: tea.KeyEnter})
+	if _, ok = next.(model); !ok {
+		t.Fatalf("expected model type after enter, got %T", next)
+	}
+	if cmd == nil {
+		t.Fatal("expected enter to start interactive command")
+	}
+}
+
+func TestInteractiveCommandFinishedRespondsToExecutionWorker(t *testing.T) {
+	response := make(chan interactiveCommandResult, 1)
+	updates := make(chan tea.Msg)
+	request := interactiveCommandRequest{
+		Command:  runner.Command{Name: "brew", Args: []string{"bundle", "install"}, Interactive: true},
+		Response: response,
+	}
+	m := model{
+		screen:            screenInteractive,
+		updates:           updates,
+		interactivePrompt: &request,
+	}
+	want := interactiveCommandResult{Result: runner.Result{ExitCode: 0}}
+
+	next, cmd := m.Update(interactiveCommandFinishedMsg{Request: request, Result: want})
+	updated, ok := next.(model)
+	if !ok {
+		t.Fatalf("expected model type after update, got %T", next)
+	}
+	if updated.screen != screenExecuting {
+		t.Fatalf("expected executing screen, got %v", updated.screen)
+	}
+	if updated.interactivePrompt != nil {
+		t.Fatal("expected interactive prompt to be cleared")
+	}
+	if cmd == nil {
+		t.Fatal("expected command to resume execution updates")
+	}
+
+	select {
+	case got := <-response:
+		if got.Result.ExitCode != want.Result.ExitCode || got.Err != nil {
+			t.Fatalf("unexpected interactive result: %+v", got)
+		}
+	default:
+		t.Fatal("expected interactive result to be sent to execution worker")
+	}
+}
+
 func TestEscapeReturnsFromQuitConfirmation(t *testing.T) {
 	m := model{screen: screenGitName}
 

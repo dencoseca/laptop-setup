@@ -70,6 +70,7 @@ const (
 	screenManual
 	screenReview
 	screenExecuting
+	screenInteractive
 	screenFailure
 	screenSummary
 	screenQuitConfirm
@@ -114,6 +115,25 @@ type failureRequest struct {
 
 type failureRequestMsg struct {
 	Request failureRequest
+}
+
+type interactiveCommandRequest struct {
+	Command  runner.Command
+	Response chan interactiveCommandResult
+}
+
+type interactiveCommandResult struct {
+	Result runner.Result
+	Err    error
+}
+
+type interactiveCommandRequestMsg struct {
+	Request interactiveCommandRequest
+}
+
+type interactiveCommandFinishedMsg struct {
+	Request interactiveCommandRequest
+	Result  interactiveCommandResult
 }
 
 type model struct {
@@ -161,23 +181,24 @@ type model struct {
 	gitEmailInput   textinput.Model
 	inputError      string
 
-	plan          []string
-	planError     string
-	stageStatuses map[string]state.StageStatus
-	stageOrder    []string
-	tailedLogs    []tailedLogLine
-	logTailOffset int64
-	logTailCarry  string
-	updates       chan tea.Msg
-	failurePrompt *failureRequest
-	runState      *state.RunState
-	humanLogPath  string
-	eventsLogPath string
-	runErr        error
-	executing     bool
-	spinner       spinner.Model
-	help          help.Model
-	stopwatch     stopwatch.Model
+	plan              []string
+	planError         string
+	stageStatuses     map[string]state.StageStatus
+	stageOrder        []string
+	tailedLogs        []tailedLogLine
+	logTailOffset     int64
+	logTailCarry      string
+	updates           chan tea.Msg
+	failurePrompt     *failureRequest
+	interactivePrompt *interactiveCommandRequest
+	runState          *state.RunState
+	humanLogPath      string
+	eventsLogPath     string
+	runErr            error
+	executing         bool
+	spinner           spinner.Model
+	help              help.Model
+	stopwatch         stopwatch.Model
 }
 
 const (
@@ -365,6 +386,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.failurePrompt = &message.Request
 		m.screen = screenFailure
 		return m, nil
+	case interactiveCommandRequestMsg:
+		m.interactivePrompt = &message.Request
+		m.screen = screenInteractive
+		return m, nil
+	case interactiveCommandFinishedMsg:
+		select {
+		case message.Request.Response <- message.Result:
+		default:
+		}
+		m.interactivePrompt = nil
+		m.screen = screenExecuting
+		return m, waitForExecutionUpdate(m.updates)
 	case executionDoneMsg:
 		m.pollRunLog()
 		m.executing = false
@@ -507,6 +540,13 @@ func (m model) updateKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m.startExecutionFromReview()
 		}
 	case screenExecuting:
+	case screenInteractive:
+		switch key.String() {
+		case "enter":
+			if m.interactivePrompt != nil {
+				return m, runInteractiveCommand(*m.interactivePrompt)
+			}
+		}
 	case screenFailure:
 		switch key.String() {
 		case "enter":
@@ -994,7 +1034,7 @@ func (m model) statusPanelElapsed() string {
 		return ""
 	}
 	switch m.screen {
-	case screenExecuting, screenFailure, screenSummary:
+	case screenExecuting, screenInteractive, screenFailure, screenSummary:
 		return formatElapsed(m.stopwatch.Elapsed())
 	default:
 		return ""
@@ -1308,6 +1348,19 @@ func (m model) executionDashboardStatus(progress executionProgress) dashboardSta
 	}
 }
 
+func (m model) interactiveDashboardStatus() dashboardStatus {
+	progress := m.executionProgress()
+	return dashboardStatus{
+		Badge:                    "Action",
+		BadgeTone:                warningColor,
+		Heading:                  "Terminal authorization",
+		Summary:                  "run command with terminal input",
+		ConfigurationProgressPct: 100,
+		ExecutionProgressPct:     progress.PercentComplete,
+		Hint:                     "Enter continue  CTRL+C abort",
+	}
+}
+
 func (m model) configurationDashboardStatus() dashboardStatus {
 	stepIndex, totalSteps := configurationStepPosition(m.screen)
 	badge := "Configuring"
@@ -1405,7 +1458,7 @@ func (m model) summaryDashboardStatus() dashboardStatus {
 func (m model) previewJourney() dashboardJourney {
 	if len(m.stageOrder) > 0 {
 		currentStep := ""
-		if m.executing || m.screen == screenFailure || m.screen == screenSummary {
+		if m.executing || m.screen == screenInteractive || m.screen == screenFailure || m.screen == screenSummary {
 			currentStep = m.executionProgress().CurrentStageID
 		}
 		return dashboardJourney{
@@ -1536,6 +1589,8 @@ func screenTitle(current screen) string {
 		return "Execution Plan Review"
 	case screenExecuting:
 		return "Executing Plan"
+	case screenInteractive:
+		return "Terminal Authorization"
 	case screenFailure:
 		return "Stage Failure"
 	case screenSummary:

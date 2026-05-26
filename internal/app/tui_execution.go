@@ -86,23 +86,31 @@ func (s tuiExecutionService) PrepareExecution(ctx context.Context, request ui.Ex
 
 func (s tuiExecutionService) Execute(ctx context.Context, run ui.ExecutionRun, hooks ui.ExecutionHooks) error {
 	logger := runner.NewEventLogger(run.HumanLog, run.EventsLog)
+	var interactiveRunner runner.InteractiveRunner
+	if hooks.OnInteractiveCommand != nil {
+		interactiveRunner = runner.InteractiveRunnerFunc(hooks.OnInteractiveCommand)
+	} else if s.deps.InteractiveRunner != nil {
+		interactiveRunner = s.deps.InteractiveRunner()
+	}
 	return s.deps.Executor.Execute(ctx, execution.Options{
-		Store:          s.store,
-		RunState:       run.RunState,
-		Catalog:        s.catalog,
-		DryRun:         run.DryRun,
-		DryRunDelay:    s.deps.DryRunStageDelay,
-		RepoRoot:       s.repoRoot,
-		HomeDir:        s.homeDir,
-		RunDir:         run.RunDir,
-		CommandRunner:  s.commandRunner,
-		FileSystem:     s.deps.FileSystem,
-		TemplateStore:  s.templateStore,
-		PackageManager: s.deps.PackageManager,
-		Logger:         logger,
+		Store:             s.store,
+		RunState:          run.RunState,
+		Catalog:           s.catalog,
+		DryRun:            run.DryRun,
+		DryRunDelay:       s.deps.DryRunStageDelay,
+		RepoRoot:          s.repoRoot,
+		HomeDir:           s.homeDir,
+		RunDir:            run.RunDir,
+		CommandRunner:     s.commandRunner,
+		InteractiveRunner: interactiveRunner,
+		FileSystem:        s.deps.FileSystem,
+		TemplateStore:     s.templateStore,
+		PackageManager:    s.deps.PackageManager,
+		Logger:            logger,
 		Hooks: execution.Hooks{
-			OnStageStatus: hooks.OnStageStatus,
-			OnFailure:     hooks.OnFailure,
+			OnStageStatus:        hooks.OnStageStatus,
+			OnFailure:            hooks.OnFailure,
+			OnInteractiveCommand: hooks.OnInteractiveCommand,
 		},
 	})
 }

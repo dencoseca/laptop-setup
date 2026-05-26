@@ -38,9 +38,10 @@ type Failure struct {
 }
 
 type Hooks struct {
-	OnEvent       func(event runner.Event)
-	OnStageStatus func(stageID state.StageID, status state.StageStatus)
-	OnFailure     func(ctx context.Context, failure Failure) (FailureAction, error)
+	OnEvent              func(event runner.Event)
+	OnStageStatus        func(stageID state.StageID, status state.StageStatus)
+	OnFailure            func(ctx context.Context, failure Failure) (FailureAction, error)
+	OnInteractiveCommand func(ctx context.Context, command runner.Command) (runner.Result, error)
 }
 
 type DryRunStageDelayFunc func(ctx context.Context, execCtx stages.ExecutionContext) error
@@ -50,20 +51,21 @@ type StateRepository interface {
 }
 
 type Options struct {
-	Store          StateRepository
-	RunState       *state.RunState
-	Catalog        []stages.Stage
-	DryRun         bool
-	DryRunDelay    DryRunStageDelayFunc
-	RepoRoot       string
-	HomeDir        string
-	RunDir         string
-	CommandRunner  runner.CommandRunner
-	FileSystem     stages.FileSystem
-	TemplateStore  stages.TemplateStore
-	PackageManager stages.PackageManager
-	Logger         *runner.EventLogger
-	Hooks          Hooks
+	Store             StateRepository
+	RunState          *state.RunState
+	Catalog           []stages.Stage
+	DryRun            bool
+	DryRunDelay       DryRunStageDelayFunc
+	RepoRoot          string
+	HomeDir           string
+	RunDir            string
+	CommandRunner     runner.CommandRunner
+	InteractiveRunner runner.InteractiveRunner
+	FileSystem        stages.FileSystem
+	TemplateStore     stages.TemplateStore
+	PackageManager    stages.PackageManager
+	Logger            *runner.EventLogger
+	Hooks             Hooks
 }
 
 type hookLogger struct {
@@ -96,6 +98,9 @@ func Execute(ctx context.Context, options Options) error {
 	}
 	if options.CommandRunner == nil {
 		return errors.New("command runner is required")
+	}
+	if options.InteractiveRunner == nil && options.Hooks.OnInteractiveCommand != nil {
+		options.InteractiveRunner = runner.InteractiveRunnerFunc(options.Hooks.OnInteractiveCommand)
 	}
 	if options.Logger == nil {
 		return errors.New("event logger is required")
@@ -164,6 +169,7 @@ func Execute(ctx context.Context, options Options) error {
 			execCtx := stages.ExecutionContext{
 				DryRun:                options.DryRun,
 				Runner:                options.CommandRunner,
+				InteractiveRunner:     options.InteractiveRunner,
 				Logger:                logger,
 				RunID:                 runState.RunID,
 				Mode:                  runState.Mode,

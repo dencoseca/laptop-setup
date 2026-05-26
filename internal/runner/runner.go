@@ -5,15 +5,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 )
 
 type Command struct {
-	Name string
-	Args []string
-	Dir  string
-	Env  []string
+	Name        string
+	Args        []string
+	Dir         string
+	Env         []string
+	Interactive bool
+	Prompt      string
 }
 
 func (c Command) String() string {
@@ -63,6 +66,16 @@ func (e *CommandError) Unwrap() error {
 type CommandRunner interface {
 	Run(context.Context, Command) (Result, error)
 	LookPath(context.Context, string) (string, error)
+}
+
+type InteractiveRunner interface {
+	RunInteractive(context.Context, Command) (Result, error)
+}
+
+type InteractiveRunnerFunc func(context.Context, Command) (Result, error)
+
+func (f InteractiveRunnerFunc) RunInteractive(ctx context.Context, command Command) (Result, error) {
+	return f(ctx, command)
 }
 
 type OSCommandRunner struct{}
@@ -125,4 +138,44 @@ func (r *OSCommandRunner) LookPath(ctx context.Context, name string) (string, er
 		return "", fmt.Errorf("command %q not found: %w", name, err)
 	}
 	return path, nil
+}
+
+type OSInteractiveRunner struct{}
+
+func NewOSInteractiveRunner() *OSInteractiveRunner {
+	return &OSInteractiveRunner{}
+}
+
+func (r *OSInteractiveRunner) RunInteractive(ctx context.Context, command Command) (Result, error) {
+	if strings.TrimSpace(command.Name) == "" {
+		return Result{}, errors.New("command name is required")
+	}
+
+	cmd := exec.CommandContext(ctx, command.Name, command.Args...)
+	cmd.Dir = command.Dir
+	if len(command.Env) > 0 {
+		cmd.Env = append(cmd.Environ(), command.Env...)
+	}
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	err := cmd.Run()
+	result := Result{ExitCode: 0}
+	if err == nil {
+		return result, nil
+	}
+
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		result.ExitCode = exitErr.ExitCode()
+	} else {
+		result.ExitCode = -1
+	}
+
+	return result, &CommandError{
+		Command:  command,
+		ExitCode: result.ExitCode,
+		Err:      err,
+	}
 }

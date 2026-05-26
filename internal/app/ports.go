@@ -64,6 +64,7 @@ type TTYDetector interface {
 type Dependencies struct {
 	Catalog           func() []stages.Stage
 	CommandRunner     func() runner.CommandRunner
+	InteractiveRunner func() runner.InteractiveRunner
 	StateRepositories StateRepositoryFactory
 	Paths             PathResolver
 	RunLogs           RunLogFactory
@@ -180,9 +181,11 @@ func (stdinTTYDetector) CanPrompt() (bool, error) {
 func DefaultDependencies() Dependencies {
 	paths := osPathResolver{}
 	commandRunner := runner.NewOSCommandRunner()
+	interactiveRunner := runner.NewOSInteractiveRunner()
 	return Dependencies{
 		Catalog:           stages.DefaultCatalog,
 		CommandRunner:     func() runner.CommandRunner { return commandRunner },
+		InteractiveRunner: func() runner.InteractiveRunner { return interactiveRunner },
 		StateRepositories: stateStoreFactory{},
 		Paths:             paths,
 		RunLogs:           filesystemRunLogFactory{Paths: paths},
@@ -203,6 +206,9 @@ func (deps Dependencies) withDefaults() Dependencies {
 	}
 	if deps.CommandRunner == nil {
 		deps.CommandRunner = defaults.CommandRunner
+	}
+	if deps.InteractiveRunner == nil {
+		deps.InteractiveRunner = defaults.InteractiveRunner
 	}
 	if deps.StateRepositories == nil {
 		deps.StateRepositories = defaults.StateRepositories

@@ -41,6 +41,8 @@ func (m model) View() string {
 		content = m.viewReview()
 	case screenExecuting:
 		return m.viewExecuting()
+	case screenInteractive:
+		return m.viewInteractiveCommand()
 	case screenFailure:
 		return m.viewFailureScreen()
 	case screenSummary:
@@ -201,8 +203,28 @@ func (m model) viewExecuting() string {
 	)
 }
 
+func (m model) viewInteractiveCommand() string {
+	return m.renderDashboard(m.interactiveDashboardStatus(), m.previewJourney(), m.standardOutputContent(m.viewInteractivePrompt()))
+}
+
 func (m model) viewConfigFlow(output string) string {
 	return m.renderDashboard(m.configurationDashboardStatus(), m.previewJourney(), m.standardOutputContent(output))
+}
+
+func (m model) viewInteractivePrompt() string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "%s\n\n", lipgloss.NewStyle().Bold(true).Render("Terminal Authorization"))
+	if m.interactivePrompt != nil {
+		command := m.interactivePrompt.Command
+		if strings.TrimSpace(command.Prompt) != "" {
+			fmt.Fprintf(&b, "%s\n\n", command.Prompt)
+		}
+		fmt.Fprintf(&b, "Command: %s\n\n", command.String())
+	}
+	fmt.Fprintf(&b, "Press Enter to temporarily leave the setup UI and run this command in the terminal.\n")
+	fmt.Fprintf(&b, "When the command finishes, the setup UI will resume automatically.\n\n")
+	fmt.Fprintf(&b, "Press CTRL+C to abort the run.")
+	return b.String()
 }
 
 func (m model) viewFailureScreen() string {

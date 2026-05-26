@@ -46,6 +46,17 @@ func (r *scriptedRunner) LookPath(_ context.Context, name string) (string, error
 	return filepath.Join("/usr/local/bin", name), nil
 }
 
+type scriptedInteractiveRunner struct {
+	commands []runner.Command
+	result   runner.Result
+	err      error
+}
+
+func (r *scriptedInteractiveRunner) RunInteractive(_ context.Context, command runner.Command) (runner.Result, error) {
+	r.commands = append(r.commands, command)
+	return r.result, r.err
+}
+
 type defaultsRunner struct {
 	commands []runner.Command
 	values   map[string]string
@@ -1042,6 +1053,38 @@ func TestRunCommandLogsOutputAndLifecycleOnSuccess(t *testing.T) {
 	}
 	if completed.Message != "ok" {
 		t.Fatalf("expected completion message ok, got %q", completed.Message)
+	}
+}
+
+func TestRunCommandUsesInteractiveRunnerForInteractiveCommand(t *testing.T) {
+	command := runner.Command{Name: "brew", Args: []string{"bundle", "install"}, Interactive: true}
+	captured := &scriptedRunner{}
+	interactive := &scriptedInteractiveRunner{
+		result: runner.Result{ExitCode: 0},
+	}
+	logger := &recordingEventLogger{}
+	execCtx := ExecutionContext{
+		Runner:            captured,
+		InteractiveRunner: interactive,
+		Logger:            logger,
+		RunID:             "run-123",
+		StageID:           "brew_bundle",
+		Attempt:           1,
+		Mode:              "normal",
+	}
+
+	if err := runCommand(context.Background(), execCtx, command); err != nil {
+		t.Fatalf("runCommand returned error: %v", err)
+	}
+
+	if len(captured.commands) != 0 {
+		t.Fatalf("expected captured runner not to run interactive command, got %d commands", len(captured.commands))
+	}
+	if len(interactive.commands) != 1 {
+		t.Fatalf("expected one interactive command, got %d", len(interactive.commands))
+	}
+	if !interactive.commands[0].Interactive {
+		t.Fatal("expected interactive command marker to be preserved")
 	}
 }
 
