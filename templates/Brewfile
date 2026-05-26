@@ -1,6 +1,7 @@
 # formulae
 brew "btop"
 brew "jq"
+brew "ripgrep"
 brew "watch"
 brew "tree"
 brew "starship"
