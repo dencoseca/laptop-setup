@@ -103,3 +103,40 @@ func TestResolvePlan(t *testing.T) {
 		})
 	}
 }
+
+func TestResolvePlanRejectsCriticalStageSkip(t *testing.T) {
+	catalog := []Stage{
+		{ID: "a"},
+		{ID: "b", Critical: true},
+		{ID: "c"},
+	}
+
+	_, err := ResolvePlan(catalog, PlanOptions{SkipIDs: []string{"b"}})
+	if err == nil {
+		t.Fatal("expected critical stage skip to fail")
+	}
+}
+
+func TestResolvePlanRejectsOnlyThatOmitsCriticalStage(t *testing.T) {
+	catalog := []Stage{
+		{ID: "xcode_clt", Critical: true},
+		{ID: "homebrew_install", Critical: true},
+		{ID: "brew_bundle"},
+	}
+
+	_, err := ResolvePlan(catalog, PlanOptions{OnlyIDs: []string{"brew_bundle"}})
+	if err == nil {
+		t.Fatal("expected --only without critical stages to fail")
+	}
+
+	plan, err := ResolvePlan(catalog, PlanOptions{
+		FromID:  "brew_bundle",
+		OnlyIDs: []string{"brew_bundle"},
+	})
+	if err != nil {
+		t.Fatalf("expected --from after critical stages to allow only brew_bundle: %v", err)
+	}
+	if len(plan) != 1 || plan[0] != "brew_bundle" {
+		t.Fatalf("unexpected plan: %v", plan)
+	}
+}

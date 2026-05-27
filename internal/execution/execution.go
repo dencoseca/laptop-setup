@@ -404,7 +404,7 @@ func processFailure(
 		}
 		return ActionRetry, nil
 	case ActionSkip:
-		if !stage.CanSkip {
+		if !stage.CanSkip || stage.Critical {
 			return ActionAbort, fmt.Errorf("stage %s cannot be skipped", stageID)
 		}
 		progress.Status = stages.StatusSkipped

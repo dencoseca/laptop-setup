@@ -15,9 +15,10 @@ runtime target.
 
 `bootstrap.sh` is the default entrypoint. It is intended to run on a fresh Apple
 Silicon macOS install using only tools that ship with macOS: `sh`, `curl`,
-`chmod`, `mktemp`, `uname`, and `rm`. It downloads the latest Apple Silicon
-binary from this repository's GitHub Releases and runs it. The binary embeds its
-setup templates, so no local checkout, Git, Go toolchain, Bash, or Homebrew
+`awk`, `chmod`, `mktemp`, `rm`, `shasum`, and `uname`. It downloads the latest
+Apple Silicon binary from this repository's GitHub Releases, verifies its
+GitHub release SHA-256 digest, and runs it. The binary embeds its setup
+templates, so no local checkout, Git, Go toolchain, Bash, or Homebrew
 installation is required before starting the app.
 
 There is intentionally no `setup.sh` fallback path: bootstrap fails fast when

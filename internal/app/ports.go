@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/charmbracelet/x/term"
 	laptopsetup "github.com/dencoseca/laptop-setup"
 	"github.com/dencoseca/laptop-setup/internal/execution"
 	"github.com/dencoseca/laptop-setup/internal/runner"
@@ -171,11 +172,7 @@ func (f executorFunc) Execute(ctx context.Context, options execution.Options) er
 type stdinTTYDetector struct{}
 
 func (stdinTTYDetector) CanPrompt() (bool, error) {
-	stat, err := os.Stdin.Stat()
-	if err != nil {
-		return false, fmt.Errorf("inspect stdin: %w", err)
-	}
-	return (stat.Mode() & os.ModeCharDevice) != 0, nil
+	return term.IsTerminal(os.Stdin.Fd()), nil
 }
 
 func DefaultDependencies() Dependencies {

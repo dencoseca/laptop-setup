@@ -80,6 +80,7 @@ type toggleOption struct {
 	ID       string
 	Title    string
 	Selected bool
+	Critical bool
 }
 
 type selectOption struct {
@@ -806,6 +807,7 @@ func optionsForStageIDs(catalog []stages.Stage, ids []string) []toggleOption {
 			ID:       stage.ID.String(),
 			Title:    stage.Title,
 			Selected: true,
+			Critical: stage.Critical,
 		})
 	}
 	return options

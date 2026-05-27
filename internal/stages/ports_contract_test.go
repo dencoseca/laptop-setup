@@ -171,7 +171,7 @@ func TestHomebrewPackageManagerContract(t *testing.T) {
 		t.Fatalf("expected one brew command, got %d", len(runnerStub.commands))
 	}
 	command := runnerStub.commands[0]
-	if command.Name != "brew" || !slices.Equal(command.Args, []string{"bundle", "install", "--file", brewfilePath}) {
+	if command.Name != "/usr/local/bin/brew" || !slices.Equal(command.Args, []string{"bundle", "install", "--file", brewfilePath}) {
 		t.Fatalf("unexpected brew command: %s", command.String())
 	}
 }

@@ -1423,6 +1423,39 @@ func TestPromptFlowReachesReviewScreen(t *testing.T) {
 	}
 }
 
+func TestCriticalToggleOptionCannotBeDeselected(t *testing.T) {
+	m := model{
+		screen: screenMacOS,
+		macOSOptions: []toggleOption{
+			{ID: "xcode_clt", Title: "Xcode", Selected: true, Critical: true},
+		},
+		stageStatuses: map[string]state.StageStatus{},
+	}
+
+	next, _ := m.updateKey(tea.KeyMsg{Type: tea.KeySpace})
+	updated := next.(model)
+
+	if !updated.macOSOptions[0].Selected {
+		t.Fatal("expected critical option to remain selected")
+	}
+}
+
+func TestLimitedOutputBufferTruncatesCapturedInteractiveOutput(t *testing.T) {
+	buffer := newLimitedOutputBuffer(4)
+
+	if _, err := buffer.Write([]byte("abcdef")); err != nil {
+		t.Fatalf("Write returned error: %v", err)
+	}
+
+	output := buffer.String()
+	if !strings.HasPrefix(output, "abcd\n") {
+		t.Fatalf("expected output to keep prefix within limit, got %q", output)
+	}
+	if !strings.Contains(output, "<output truncated>") {
+		t.Fatalf("expected truncation marker, got %q", output)
+	}
+}
+
 func TestReviewEnterBlocksExecutionWhenPlanInvalid(t *testing.T) {
 	m := model{
 		ctx:    context.Background(),

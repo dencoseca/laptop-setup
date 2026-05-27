@@ -24,7 +24,7 @@ Supported host: Apple Silicon macOS.
 EOF
   cat <<'EOF'
 Bootstrap downloads the latest release binary and runs it.
-It uses the default macOS shell plus curl, chmod, mktemp, uname, and rm.
+It uses the default macOS shell plus awk, curl, chmod, mktemp, rm, shasum, and uname.
 EOF
 }
 
@@ -92,11 +92,47 @@ require_command() {
 
 ensure_tmp_dir() {
   if [ -z "$TMP_DIR" ]; then
-    TMP_DIR=$(mktemp -d 2>/dev/null || mktemp -d -t laptop-setup-bootstrap)
+    if ! TMP_DIR=$(mktemp -d 2>/dev/null || mktemp -d -t laptop-setup-bootstrap); then
+      set_bootstrap_error "Unable to create a temporary directory."
+      return 1
+    fi
   fi
+  return 0
+}
+
+asset_digest_from_metadata() {
+  metadata_path=$1
+  asset_name=$2
+  awk -v asset="$asset_name" '
+    index($0, "\"name\": \"" asset "\"") { in_asset = 1 }
+    in_asset && index($0, "\"digest\": \"sha256:") {
+      sub(/^.*"digest": "sha256:/, "")
+      sub(/".*$/, "")
+      print
+      exit
+    }
+  ' "$metadata_path"
+}
+
+verify_binary_checksum() {
+  binary_path=$1
+  expected_sha256=$2
+  if ! actual_sha256=$(shasum -a 256 "$binary_path" | awk '{ print $1 }'); then
+    set_bootstrap_error "Checksum verification failed: unable to calculate SHA-256 for $ASSET_NAME."
+    return 1
+  fi
+  if [ "$actual_sha256" != "$expected_sha256" ]; then
+    set_bootstrap_error "Checksum verification failed for $ASSET_NAME."
+    return 1
+  fi
+  log "Verified $ASSET_NAME checksum."
+  return 0
 }
 
 download_binary() {
+  if ! require_command awk; then
+    return 1
+  fi
   if ! require_command curl; then
     return 1
   fi
@@ -106,14 +142,39 @@ download_binary() {
   if ! require_command mktemp; then
     return 1
   fi
+  if ! require_command shasum; then
+    return 1
+  fi
 
-  ensure_tmp_dir
+  if ! ensure_tmp_dir; then
+    return 1
+  fi
   binary_path=$TMP_DIR/laptop-setup
+  metadata_path=$TMP_DIR/release.json
   url="https://github.com/$REPO_SLUG/releases/latest/download/$ASSET_NAME"
+  metadata_url="https://api.github.com/repos/$REPO_SLUG/releases/latest"
+
+  log "Fetching release metadata from $metadata_url."
+  if ! curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 "$metadata_url" -o "$metadata_path"; then
+    set_bootstrap_error "Download failed: unable to fetch latest release metadata from $REPO_SLUG."
+    return 1
+  fi
+  if ! expected_sha256=$(asset_digest_from_metadata "$metadata_path" "$ASSET_NAME"); then
+    set_bootstrap_error "Download failed: unable to read latest release metadata from $REPO_SLUG."
+    return 1
+  fi
+  if [ -z "$expected_sha256" ]; then
+    set_bootstrap_error "Download failed: unable to find SHA-256 digest for $ASSET_NAME in release metadata."
+    return 1
+  fi
 
   log "Downloading laptop-setup binary from $url."
   if ! curl -fL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 "$url" -o "$binary_path"; then
     set_bootstrap_error "Download failed: unable to fetch $ASSET_NAME from $REPO_SLUG releases."
+    return 1
+  fi
+
+  if ! verify_binary_checksum "$binary_path" "$expected_sha256"; then
     return 1
   fi
 

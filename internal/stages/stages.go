@@ -32,6 +32,10 @@ const (
 
 const (
 	defaultBrewTemplate = "Brewfile"
+
+	brewShellenvSentinel    = "brew shellenv"
+	brewShellenvLine        = `eval "$(/opt/homebrew/bin/brew shellenv)"`
+	brewShellenvCommentLine = "# Set PATH, MANPATH, etc., for Homebrew."
 )
 
 var manualAppStoreApps = []string{
@@ -105,7 +109,7 @@ func DefaultCatalog() []Stage {
 			Title:        "Xcode Command Line Tools",
 			Description:  "Validate or install Xcode Command Line Tools",
 			DecisionDeps: nil,
-			CanSkip:      true,
+			CanSkip:      false,
 			Critical:     true,
 			LogTag:       "xcode_clt",
 			Precheck:     precheckXcodeCLT,
@@ -129,7 +133,7 @@ func DefaultCatalog() []Stage {
 			Title:        "Homebrew Install",
 			Description:  "Ensure Homebrew is installed",
 			DecisionDeps: nil,
-			CanSkip:      true,
+			CanSkip:      false,
 			Critical:     true,
 			LogTag:       "homebrew_install",
 			Precheck:     precheckHomebrew,
@@ -308,10 +312,17 @@ func precheckXcodeCLT(ctx context.Context, execCtx ExecutionContext) (CheckResul
 }
 
 func precheckHomebrew(ctx context.Context, execCtx ExecutionContext) (CheckResult, error) {
-	if err := execCtx.packageManager().HomebrewAvailable(ctx); err == nil {
-		return CheckResult{Satisfied: true, Message: "Homebrew already installed"}, nil
+	if err := execCtx.packageManager().HomebrewAvailable(ctx); err != nil {
+		return CheckResult{Satisfied: false}, nil
 	}
-	return CheckResult{Satisfied: false}, nil
+	configured, err := brewShellenvConfigured(execCtx)
+	if err != nil {
+		return CheckResult{}, err
+	}
+	if !configured {
+		return CheckResult{Satisfied: false}, nil
+	}
+	return CheckResult{Satisfied: true, Message: "Homebrew already installed and shellenv configured"}, nil
 }
 
 type macOSDefault struct {
@@ -556,7 +567,7 @@ func runHomebrewInstall(ctx context.Context, execCtx ExecutionContext) error {
 	}
 	if err := runCommand(ctx, execCtx, runner.Command{
 		Name:        "/bin/bash",
-		Args:        []string{"-c", "NONINTERACTIVE=1 /bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\""},
+		Args:        []string{"-c", remoteInstallCommand("https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh", []string{"NONINTERACTIVE=1"}, "/bin/bash")},
 		Interactive: true,
 		Prompt:      "Installing Homebrew may ask for your macOS administrator password.",
 	}); err != nil {
@@ -619,7 +630,7 @@ func runNodeToolchainInstall(ctx context.Context, execCtx ExecutionContext) erro
 		} else {
 			if err = runCommand(ctx, execCtx, runner.Command{
 				Name: "/bin/bash",
-				Args: []string{"-c", "curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash"},
+				Args: []string{"-c", remoteInstallCommand("https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh", nil, "/bin/bash")},
 			}); err != nil {
 				return err
 			}
@@ -634,7 +645,7 @@ func runNodeToolchainInstall(ctx context.Context, execCtx ExecutionContext) erro
 		}
 		return runCommand(ctx, execCtx, runner.Command{
 			Name: "/bin/bash",
-			Args: []string{"-c", "curl -fsSL https://get.pnpm.io/install.sh | sh -"},
+			Args: []string{"-c", remoteInstallCommand("https://get.pnpm.io/install.sh", nil, "/bin/sh")},
 		})
 	default:
 		installed, err := commandInstalled(ctx, execCtx, "vite")
@@ -646,7 +657,7 @@ func runNodeToolchainInstall(ctx context.Context, execCtx ExecutionContext) erro
 		}
 		return runCommand(ctx, execCtx, runner.Command{
 			Name: "/bin/bash",
-			Args: []string{"-c", "curl -fsSL https://vite.plus | bash"},
+			Args: []string{"-c", remoteInstallCommand("https://vite.plus", nil, "/bin/bash")},
 		})
 	}
 }
@@ -654,12 +665,12 @@ func runNodeToolchainInstall(ctx context.Context, execCtx ExecutionContext) erro
 func simulateNodeToolchainInstall(_ context.Context, execCtx ExecutionContext) error {
 	switch NodeToolchainFromDecisions(execCtx.Decisions) {
 	case NodeToolchainNvmPnpm:
-		if err := logSimulation(execCtx, "Would install nvm (curl raw.githubusercontent.com/nvm-sh/.../install.sh | bash)"); err != nil {
+		if err := logSimulation(execCtx, "Would download and run nvm installer from raw.githubusercontent.com/nvm-sh"); err != nil {
 			return err
 		}
-		return logSimulation(execCtx, "Would install pnpm (curl https://get.pnpm.io/install.sh | sh -)")
+		return logSimulation(execCtx, "Would download and run pnpm installer from https://get.pnpm.io/install.sh")
 	default:
-		return logSimulation(execCtx, "Would run Vite+ installer (curl https://vite.plus | bash)")
+		return logSimulation(execCtx, "Would download and run Vite+ installer from https://vite.plus")
 	}
 }
 
@@ -696,7 +707,7 @@ func runShellSetup(ctx context.Context, execCtx ExecutionContext) error {
 		} else {
 			if err = runCommand(ctx, execCtx, runner.Command{
 				Name: "/bin/bash",
-				Args: []string{"-c", "curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh | sh -s -- --unattended"},
+				Args: []string{"-c", remoteInstallCommand("https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh", nil, "/bin/sh", "--unattended")},
 			}); err != nil {
 				return err
 			}
@@ -932,18 +943,35 @@ func logStageMessage(execCtx ExecutionContext, message string) error {
 	})
 }
 
+func remoteInstallCommand(url string, env []string, interpreter string, args ...string) string {
+	parts := make([]string, 0, len(env)+len(args)+2)
+	parts = append(parts, env...)
+	parts = append(parts, shellQuote(interpreter), "\"$install_script\"")
+	for _, arg := range args {
+		parts = append(parts, shellQuote(arg))
+	}
+	return strings.Join([]string{
+		"set -e",
+		"install_script=$(mktemp -t laptop-setup-install.XXXXXX)",
+		"trap 'rm -f \"$install_script\"' EXIT",
+		"curl -fsSL " + shellQuote(url) + " -o \"$install_script\"",
+		strings.Join(parts, " "),
+	}, "\n")
+}
+
+func shellQuote(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", "'\\''") + "'"
+}
+
 func ensureBrewShellenv(execCtx ExecutionContext) error {
 	zprofilePath := filepath.Join(execCtx.HomeDir, ".zprofile")
-	const sentinel = "brew shellenv"
-	const shellenvLine = `eval "$(/opt/homebrew/bin/brew shellenv)"`
-	const commentLine = "# Set PATH, MANPATH, etc., for Homebrew."
 
 	fsys := execCtx.fileSystem()
 	content, err := fsys.ReadFile(zprofilePath)
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return fmt.Errorf("read .zprofile: %w", err)
 	}
-	if strings.Contains(string(content), sentinel) {
+	if strings.Contains(string(content), brewShellenvSentinel) {
 		return nil
 	}
 
@@ -955,11 +983,25 @@ func ensureBrewShellenv(execCtx ExecutionContext) error {
 	if len(content) > 0 && !strings.HasSuffix(string(content), "\n") {
 		builder.WriteString("\n")
 	}
-	builder.WriteString(commentLine + "\n" + shellenvLine + "\n")
+	builder.WriteString(brewShellenvCommentLine + "\n" + brewShellenvLine + "\n")
 	if err = fsys.AppendFile(zprofilePath, []byte(builder.String()), privateFilePerm); err != nil {
 		return fmt.Errorf("append brew shellenv to .zprofile: %w", err)
 	}
 	return nil
+}
+
+func brewShellenvConfigured(execCtx ExecutionContext) (bool, error) {
+	if strings.TrimSpace(execCtx.HomeDir) == "" {
+		return false, nil
+	}
+	content, err := execCtx.fileSystem().ReadFile(filepath.Join(execCtx.HomeDir, ".zprofile"))
+	if err == nil {
+		return strings.Contains(string(content), brewShellenvSentinel), nil
+	}
+	if errors.Is(err, fs.ErrNotExist) {
+		return false, nil
+	}
+	return false, fmt.Errorf("read .zprofile: %w", err)
 }
 
 func macOSDefaultSatisfied(ctx context.Context, execCtx ExecutionContext, setting macOSDefault) (bool, error) {

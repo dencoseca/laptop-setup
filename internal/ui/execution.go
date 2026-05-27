@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -44,6 +45,75 @@ type ExecutionHooks struct {
 type ExecutionService interface {
 	PrepareExecution(context.Context, ExecutionRequest) (ExecutionRun, error)
 	Execute(context.Context, ExecutionRun, ExecutionHooks) error
+}
+
+const maxInteractiveOutputCaptureBytes = 1 << 20
+
+type limitedOutputBuffer struct {
+	buffer    bytes.Buffer
+	limit     int
+	truncated bool
+}
+
+type capturingExecCommand struct {
+	cmd    *exec.Cmd
+	stdout *limitedOutputBuffer
+	stderr *limitedOutputBuffer
+}
+
+func newLimitedOutputBuffer(limit int) *limitedOutputBuffer {
+	return &limitedOutputBuffer{limit: limit}
+}
+
+func (b *limitedOutputBuffer) Write(payload []byte) (int, error) {
+	if b.limit <= 0 || b.buffer.Len() >= b.limit {
+		b.truncated = b.truncated || len(payload) > 0
+		return len(payload), nil
+	}
+	remaining := b.limit - b.buffer.Len()
+	if len(payload) > remaining {
+		_, _ = b.buffer.Write(payload[:remaining])
+		b.truncated = true
+		return len(payload), nil
+	}
+	_, _ = b.buffer.Write(payload)
+	return len(payload), nil
+}
+
+func (b *limitedOutputBuffer) String() string {
+	if b == nil {
+		return ""
+	}
+	output := b.buffer.String()
+	if b.truncated {
+		if output != "" && !strings.HasSuffix(output, "\n") {
+			output += "\n"
+		}
+		output += "<output truncated>\n"
+	}
+	return output
+}
+
+func (c capturingExecCommand) Run() error {
+	return c.cmd.Run()
+}
+
+func (c capturingExecCommand) SetStdin(reader io.Reader) {
+	if c.cmd.Stdin == nil {
+		c.cmd.Stdin = reader
+	}
+}
+
+func (c capturingExecCommand) SetStdout(writer io.Writer) {
+	if c.cmd.Stdout == nil {
+		c.cmd.Stdout = io.MultiWriter(writer, c.stdout)
+	}
+}
+
+func (c capturingExecCommand) SetStderr(writer io.Writer) {
+	if c.cmd.Stderr == nil {
+		c.cmd.Stderr = io.MultiWriter(writer, c.stderr)
+	}
 }
 
 func (m *model) startExecutionFromReview() (tea.Model, tea.Cmd) {
@@ -220,13 +290,22 @@ func runInteractiveCommand(request interactiveCommandRequest) tea.Cmd {
 	if len(command.Env) > 0 {
 		cmd.Env = append(cmd.Environ(), command.Env...)
 	}
-	return tea.ExecProcess(cmd, func(err error) tea.Msg {
-		result := runner.Result{ExitCode: 0}
+	stdout := newLimitedOutputBuffer(maxInteractiveOutputCaptureBytes)
+	stderr := newLimitedOutputBuffer(maxInteractiveOutputCaptureBytes)
+	execCommand := capturingExecCommand{
+		cmd:    cmd,
+		stdout: stdout,
+		stderr: stderr,
+	}
+	return tea.Exec(execCommand, func(err error) tea.Msg {
+		result := runner.Result{ExitCode: 0, Stdout: stdout.String(), Stderr: stderr.String()}
 		if err != nil {
 			result.ExitCode = commandExitCode(err)
 			err = &runner.CommandError{
 				Command:  command,
 				ExitCode: result.ExitCode,
+				Stdout:   result.Stdout,
+				Stderr:   result.Stderr,
 				Err:      err,
 			}
 		}

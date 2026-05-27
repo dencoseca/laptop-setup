@@ -16,6 +16,8 @@ import (
 const (
 	privateDirPerm  fs.FileMode = 0o700
 	privateFilePerm fs.FileMode = 0o600
+
+	defaultAppleSiliconBrewPath = "/opt/homebrew/bin/brew"
 )
 
 type FileSystem interface {
@@ -252,22 +254,43 @@ func (s FSTemplateStore) fileSystem() FileSystem {
 }
 
 type HomebrewPackageManager struct {
-	Runner runner.CommandRunner
+	Runner   runner.CommandRunner
+	BrewPath string
 }
 
 func (m HomebrewPackageManager) HomebrewAvailable(ctx context.Context) error {
-	if m.Runner == nil {
-		return errors.New("runner is required")
-	}
-	if _, err := m.Runner.LookPath(ctx, "brew"); err != nil {
-		return fmt.Errorf("brew executable not found: %w", err)
-	}
-	return nil
+	_, err := m.ResolveBrewPath(ctx)
+	return err
 }
 
-func (HomebrewPackageManager) RunBrewBundle(ctx context.Context, execCtx ExecutionContext, brewfilePath string) error {
+func (m HomebrewPackageManager) ResolveBrewPath(ctx context.Context) (string, error) {
+	if m.Runner == nil {
+		return "", errors.New("runner is required")
+	}
+	path, pathErr := m.Runner.LookPath(ctx, "brew")
+	if pathErr == nil {
+		return path, nil
+	}
+
+	brewPath := strings.TrimSpace(m.BrewPath)
+	if brewPath == "" {
+		brewPath = defaultAppleSiliconBrewPath
+	}
+	path, fallbackErr := m.Runner.LookPath(ctx, brewPath)
+	if fallbackErr == nil {
+		return path, nil
+	}
+
+	return "", fmt.Errorf("brew executable not found in PATH (%v) or at %s (%v)", pathErr, brewPath, fallbackErr)
+}
+
+func (m HomebrewPackageManager) RunBrewBundle(ctx context.Context, execCtx ExecutionContext, brewfilePath string) error {
+	brewPath, err := m.ResolveBrewPath(ctx)
+	if err != nil {
+		return err
+	}
 	return runCommand(ctx, execCtx, runner.Command{
-		Name:        "brew",
+		Name:        brewPath,
 		Args:        []string{"bundle", "install", "--file", brewfilePath},
 		Interactive: true,
 		Prompt:      "Homebrew may ask for administrator authorization while installing selected packages or apps.",

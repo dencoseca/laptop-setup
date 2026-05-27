@@ -14,8 +14,10 @@ type PlanOptions struct {
 func ResolvePlan(catalog []Stage, options PlanOptions) ([]StageID, error) {
 	ids := IDs(catalog)
 	index := make(map[StageID]int, len(ids))
+	stageByID := make(map[StageID]Stage, len(catalog))
 	for i, id := range ids {
 		index[id] = i
+		stageByID[id] = catalog[i]
 	}
 
 	plan := make([]StageID, 0, len(ids))
@@ -32,6 +34,9 @@ func ResolvePlan(catalog []Stage, options PlanOptions) ([]StageID, error) {
 				return nil, fmt.Errorf("unknown stage id in --only: %s", normalized)
 			}
 			onlySet[stageID] = struct{}{}
+		}
+		if err := validateCriticalStagesIncluded(catalog, index, onlySet, strings.TrimSpace(options.FromID)); err != nil {
+			return nil, err
 		}
 		for _, id := range ids {
 			if _, ok := onlySet[id]; ok {
@@ -69,6 +74,9 @@ func ResolvePlan(catalog []Stage, options PlanOptions) ([]StageID, error) {
 			if _, ok := index[stageID]; !ok {
 				return nil, fmt.Errorf("unknown stage id in --skip: %s", normalized)
 			}
+			if stageByID[stageID].Critical {
+				return nil, fmt.Errorf("stage %s cannot be skipped", normalized)
+			}
 			skipSet[stageID] = struct{}{}
 		}
 
@@ -87,4 +95,28 @@ func ResolvePlan(catalog []Stage, options PlanOptions) ([]StageID, error) {
 	}
 
 	return plan, nil
+}
+
+func validateCriticalStagesIncluded(catalog []Stage, index map[StageID]int, included map[StageID]struct{}, from string) error {
+	fromIndex := 0
+	if from != "" {
+		fromID := StageID(from)
+		resolvedIndex, ok := index[fromID]
+		if !ok {
+			return fmt.Errorf("unknown stage id in --from: %s", from)
+		}
+		fromIndex = resolvedIndex
+	}
+	for _, stage := range catalog {
+		if !stage.Critical {
+			continue
+		}
+		if index[stage.ID] < fromIndex {
+			continue
+		}
+		if _, ok := included[stage.ID]; !ok {
+			return fmt.Errorf("critical stage %s must be included", stage.ID)
+		}
+	}
+	return nil
 }

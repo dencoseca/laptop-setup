@@ -13,9 +13,11 @@ import (
 )
 
 type recordingRunner struct {
-	commands      []runner.Command
-	lookPathCalls []string
-	lookPathErr   error
+	commands        []runner.Command
+	lookPathCalls   []string
+	lookPathResults map[string]string
+	lookPathErrs    map[string]error
+	lookPathErr     error
 }
 
 func (r *recordingRunner) Run(_ context.Context, command runner.Command) (runner.Result, error) {
@@ -25,6 +27,12 @@ func (r *recordingRunner) Run(_ context.Context, command runner.Command) (runner
 
 func (r *recordingRunner) LookPath(_ context.Context, name string) (string, error) {
 	r.lookPathCalls = append(r.lookPathCalls, name)
+	if err, ok := r.lookPathErrs[name]; ok {
+		return "", err
+	}
+	if path, ok := r.lookPathResults[name]; ok {
+		return path, nil
+	}
 	if r.lookPathErr != nil {
 		return "", r.lookPathErr
 	}
@@ -257,8 +265,8 @@ func TestRunBrewBundleUsesGeneratedBrewfileMatchingSelectedEntries(t *testing.T)
 		t.Fatalf("expected one brew invocation, got %d", len(runnerStub.commands))
 	}
 	command := runnerStub.commands[0]
-	if command.Name != "brew" {
-		t.Fatalf("expected brew command, got %q", command.Name)
+	if command.Name != "/usr/local/bin/brew" {
+		t.Fatalf("expected resolved brew command, got %q", command.Name)
 	}
 	if len(command.Args) != 4 || command.Args[0] != "bundle" || command.Args[1] != "install" || command.Args[2] != "--file" {
 		t.Fatalf("unexpected brew args: %v", command.Args)
@@ -300,8 +308,79 @@ func TestRunBrewBundleFailsWhenBrewMissing(t *testing.T) {
 	if len(runnerStub.commands) != 0 {
 		t.Fatalf("expected no command execution when brew is missing, got %d commands", len(runnerStub.commands))
 	}
-	if !slices.Equal(runnerStub.lookPathCalls, []string{"brew"}) {
+	if !slices.Equal(runnerStub.lookPathCalls, []string{"brew", defaultAppleSiliconBrewPath}) {
 		t.Fatalf("expected brew availability check through runner, got %v", runnerStub.lookPathCalls)
+	}
+}
+
+func TestPrecheckHomebrewRequiresShellenvConfiguration(t *testing.T) {
+	homeDir := t.TempDir()
+	packages := &recordingPackageManager{}
+
+	result, err := precheckHomebrew(context.Background(), ExecutionContext{
+		HomeDir:        homeDir,
+		PackageManager: packages,
+	})
+	if err != nil {
+		t.Fatalf("precheckHomebrew returned error: %v", err)
+	}
+	if result.Satisfied {
+		t.Fatal("expected Homebrew precheck not to be satisfied without shellenv")
+	}
+
+	if err := os.WriteFile(filepath.Join(homeDir, ".zprofile"), []byte(brewShellenvLine+"\n"), 0o600); err != nil {
+		t.Fatalf("write .zprofile: %v", err)
+	}
+	result, err = precheckHomebrew(context.Background(), ExecutionContext{
+		HomeDir:        homeDir,
+		PackageManager: packages,
+	})
+	if err != nil {
+		t.Fatalf("precheckHomebrew returned error after shellenv: %v", err)
+	}
+	if !result.Satisfied {
+		t.Fatal("expected Homebrew precheck to be satisfied with shellenv")
+	}
+}
+
+func TestHomebrewPackageManagerFallsBackToAppleSiliconPath(t *testing.T) {
+	fallbackPath := filepath.Join(t.TempDir(), "brew")
+	runnerStub := &recordingRunner{
+		lookPathErrs: map[string]error{
+			"brew": errors.New("not found"),
+		},
+		lookPathResults: map[string]string{
+			fallbackPath: fallbackPath,
+		},
+	}
+	manager := HomebrewPackageManager{Runner: runnerStub, BrewPath: fallbackPath}
+
+	resolved, err := manager.ResolveBrewPath(context.Background())
+	if err != nil {
+		t.Fatalf("ResolveBrewPath returned error: %v", err)
+	}
+	if resolved != fallbackPath {
+		t.Fatalf("resolved path mismatch: got=%q want=%q", resolved, fallbackPath)
+	}
+	if !slices.Equal(runnerStub.lookPathCalls, []string{"brew", fallbackPath}) {
+		t.Fatalf("look path calls mismatch: %v", runnerStub.lookPathCalls)
+	}
+}
+
+func TestRemoteInstallCommandDownloadsBeforeExecuting(t *testing.T) {
+	command := remoteInstallCommand("https://example.com/install.sh", []string{"NONINTERACTIVE=1"}, "/bin/bash", "--flag")
+
+	for _, want := range []string{
+		"set -e",
+		"curl -fsSL 'https://example.com/install.sh' -o \"$install_script\"",
+		"NONINTERACTIVE=1 '/bin/bash' \"$install_script\" '--flag'",
+	} {
+		if !strings.Contains(command, want) {
+			t.Fatalf("expected command to contain %q, got:\n%s", want, command)
+		}
+	}
+	if strings.Contains(command, "|") {
+		t.Fatalf("expected installer command not to pipe curl into a shell, got:\n%s", command)
 	}
 }
 

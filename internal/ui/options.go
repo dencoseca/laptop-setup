@@ -69,6 +69,9 @@ func (m *model) updateToggleListScreen(
 		m.cursor = m.defaultCursorForScreen(backScreen)
 	case " ":
 		if item, ok := m.optionList.SelectedItem().(optionListItem); ok && item.Index >= 0 && item.Index < len(*options) {
+			if (*options)[item.Index].Critical {
+				return *m, nil
+			}
 			(*options)[item.Index].Selected = !(*options)[item.Index].Selected
 			m.cursor = item.Index
 			m.refreshOptionListItems()
@@ -136,6 +139,9 @@ func (m *model) updateShellOptionsScreen(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.cursor = m.defaultCursorForScreen(screenDockerRuntime)
 	case " ":
 		if item, ok := m.optionList.SelectedItem().(optionListItem); ok && item.Index >= 0 && item.Index < len(m.shellOptions) {
+			if m.shellOptions[item.Index].Critical {
+				return *m, nil
+			}
 			m.shellOptions[item.Index].Selected = !m.shellOptions[item.Index].Selected
 			m.cursor = item.Index
 			m.refreshOptionListItems()
