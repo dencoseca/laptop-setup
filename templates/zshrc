@@ -57,6 +57,22 @@ edit() {
  webstorm -e "$1"
 }
 
+grnr() {
+    if [ "$#" -gt 1 ]; then
+        echo "usage: grnr [new-branch-name]" >&2
+        return 2
+    fi
+
+    old_branch=$(git rev-parse --abbrev-ref --symbolic-full-name @{u} | sed 's|^origin/||')
+
+    if [ -n "$1" ]; then
+        git branch -m "$1" || return
+    fi
+
+    git push origin --delete "$old_branch" || return
+    git push --set-upstream origin HEAD
+}
+
 alias src="source $HOME/.zshrc"
 alias zshc="edit $HOME/.zshrc"
 alias zshb="cp $HOME/.zshrc $HOME/.zshrc.bak"
