@@ -148,7 +148,7 @@ func (m *model) updateShellOptionsScreen(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	case "enter":
 		m.inputError = ""
-		if m.stageSelected("git_config") {
+		if m.stageSelected(string(stages.StageGitConfig)) {
 			m.screen = screenGitName
 			m.gitNameInput.Focus()
 			return *m, textinput.Blink

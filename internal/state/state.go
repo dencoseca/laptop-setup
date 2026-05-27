@@ -105,6 +105,19 @@ func IsTerminalStatus(status StageStatusValue) bool {
 	return setup.IsTerminalStatus(status)
 }
 
+func NormalizeRunState(run *RunState) error {
+	if run == nil {
+		return errors.New("field run_state: is required")
+	}
+	if run.Decisions.IsZero() {
+		run.Decisions = stages.DefaultDecisions().WithSelectedStageIDs(run.ResolvedPlan)
+	}
+	if len(run.Decisions.SelectedStageIDs) == 0 {
+		run.Decisions = run.Decisions.WithSelectedStageIDs(run.ResolvedPlan)
+	}
+	return nil
+}
+
 func ValidateRunState(run *RunState) error {
 	if run == nil {
 		return errors.New("field run_state: is required")
@@ -127,12 +140,6 @@ func ValidateRunState(run *RunState) error {
 			return fmt.Errorf("field resolved_plan[%d]: duplicate stage id %q", index, stageID)
 		}
 		seenPlanIDs[stageID] = struct{}{}
-	}
-	if run.Decisions.IsZero() {
-		run.Decisions = stages.DefaultDecisions().WithSelectedStageIDs(run.ResolvedPlan)
-	}
-	if len(run.Decisions.SelectedStageIDs) == 0 {
-		run.Decisions = run.Decisions.WithSelectedStageIDs(run.ResolvedPlan)
 	}
 	if err := run.Decisions.Validate(); err != nil {
 		return fmt.Errorf("field decisions: %w", err)
@@ -219,6 +226,9 @@ func (s *Store) Load(ctx context.Context) (*RunState, error) {
 			return nil, fmt.Errorf("decode state file: invalid field %s at byte %d: %w", field, typeErr.Offset, err)
 		}
 		return nil, fmt.Errorf("decode state file: %w", err)
+	}
+	if err = NormalizeRunState(&state); err != nil {
+		return nil, fmt.Errorf("normalize state file: %w", err)
 	}
 	if err = ValidateRunState(&state); err != nil {
 		return nil, fmt.Errorf("validate state file: %w", err)

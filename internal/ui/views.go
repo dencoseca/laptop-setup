@@ -166,7 +166,7 @@ func (m *model) viewReview() string {
 		stages.ShellApplyZshrcTemplate(decisions),
 		stages.ShellApplyStarshipTemplate(decisions),
 	)
-	if m.stageSelected("git_config") {
+	if m.stageSelected(string(stages.StageGitConfig)) {
 		name, email := stages.GitIdentityFromDecisions(decisions)
 		fmt.Fprintf(&b, "Git identity: %s <%s>\n", name, email)
 	}

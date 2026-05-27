@@ -39,9 +39,10 @@ func (s tuiExecutionService) PrepareExecution(ctx context.Context, request ui.Ex
 		}
 	} else {
 		dryRun = request.DryRun
+		now := time.Now()
 		runState = &state.RunState{
-			RunID:        state.NewRunID(time.Now()),
-			StartAt:      time.Now().UTC(),
+			RunID:        state.NewRunID(now),
+			StartAt:      now.UTC(),
 			Mode:         modeName(dryRun),
 			ResolvedPlan: request.Plan,
 			Decisions:    request.Decisions,
@@ -50,15 +51,13 @@ func (s tuiExecutionService) PrepareExecution(ctx context.Context, request ui.Ex
 		}
 	}
 
-	if runState.Decisions.IsZero() {
-		runState.Decisions = stages.DefaultDecisions().WithSelectedStageIDs(runState.ResolvedPlan)
-	}
 	if !request.Resume {
 		runState.SelectedIDs = request.SelectedIDs
 		runState.ResolvedPlan = request.Plan
 		runState.Decisions = request.Decisions
-	} else if len(runState.Decisions.SelectedStageIDs) == 0 {
-		runState.Decisions = runState.Decisions.WithSelectedStageIDs(runState.ResolvedPlan)
+	}
+	if err := state.NormalizeRunState(runState); err != nil {
+		return ui.ExecutionRun{}, fmt.Errorf("normalize run state: %w", err)
 	}
 	if err := runState.Decisions.Validate(); err != nil {
 		return ui.ExecutionRun{}, fmt.Errorf("validate decisions: %w", err)

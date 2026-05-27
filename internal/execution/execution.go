@@ -105,6 +105,9 @@ func Execute(ctx context.Context, options Options) error {
 	if options.Logger == nil {
 		return errors.New("event logger is required")
 	}
+	if err := state.NormalizeRunState(options.RunState); err != nil {
+		return fmt.Errorf("normalize run state: %w", err)
+	}
 	if err := ValidateRunStateForCatalog(options.RunState, options.Catalog, options.DryRun); err != nil {
 		return err
 	}
@@ -294,11 +297,18 @@ func Execute(ctx context.Context, options Options) error {
 }
 
 func ValidateRunStateForCatalog(runState *state.RunState, catalog []stages.Stage, dryRun bool) error {
-	if err := state.ValidateRunState(runState); err != nil {
+	if runState == nil {
+		return errors.New("resume state: field run_state: is required")
+	}
+	normalized := *runState
+	if err := state.NormalizeRunState(&normalized); err != nil {
 		return fmt.Errorf("resume state: %w", err)
 	}
-	if runState.Mode.IsDryRun() != dryRun {
-		return fmt.Errorf("resume state field mode: saved mode %q is incompatible with requested dry-run=%t", runState.Mode, dryRun)
+	if err := state.ValidateRunState(&normalized); err != nil {
+		return fmt.Errorf("resume state: %w", err)
+	}
+	if normalized.Mode.IsDryRun() != dryRun {
+		return fmt.Errorf("resume state field mode: saved mode %q is incompatible with requested dry-run=%t", normalized.Mode, dryRun)
 	}
 	if len(catalog) == 0 {
 		return errors.New("resume state: catalog is empty")
@@ -315,7 +325,7 @@ func ValidateRunStateForCatalog(runState *state.RunState, catalog []stages.Stage
 		stageIndex[stage.ID] = stage
 	}
 
-	for index, stageID := range runState.ResolvedPlan {
+	for index, stageID := range normalized.ResolvedPlan {
 		stage, ok := stageIndex[stageID]
 		if !ok {
 			return fmt.Errorf("resume state field resolved_plan[%d]: unknown stage id %q", index, stageID)
@@ -334,7 +344,7 @@ func ValidateRunStateForCatalog(runState *state.RunState, catalog []stages.Stage
 		}
 	}
 
-	for stageID := range runState.Stages {
+	for stageID := range normalized.Stages {
 		if _, ok := stageIndex[stageID]; !ok {
 			return fmt.Errorf("resume state field stages.%s: unknown stage id %q", stageID, stageID)
 		}

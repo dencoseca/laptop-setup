@@ -27,10 +27,23 @@ import (
 )
 
 var (
-	phaseMacOSStages   = []string{"xcode_clt", "macos_defaults"}
-	phaseInstallStages = []string{"homebrew_install", "brew_bundle"}
-	phaseDevStages     = []string{"node_toolchain", "docker_config", "shell_setup", "git_config"}
-	phaseManualStages  = []string{"manual_app_store_apps"}
+	phaseMacOSStages = []string{
+		string(stages.StageXcodeCLT),
+		string(stages.StageMacOSDefaults),
+	}
+	phaseInstallStages = []string{
+		string(stages.StageHomebrewInstall),
+		string(stages.StageBrewBundle),
+	}
+	phaseDevStages = []string{
+		string(stages.StageNodeToolchain),
+		string(stages.StageDockerConfig),
+		string(stages.StageShellSetup),
+		string(stages.StageGitConfig),
+	}
+	phaseManualStages = []string{
+		string(stages.StageManualAppStoreApps),
+	}
 )
 
 type Config struct {
@@ -492,7 +505,7 @@ func (m model) updateKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.inputError = ""
 			m.gitNameInput.Blur()
 			m.screen = screenShellOptions
-			m.cursor = m.optionCursor(m.shellOptions, "git_config")
+			m.cursor = m.optionCursor(m.shellOptions, string(stages.StageGitConfig))
 			return m, nil
 		case "enter":
 			name := strings.TrimSpace(m.gitNameInput.Value())
@@ -585,10 +598,11 @@ func (m *model) resolvePlan() ([]string, error) {
 		onlyIDs = m.config.Only
 	}
 
-	if slices.Contains(onlyIDs, "brew_bundle") && len(m.selectedBrewIDs()) == 0 {
+	brewBundleID := string(stages.StageBrewBundle)
+	if slices.Contains(onlyIDs, brewBundleID) && len(m.selectedBrewIDs()) == 0 {
 		return nil, fmt.Errorf("%s selected with no package/app entries; select at least one entry or deselect %s",
-			m.stageTitle("brew_bundle"),
-			m.stageTitle("brew_bundle"),
+			m.stageTitle(brewBundleID),
+			m.stageTitle(brewBundleID),
 		)
 	}
 
@@ -731,7 +745,7 @@ func (m *model) optionCursor(options []toggleOption, id string) int {
 }
 
 func (m *model) manualBackScreen() screen {
-	if m.stageSelected("git_config") {
+	if m.stageSelected(string(stages.StageGitConfig)) {
 		return screenGitEmail
 	}
 	return screenShellOptions
