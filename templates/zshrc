@@ -45,10 +45,6 @@ export DOCKER_HOST="unix://$HOME/.colima/default/docker.sock"
 #  CUSTOM ALIASES / FUNCTIONS
 #------------------------------#
 
-cd_and_ls() {
-  builtin cd "$@" && ls -lh
-}
-
 ag() {
  alias | grep -i "$1"
 }
@@ -76,10 +72,10 @@ grnr() {
 alias src="source $HOME/.zshrc"
 alias zshc="edit $HOME/.zshrc"
 alias zshb="cp $HOME/.zshrc $HOME/.zshrc.bak"
-alias dencoseca="cd_and_ls $HOME/Developer/repos/github.com/dencoseca"
-alias repos="cd_and_ls $HOME/Developer/repos"
-alias dl="cd_and_ls $HOME/Downloads"
-alias dt="cd_and_ls $HOME/Desktop"
+alias dencoseca="cd $HOME/Developer/repos/github.com/dencoseca"
+alias repos="cd $HOME/Developer/repos"
+alias dl="cd $HOME/Downloads"
+alias dt="cd $HOME/Desktop"
 alias oif="open -a Finder ./"
 alias nq="networkQuality"
 alias trc="tree -d -L 3 $HOME/Developer/repos"
@@ -90,7 +86,6 @@ alias npmls="npm list -g --depth=0"
 alias l="ls -lh"
 alias upbrew="brew update && brew upgrade && brew cleanup && brew doctor"
 alias upomz="omz update"
-alias cd="cd_and_ls"
 alias tf="terraform"
 
 sockson() {
