@@ -4,7 +4,6 @@ This is a Go CLI for planning, executing, and resuming an Apple Silicon macOS la
 
 ## Rules
 
-- Never commit. Git commits are human-only.
 - Keep `README.md` consumer-facing; put maintainer/developer guidance here.
 - Prefer small, tested changes that follow existing package boundaries.
 - Do not call `os/exec` directly from stages; use `runner.CommandRunner`.

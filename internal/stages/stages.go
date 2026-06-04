@@ -89,11 +89,9 @@ func precheckMacOSDefaults(ctx context.Context, execCtx ExecutionContext) (Check
 }
 
 func precheckBrewBundle(ctx context.Context, execCtx ExecutionContext) (CheckResult, error) {
-	if err := execCtx.packageManager().HomebrewAvailable(ctx); err != nil {
+	packageManager := execCtx.packageManager()
+	if err := packageManager.HomebrewAvailable(ctx); err != nil {
 		return CheckResult{Satisfied: false}, nil
-	}
-	if execCtx.Runner == nil {
-		return CheckResult{}, errors.New("runner is required")
 	}
 
 	brewfilePath := execCtx.GeneratedBrewfilePath
@@ -114,17 +112,14 @@ func precheckBrewBundle(ctx context.Context, execCtx ExecutionContext) (CheckRes
 		}
 	}
 
-	result, err := execCtx.Runner.Run(ctx, runner.Command{
-		Name: "brew",
-		Args: []string{"bundle", "check", "--file", brewfilePath},
-	})
-	if err == nil {
+	satisfied, err := packageManager.BrewBundleSatisfied(ctx, execCtx, brewfilePath)
+	if err != nil {
+		return CheckResult{}, err
+	}
+	if satisfied {
 		return CheckResult{Satisfied: true, Message: "Homebrew bundle already satisfied"}, nil
 	}
-	if result.ExitCode >= 1 {
-		return CheckResult{Satisfied: false}, nil
-	}
-	return CheckResult{}, err
+	return CheckResult{Satisfied: false}, nil
 }
 
 func precheckNodeToolchain(ctx context.Context, execCtx ExecutionContext) (CheckResult, error) {

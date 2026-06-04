@@ -164,13 +164,29 @@ func TestHomebrewPackageManagerContract(t *testing.T) {
 	}
 
 	brewfilePath := filepath.Join(t.TempDir(), "Brewfile.generated")
+	satisfied, err := manager.BrewBundleSatisfied(context.Background(), ExecutionContext{Runner: runnerStub}, brewfilePath)
+	if err != nil {
+		t.Fatalf("BrewBundleSatisfied returned error: %v", err)
+	}
+	if !satisfied {
+		t.Fatal("expected BrewBundleSatisfied to report satisfied")
+	}
+	if len(runnerStub.commands) != 1 {
+		t.Fatalf("expected one brew check command, got %d", len(runnerStub.commands))
+	}
+	command := runnerStub.commands[0]
+	if command.Name != "/usr/local/bin/brew" || !slices.Equal(command.Args, []string{"bundle", "check", "--file", brewfilePath}) {
+		t.Fatalf("unexpected brew check command: %s", command.String())
+	}
+
+	runnerStub.commands = nil
 	if err := manager.RunBrewBundle(context.Background(), ExecutionContext{Runner: runnerStub}, brewfilePath); err != nil {
 		t.Fatalf("RunBrewBundle returned error: %v", err)
 	}
 	if len(runnerStub.commands) != 1 {
 		t.Fatalf("expected one brew command, got %d", len(runnerStub.commands))
 	}
-	command := runnerStub.commands[0]
+	command = runnerStub.commands[0]
 	if command.Name != "/usr/local/bin/brew" || !slices.Equal(command.Args, []string{"bundle", "install", "--file", brewfilePath}) {
 		t.Fatalf("unexpected brew command: %s", command.String())
 	}

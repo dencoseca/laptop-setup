@@ -39,6 +39,7 @@ type TemplateStore interface {
 
 type PackageManager interface {
 	HomebrewAvailable(context.Context) error
+	BrewBundleSatisfied(context.Context, ExecutionContext, string) (bool, error)
 	RunBrewBundle(context.Context, ExecutionContext, string) error
 }
 
@@ -270,6 +271,27 @@ func (m HomebrewPackageManager) RunBrewBundle(ctx context.Context, execCtx Execu
 		Interactive: true,
 		Prompt:      "Homebrew may ask for administrator authorization while installing selected packages or apps.",
 	})
+}
+
+func (m HomebrewPackageManager) BrewBundleSatisfied(ctx context.Context, execCtx ExecutionContext, brewfilePath string) (bool, error) {
+	brewPath, err := m.ResolveBrewPath(ctx)
+	if err != nil {
+		return false, err
+	}
+	if execCtx.Runner == nil {
+		return false, errors.New("runner is required")
+	}
+	result, err := execCtx.Runner.Run(ctx, runner.Command{
+		Name: brewPath,
+		Args: []string{"bundle", "check", "--file", brewfilePath},
+	})
+	if err == nil {
+		return true, nil
+	}
+	if result.ExitCode >= 1 {
+		return false, nil
+	}
+	return false, err
 }
 
 func ResolveSelectedBrewIDsFromStore(store TemplateStore) ([]string, error) {
