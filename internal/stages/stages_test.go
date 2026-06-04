@@ -105,12 +105,20 @@ func (l *recordingEventLogger) Log(event runner.Event) error {
 
 type recordingPackageManager struct {
 	availableCalls int
+	checkPaths     []string
+	checkSatisfied bool
+	checkErr       error
 	bundlePaths    []string
 }
 
 func (m *recordingPackageManager) HomebrewAvailable(context.Context) error {
 	m.availableCalls++
 	return nil
+}
+
+func (m *recordingPackageManager) BrewBundleSatisfied(_ context.Context, _ ExecutionContext, brewfilePath string) (bool, error) {
+	m.checkPaths = append(m.checkPaths, brewfilePath)
+	return m.checkSatisfied, m.checkErr
 }
 
 func (m *recordingPackageManager) RunBrewBundle(_ context.Context, _ ExecutionContext, brewfilePath string) error {
@@ -343,6 +351,28 @@ func TestPrecheckHomebrewRequiresShellenvConfiguration(t *testing.T) {
 	}
 }
 
+func TestPrecheckBrewBundleUsesInjectedPackageManager(t *testing.T) {
+	brewfilePath := filepath.Join(t.TempDir(), "Brewfile.generated")
+	packages := &recordingPackageManager{checkSatisfied: true}
+
+	result, err := precheckBrewBundle(context.Background(), ExecutionContext{
+		GeneratedBrewfilePath: brewfilePath,
+		PackageManager:        packages,
+	})
+	if err != nil {
+		t.Fatalf("precheckBrewBundle returned error: %v", err)
+	}
+	if !result.Satisfied {
+		t.Fatal("expected Brew bundle precheck to be satisfied")
+	}
+	if packages.availableCalls != 1 {
+		t.Fatalf("expected one availability check, got %d", packages.availableCalls)
+	}
+	if !slices.Equal(packages.checkPaths, []string{brewfilePath}) {
+		t.Fatalf("expected injected package manager check path %q, got %v", brewfilePath, packages.checkPaths)
+	}
+}
+
 func TestHomebrewPackageManagerFallsBackToAppleSiliconPath(t *testing.T) {
 	fallbackPath := filepath.Join(t.TempDir(), "brew")
 	runnerStub := &recordingRunner{
@@ -364,6 +394,42 @@ func TestHomebrewPackageManagerFallsBackToAppleSiliconPath(t *testing.T) {
 	}
 	if !slices.Equal(runnerStub.lookPathCalls, []string{"brew", fallbackPath}) {
 		t.Fatalf("look path calls mismatch: %v", runnerStub.lookPathCalls)
+	}
+}
+
+func TestPrecheckBrewBundleUsesResolvedBrewPath(t *testing.T) {
+	brewfilePath := filepath.Join(t.TempDir(), "Brewfile.generated")
+	runnerStub := &recordingRunner{
+		lookPathErrs: map[string]error{
+			"brew": errors.New("not found"),
+		},
+		lookPathResults: map[string]string{
+			defaultAppleSiliconBrewPath: defaultAppleSiliconBrewPath,
+		},
+	}
+
+	result, err := precheckBrewBundle(context.Background(), ExecutionContext{
+		Runner:                runnerStub,
+		GeneratedBrewfilePath: brewfilePath,
+	})
+	if err != nil {
+		t.Fatalf("precheckBrewBundle returned error: %v", err)
+	}
+	if !result.Satisfied {
+		t.Fatalf("expected Brew bundle precheck to be satisfied")
+	}
+	if len(runnerStub.commands) != 1 {
+		t.Fatalf("expected one brew bundle check, got %d", len(runnerStub.commands))
+	}
+	command := runnerStub.commands[0]
+	if command.Name != defaultAppleSiliconBrewPath {
+		t.Fatalf("expected resolved brew command, got %q", command.Name)
+	}
+	if !slices.Equal(command.Args, []string{"bundle", "check", "--file", brewfilePath}) {
+		t.Fatalf("unexpected brew args: %v", command.Args)
+	}
+	if !slices.Equal(runnerStub.lookPathCalls, []string{"brew", defaultAppleSiliconBrewPath, "brew", defaultAppleSiliconBrewPath}) {
+		t.Fatalf("expected brew availability and check to use fallback resolution, got %v", runnerStub.lookPathCalls)
 	}
 }
 
