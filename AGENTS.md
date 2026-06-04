@@ -9,6 +9,12 @@ This is a Go CLI for planning, executing, and resuming an Apple Silicon macOS la
 - Do not call `os/exec` directly from stages; use `runner.CommandRunner`.
 - Put filesystem, template, Homebrew, state, TTY, UI, and execution seams behind the existing ports.
 
+## Git
+
+- Before starting a task, update local `main` with `git switch main`, `git fetch origin`, and `git pull --ff-only origin main`; branch from that updated `main` so work starts on the latest base.
+- Use a task-specific branch for changes instead of working directly on `main`.
+- Open pull requests ready for review by default, not as drafts, so CI starts automatically and feedback arrives quickly. Use draft PRs only when explicitly requested.
+
 ## Map
 
 - `cmd/laptop-setup`: CLI entrypoint to `internal/app.Run`.
