@@ -843,10 +843,10 @@ func TestViewConfigurationUsesDashboardLayoutWithJourneyPreview(t *testing.T) {
 			{ID: "brew_bundle", Title: "Brew Bundle", Selected: true},
 		},
 		brewEntries: []stages.BrewEntry{
-			{ID: "go", Kind: "brew"},
+			{ID: "jq", Kind: "brew"},
 		},
 		brewSelected: map[string]bool{
-			"go": true,
+			"jq": true,
 		},
 		devOptions: []toggleOption{
 			{ID: "git_config", Title: "Git Configuration", Selected: true},
@@ -967,10 +967,10 @@ func TestViewConfigurationMatchesWindowDimensions(t *testing.T) {
 			{ID: "brew_bundle", Title: "Brew Bundle", Selected: true},
 		},
 		brewEntries: []stages.BrewEntry{
-			{ID: "go", Kind: "brew"},
+			{ID: "jq", Kind: "brew"},
 		},
 		brewSelected: map[string]bool{
-			"go": true,
+			"jq": true,
 		},
 		devOptions: []toggleOption{
 			{ID: "git_config", Title: "Git Configuration", Selected: true},
@@ -1351,9 +1351,9 @@ func TestPromptFlowReachesReviewScreen(t *testing.T) {
 		installOptions: []toggleOption{
 			{ID: "brew_bundle", Title: "Brew Bundle", Selected: true},
 		},
-		brewEntries: []stages.BrewEntry{{ID: "go", Kind: "brew"}},
+		brewEntries: []stages.BrewEntry{{ID: "jq", Kind: "brew"}},
 		brewSelected: map[string]bool{
-			"go": true,
+			"jq": true,
 		},
 		devOptions: []toggleOption{
 			{ID: "git_config", Title: "Git", Selected: true},
@@ -1537,9 +1537,9 @@ func TestReviewEnterConfirmsPlanAndStartsExecution(t *testing.T) {
 		installOptions: []toggleOption{
 			{ID: "brew_bundle", Title: "Brew Bundle", Selected: true},
 		},
-		brewEntries: []stages.BrewEntry{{ID: "go", Kind: "brew"}},
+		brewEntries: []stages.BrewEntry{{ID: "jq", Kind: "brew"}},
 		brewSelected: map[string]bool{
-			"go": true,
+			"jq": true,
 		},
 		nodeOptions: []selectOption{
 			{ID: string(stages.NodeToolchainVitePlus), Title: "vite+"},

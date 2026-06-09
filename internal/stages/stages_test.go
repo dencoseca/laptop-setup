@@ -130,7 +130,7 @@ func TestLoadBrewEntries(t *testing.T) {
 	brewfile := filepath.Join(t.TempDir(), "Brewfile")
 	content := strings.Join([]string{
 		`# comment`,
-		`brew "go"`,
+		`brew "jq"`,
 		`cask "warp"`,
 		`tap "homebrew/cask"`,
 		"",
@@ -147,7 +147,7 @@ func TestLoadBrewEntries(t *testing.T) {
 	if len(entries) != 2 {
 		t.Fatalf("expected 2 entries, got %d", len(entries))
 	}
-	if entries[0].Kind != "brew" || entries[0].ID != "go" {
+	if entries[0].Kind != "brew" || entries[0].ID != "jq" {
 		t.Fatalf("unexpected first entry: %+v", entries[0])
 	}
 	if entries[1].Kind != "cask" || entries[1].ID != "warp" {
@@ -165,7 +165,7 @@ func TestGenerateBrewfileUsesSelectedIDs(t *testing.T) {
 
 	templatePath := filepath.Join(templatesDir, "Brewfile")
 	content := strings.Join([]string{
-		`brew "go"`,
+		`brew "ripgrep"`,
 		`brew "jq"`,
 		`cask "warp"`,
 		"",
@@ -177,7 +177,7 @@ func TestGenerateBrewfileUsesSelectedIDs(t *testing.T) {
 	path, selectedIDs, err := GenerateBrewfile(ExecutionContext{
 		RepoRoot:        repoRoot,
 		RunDir:          runDir,
-		SelectedBrewIDs: []string{"warp", "go"},
+		SelectedBrewIDs: []string{"warp", "ripgrep"},
 	})
 	if err != nil {
 		t.Fatalf("generate Brewfile: %v", err)
@@ -186,7 +186,7 @@ func TestGenerateBrewfileUsesSelectedIDs(t *testing.T) {
 	if path != filepath.Join(runDir, "Brewfile.generated") {
 		t.Fatalf("unexpected generated path: %s", path)
 	}
-	expectedSelected := []string{"go", "warp"}
+	expectedSelected := []string{"ripgrep", "warp"}
 	if !slices.Equal(selectedIDs, expectedSelected) {
 		t.Fatalf("selected ids mismatch: got=%v want=%v", selectedIDs, expectedSelected)
 	}
@@ -198,7 +198,7 @@ func TestGenerateBrewfileUsesSelectedIDs(t *testing.T) {
 	if len(generatedEntries) != 2 {
 		t.Fatalf("expected 2 generated entries, got %d", len(generatedEntries))
 	}
-	if generatedEntries[0].ID != "go" || generatedEntries[1].ID != "warp" {
+	if generatedEntries[0].ID != "ripgrep" || generatedEntries[1].ID != "warp" {
 		t.Fatalf("unexpected generated entry order: %+v", generatedEntries)
 	}
 }
@@ -212,7 +212,7 @@ func TestGenerateBrewfileRejectsEmptyOutput(t *testing.T) {
 	}
 
 	templatePath := filepath.Join(templatesDir, "Brewfile")
-	if err := os.WriteFile(templatePath, []byte(`brew "go"`+"\n"), 0o644); err != nil {
+	if err := os.WriteFile(templatePath, []byte(`brew "jq"`+"\n"), 0o644); err != nil {
 		t.Fatalf("write template Brewfile: %v", err)
 	}
 
@@ -237,7 +237,7 @@ func TestRunBrewBundleUsesGeneratedBrewfileMatchingSelectedEntries(t *testing.T)
 		t.Fatalf("create templates directory: %v", err)
 	}
 	if err := os.WriteFile(filepath.Join(templatesDir, "Brewfile"), []byte(strings.Join([]string{
-		`brew "go"`,
+		`brew "ripgrep"`,
 		`brew "jq"`,
 		`cask "warp"`,
 		"",
@@ -457,7 +457,7 @@ func TestRunBrewBundleUsesInjectedPackageManager(t *testing.T) {
 	if err := os.MkdirAll(templatesDir, 0o755); err != nil {
 		t.Fatalf("create templates directory: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(templatesDir, "Brewfile"), []byte(`brew "go"`+"\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(templatesDir, "Brewfile"), []byte(`brew "jq"`+"\n"), 0o644); err != nil {
 		t.Fatalf("write template Brewfile: %v", err)
 	}
 
@@ -493,7 +493,7 @@ func TestSimulateBrewBundleDoesNotRequireBrew(t *testing.T) {
 	if err := os.MkdirAll(templatesDir, 0o755); err != nil {
 		t.Fatalf("create templates directory: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(templatesDir, "Brewfile"), []byte(`brew "go"`+"\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(templatesDir, "Brewfile"), []byte(`brew "jq"`+"\n"), 0o644); err != nil {
 		t.Fatalf("write template Brewfile: %v", err)
 	}
 
@@ -524,9 +524,9 @@ func TestResolveSelectedBrewIDs(t *testing.T) {
 
 	templatePath := filepath.Join(templatesDir, "Brewfile")
 	content := strings.Join([]string{
-		`brew "go"`,
 		`brew "jq"`,
-		`brew "go"`,
+		`brew "ripgrep"`,
+		`brew "jq"`,
 		`cask "warp"`,
 		"",
 	}, "\n")
@@ -538,7 +538,7 @@ func TestResolveSelectedBrewIDs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolve selected brew ids: %v", err)
 	}
-	expected := []string{"go", "jq", "go", "warp"}
+	expected := []string{"jq", "ripgrep", "jq", "warp"}
 	if !slices.Equal(ids, expected) {
 		t.Fatalf("selected id mismatch: got=%v want=%v", ids, expected)
 	}
