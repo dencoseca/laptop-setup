@@ -1,18 +1,14 @@
 # formulae
-brew "btop"
 brew "jq"
 brew "ripgrep"
-brew "watch"
 brew "tree"
 brew "starship"
 brew "git"
-brew "go"
 brew "docker"
 brew "docker-buildx"
 brew "docker-compose"
 brew "docker-credential-helper"
 brew "colima"
-brew "dive"
 
 # casks
 cask "alfred"
@@ -25,4 +21,3 @@ cask "mos"
 cask "rectangle"
 cask "warp"
 cask "signal"
-cask "gpg-suite"

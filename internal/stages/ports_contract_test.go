@@ -18,7 +18,7 @@ func TestFilesystemTemplateStoreContract(t *testing.T) {
 		t.Fatalf("create templates directory: %v", err)
 	}
 	if err := os.WriteFile(filepath.Join(templatesDir, "Brewfile"), []byte(strings.Join([]string{
-		`brew "go"`,
+		`brew "jq"`,
 		`cask "warp"`,
 		"",
 	}, "\n")), 0o644); err != nil {
@@ -36,7 +36,7 @@ func TestFilesystemTemplateStoreContract(t *testing.T) {
 	if sourcePath != filepath.Join(templatesDir, "Brewfile") {
 		t.Fatalf("source path mismatch: got=%q", sourcePath)
 	}
-	if gotIDs := []string{entries[0].ID, entries[1].ID}; !slices.Equal(gotIDs, []string{"go", "warp"}) {
+	if gotIDs := []string{entries[0].ID, entries[1].ID}; !slices.Equal(gotIDs, []string{"jq", "warp"}) {
 		t.Fatalf("entry ids mismatch: %v", gotIDs)
 	}
 
@@ -56,7 +56,7 @@ func TestFilesystemTemplateStoreContract(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load generated Brewfile: %v", err)
 	}
-	if len(generatedEntries) != 1 || generatedEntries[0].ID != "go" {
+	if len(generatedEntries) != 1 || generatedEntries[0].ID != "jq" {
 		t.Fatalf("generated entries mismatch: %+v", generatedEntries)
 	}
 	assertPathPerm(t, runDir, 0o700)
@@ -82,7 +82,7 @@ func TestFSTemplateStoreContract(t *testing.T) {
 		FS: fstest.MapFS{
 			"Brewfile": {
 				Data: []byte(strings.Join([]string{
-					`brew "go"`,
+					`brew "jq"`,
 					`cask "warp"`,
 					"",
 				}, "\n")),
@@ -101,7 +101,7 @@ func TestFSTemplateStoreContract(t *testing.T) {
 	if sourcePath != "test templates:Brewfile" {
 		t.Fatalf("source path mismatch: got=%q", sourcePath)
 	}
-	if gotIDs := []string{entries[0].ID, entries[1].ID}; !slices.Equal(gotIDs, []string{"go", "warp"}) {
+	if gotIDs := []string{entries[0].ID, entries[1].ID}; !slices.Equal(gotIDs, []string{"jq", "warp"}) {
 		t.Fatalf("entry ids mismatch: %v", gotIDs)
 	}
 
@@ -121,7 +121,7 @@ func TestFSTemplateStoreContract(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load generated Brewfile: %v", err)
 	}
-	if len(generatedEntries) != 1 || generatedEntries[0].ID != "go" {
+	if len(generatedEntries) != 1 || generatedEntries[0].ID != "jq" {
 		t.Fatalf("generated entries mismatch: %+v", generatedEntries)
 	}
 	assertPathPerm(t, runDir, 0o700)
