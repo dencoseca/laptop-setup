@@ -17,27 +17,6 @@ eval "$(starship init zsh)"
 # add new line for warp
 PROMPT="${PROMPT}"$'\n'
 
-# custom go binaries
-MY_BIN="$HOME/.local/bin"
-export PATH="$PATH:$MY_BIN"
-
-go_install() {
-  local PACKAGE="$1"
-  local VERSION="${2:-latest}"
-
-  mkdir -p "$MY_BIN"
-
-  echo "Installing $PACKAGE@$VERSION to $MY_BIN..."
-  GOBIN="$MY_BIN" GOPROXY="direct" go install "github.com/dencoseca/$PACKAGE@$VERSION"
-
-  if [ $? -eq 0 ]; then
-    echo "🥳 Successfully installed $PACKAGE@$VERSION"
-  else
-    echo "😭 Failed to install $PACKAGE@$VERSION"
-    return 1
-  fi
-}
-
 # docker with colima
 export DOCKER_HOST="unix://$HOME/.colima/default/docker.sock"
 
@@ -79,48 +58,10 @@ alias dt="cd $HOME/Desktop"
 alias oif="open -a Finder ./"
 alias nq="networkQuality"
 alias trc="tree -d -L 3 $HOME/Developer/repos"
-alias d="docker"
-alias dc="docker compose"
-alias k="kubectl"
 alias npmls="npm list -g --depth=0"
 alias l="ls -lh"
 alias upbrew="brew update && brew upgrade && brew cleanup && brew doctor"
 alias upomz="omz update"
-alias tf="terraform"
-
-sockson() {
-  port=${1:-1080}
-  export HTTP_PROXY="socks5://localhost:${port}"
-  export HTTPS_PROXY="socks5://localhost:${port}"
-  export ALL_PROXY="socks5://localhost:${port}"
-  local bypass=(
-    'registry.terraform.io'
-    'management.azure.com'
-    'releases.hashicorp.com'
-    'api.github.com'
-    'graph.microsoft.com'
-    '*.queue.core.windows.net'
-    '*.table.core.windows.net'
-    '*.blob.core.windows.net'
-    '*.googleapis.com'
-  )
-  bypass=$(printf ",%s" "${bypass[@]}")
-  export NO_PROXY=${bypass:1}
-}
-
-socksoff() {
-  unset HTTP_PROXY
-  unset HTTPS_PROXY
-  unset ALL_PROXY
-  unset NO_PROXY
-}
-
-sockswhat() {
-  echo "HTTP_PROXY: $HTTP_PROXY"
-  echo "HTTPS_PROXY: $HTTPS_PROXY"
-  echo "ALL_PROXY: $ALL_PROXY"
-  echo "NO_PROXY: $NO_PROXY"
-}
 
 sweet_sweet_details() {
   get_formatted_uptime() {
