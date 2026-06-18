@@ -38,26 +38,39 @@ grnr() {
         return 2
     fi
 
-    old_branch=$(git rev-parse --abbrev-ref --symbolic-full-name @{u} | sed 's|^origin/||')
+    local remote remote_branch current_branch
 
     if [ -n "$1" ]; then
         git branch -m "$1" || return
     fi
 
-    git push origin --delete "$old_branch" || return
-    git push --set-upstream origin HEAD
+    current_branch="$(git branch --show-current)"
+    if [ -z "$current_branch" ]; then
+        echo "grnr: not on a local branch" >&2
+        return 1
+    fi
+
+    remote="$(git config --get "branch.$current_branch.remote")"
+    remote_branch="$(git config --get "branch.$current_branch.merge" | sed 's#^refs/heads/##')"
+
+    if [ -n "$remote" ] && [ -n "$remote_branch" ]; then
+        git push "$remote" --delete "$remote_branch" || return
+        git push --set-upstream "$remote" HEAD
+    else
+        git push --set-upstream origin HEAD
+    fi
 }
 
-alias src="source $HOME/.zshrc"
-alias zshc="edit $HOME/.zshrc"
-alias zshb="cp $HOME/.zshrc $HOME/.zshrc.bak"
-alias dencoseca="cd $HOME/Developer/repos/github.com/dencoseca"
-alias repos="cd $HOME/Developer/repos"
-alias dl="cd $HOME/Downloads"
-alias dt="cd $HOME/Desktop"
+alias src="source \"$HOME/.zshrc\""
+alias zshc="edit \"$HOME/.zshrc\""
+alias zshb="cp \"$HOME/.zshrc\" \"$HOME/.zshrc.bak\""
+alias dencoseca="cd \"$HOME/Developer/repos/github.com/dencoseca\""
+alias repos="cd \"$HOME/Developer/repos\""
+alias dl="cd \"$HOME/Downloads\""
+alias dt="cd \"$HOME/Desktop\""
 alias oif="open -a Finder ./"
 alias nq="networkQuality"
-alias trc="tree -d -L 3 $HOME/Developer/repos"
+alias trc="tree -d -L 3 \"$HOME/Developer/repos\""
 alias npmls="npm list -g --depth=0"
 alias l="ls -lh"
 alias upbrew="brew update && brew upgrade && brew cleanup && brew doctor"
