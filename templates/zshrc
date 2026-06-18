@@ -54,7 +54,13 @@ grnr() {
     remote_branch="$(git config --get "branch.$current_branch.merge" | sed 's#^refs/heads/##')"
 
     if [ -n "$remote" ] && [ -n "$remote_branch" ]; then
-        git push "$remote" --delete "$remote_branch" || return
+        if ! git push "$remote" --delete "$remote_branch" >/dev/null 2>&1; then
+            if git ls-remote --exit-code --heads "$remote" "$remote_branch" >/dev/null 2>&1; then
+                echo "grnr: failed to delete remote branch $remote/$remote_branch" >&2
+                return 1
+            fi
+            echo "grnr: remote branch $remote/$remote_branch was already absent; continuing" >&2
+        fi
         git push --set-upstream "$remote" HEAD
     else
         git push --set-upstream origin HEAD
