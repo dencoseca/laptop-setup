@@ -419,6 +419,7 @@ func processFailure(
 		}
 		progress.Status = stages.StatusSkipped
 		options.RunState.Stages[stageID] = progress
+		options.RunState.LastFailure = ""
 		if err = options.Store.Save(ctx, options.RunState); err != nil {
 			return ActionAbort, err
 		}

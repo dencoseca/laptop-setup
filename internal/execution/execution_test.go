@@ -148,6 +148,68 @@ func TestExecuteSkipAfterFailure(t *testing.T) {
 	}
 }
 
+func TestExecuteSkipClearsRunFailureButKeepsStageError(t *testing.T) {
+	store := state.NewStore(filepath.Join(t.TempDir(), "state.json"))
+	runState := &state.RunState{
+		RunID:        state.NewRunID(time.Now()),
+		StartAt:      time.Now().UTC(),
+		Mode:         "normal",
+		ResolvedPlan: []state.StageID{"fails"},
+		Stages:       map[state.StageID]state.StageStatus{},
+	}
+	if err := store.Save(context.Background(), runState); err != nil {
+		t.Fatalf("save initial state: %v", err)
+	}
+
+	catalog := []stages.Stage{
+		{
+			ID:      "fails",
+			Title:   "Fails",
+			CanSkip: true,
+			Precheck: func(context.Context, stages.ExecutionContext) (stages.CheckResult, error) {
+				return stages.CheckResult{}, nil
+			},
+			Run:      func(context.Context, stages.ExecutionContext) error { return errors.New("boom") },
+			Simulate: func(context.Context, stages.ExecutionContext) error { return nil },
+		},
+	}
+
+	logger := runner.NewEventLogger(&bytes.Buffer{}, &bytes.Buffer{})
+	err := Execute(context.Background(), Options{
+		Store:         store,
+		RunState:      runState,
+		Catalog:       catalog,
+		DryRun:        false,
+		RepoRoot:      t.TempDir(),
+		HomeDir:       t.TempDir(),
+		RunDir:        t.TempDir(),
+		CommandRunner: runner.NewOSCommandRunner(),
+		Logger:        logger,
+		Hooks: Hooks{
+			OnFailure: func(context.Context, Failure) (FailureAction, error) {
+				return ActionSkip, nil
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("execute returned error: %v", err)
+	}
+
+	status := runState.Stages["fails"]
+	if status.Status != stages.StatusSkipped {
+		t.Fatalf("expected skipped status for failed stage, got %q", status.Status)
+	}
+	if status.LastError != "boom" {
+		t.Fatalf("expected skipped stage to keep failure reason, got %q", status.LastError)
+	}
+	if runState.LastFailure != "" {
+		t.Fatalf("expected handled skipped failure to clear run LastFailure, got %q", runState.LastFailure)
+	}
+	if runState.EndAt == nil {
+		t.Fatal("expected run to complete after skipping final failed stage")
+	}
+}
+
 func TestExecuteAbortOnFailure(t *testing.T) {
 	store := state.NewStore(filepath.Join(t.TempDir(), "state.json"))
 	runState := &state.RunState{
