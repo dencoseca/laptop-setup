@@ -598,14 +598,6 @@ func (m *model) resolvePlan() ([]string, error) {
 		onlyIDs = m.config.Only
 	}
 
-	brewBundleID := string(stages.StageBrewBundle)
-	if slices.Contains(onlyIDs, brewBundleID) && len(m.selectedBrewIDs()) == 0 {
-		return nil, fmt.Errorf("%s selected with no package/app entries; select at least one entry or deselect %s",
-			m.stageTitle(brewBundleID),
-			m.stageTitle(brewBundleID),
-		)
-	}
-
 	typedPlan, err := stages.ResolvePlan(m.catalog, stages.PlanOptions{
 		FromID:  m.config.From,
 		OnlyIDs: onlyIDs,
@@ -614,6 +606,15 @@ func (m *model) resolvePlan() ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	brewBundleID := string(stages.StageBrewBundle)
+	if slices.Contains(typedPlan, stages.StageBrewBundle) && len(m.selectedBrewIDs()) == 0 {
+		return nil, fmt.Errorf("%s selected with no package/app entries; select at least one entry or deselect %s",
+			m.stageTitle(brewBundleID),
+			m.stageTitle(brewBundleID),
+		)
+	}
+
 	return stageIDsToStrings(typedPlan), nil
 }
 
