@@ -1489,6 +1489,57 @@ func TestReviewEnterBlocksExecutionWhenPlanInvalid(t *testing.T) {
 	}
 }
 
+func TestResolvePlanAllowsEmptyBrewSelectionWhenBrewFilteredOut(t *testing.T) {
+	tests := []struct {
+		name   string
+		config Config
+		want   []string
+	}{
+		{
+			name:   "skip brew bundle",
+			config: Config{Skip: []string{"brew_bundle"}},
+			want:   []string{"xcode_clt", "git_config"},
+		},
+		{
+			name:   "resume from stage after brew bundle",
+			config: Config{From: "git_config"},
+			want:   []string{"git_config"},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			m := model{
+				config: test.config,
+				catalog: []stages.Stage{
+					{ID: "xcode_clt", Title: "Xcode"},
+					{ID: "brew_bundle", Title: "Brew Bundle"},
+					{ID: "git_config", Title: "Git Configuration"},
+				},
+				macOSOptions: []toggleOption{
+					{ID: "xcode_clt", Title: "Xcode", Selected: true},
+				},
+				installOptions: []toggleOption{
+					{ID: "brew_bundle", Title: "Brew Bundle", Selected: true},
+				},
+				devOptions: []toggleOption{
+					{ID: "git_config", Title: "Git Configuration", Selected: true},
+				},
+				brewEntries:  []stages.BrewEntry{},
+				brewSelected: map[string]bool{},
+			}
+
+			got, err := m.resolvePlan()
+			if err != nil {
+				t.Fatalf("resolvePlan returned error: %v", err)
+			}
+			if !reflect.DeepEqual(got, test.want) {
+				t.Fatalf("resolvePlan = %v, want %v", got, test.want)
+			}
+		})
+	}
+}
+
 func TestReviewEnterConfirmsPlanAndStartsExecution(t *testing.T) {
 	homeDir := t.TempDir()
 	t.Setenv("HOME", homeDir)
