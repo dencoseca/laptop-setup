@@ -195,17 +195,25 @@ func TestExecuteSkipClearsRunFailureButKeepsStageError(t *testing.T) {
 		t.Fatalf("execute returned error: %v", err)
 	}
 
-	status := runState.Stages["fails"]
+	persistedState, err := store.Load(context.Background())
+	if err != nil {
+		t.Fatalf("load persisted state: %v", err)
+	}
+	if persistedState == nil {
+		t.Fatal("expected persisted state")
+	}
+
+	status := persistedState.Stages["fails"]
 	if status.Status != stages.StatusSkipped {
 		t.Fatalf("expected skipped status for failed stage, got %q", status.Status)
 	}
 	if status.LastError != "boom" {
 		t.Fatalf("expected skipped stage to keep failure reason, got %q", status.LastError)
 	}
-	if runState.LastFailure != "" {
-		t.Fatalf("expected handled skipped failure to clear run LastFailure, got %q", runState.LastFailure)
+	if persistedState.LastFailure != "" {
+		t.Fatalf("expected handled skipped failure to clear run LastFailure, got %q", persistedState.LastFailure)
 	}
-	if runState.EndAt == nil {
+	if persistedState.EndAt == nil {
 		t.Fatal("expected run to complete after skipping final failed stage")
 	}
 }
