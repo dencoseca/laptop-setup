@@ -125,4 +125,8 @@ sweet_sweet_details() {
 \033[36m ╚═════╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝     ╚══════╝╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═╝"
 }
 
-sweet_sweet_details
+# Opt in to the startup details banner with:
+# export LAPTOP_SETUP_SHOW_SHELL_DETAILS=1
+if [[ "${LAPTOP_SETUP_SHOW_SHELL_DETAILS:-}" == "1" ]]; then
+  sweet_sweet_details
+fi
