@@ -62,10 +62,6 @@ func copyFromTemplates(execCtx ExecutionContext, sourceName, destination string)
 	return execCtx.templateStore().Copy(sourceName, destination)
 }
 
-func copyFile(sourcePath, destinationPath string) error {
-	return copyFileFS(OSFileSystem{}, sourcePath, destinationPath, privateFilePerm)
-}
-
 func copyFileFS(fsys FileSystem, sourcePath, destinationPath string, perm fs.FileMode) error {
 	payload, err := fsys.ReadFile(sourcePath)
 	if err != nil {

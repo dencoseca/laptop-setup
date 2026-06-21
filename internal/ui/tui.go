@@ -828,29 +828,6 @@ func optionsForStageIDs(catalog []stages.Stage, ids []string) []toggleOption {
 	return options
 }
 
-func modeName(dryRun bool) state.Mode {
-	return state.ModeFromDryRun(dryRun)
-}
-
-func statusGlyph(status string) string {
-	switch status {
-	case string(stages.StatusSuccess):
-		return "[ok]"
-	case string(stages.StatusSimulatedSuccess):
-		return "[sim]"
-	case string(stages.StatusSkipped):
-		return "[skip]"
-	case string(stages.StatusFailed):
-		return "[fail]"
-	case string(stages.StatusAlreadyDone):
-		return "[done]"
-	case string(stages.StatusRunning):
-		return "[run]"
-	default:
-		return "[...]"
-	}
-}
-
 func stageCounts(statuses map[string]state.StageStatus) (completed int, skipped int, failed int) {
 	for _, stageStatus := range statuses {
 		switch stageStatus.Status {
@@ -1225,13 +1202,6 @@ func (m model) renderOutputPanel(width int, height int, content string) string {
 	lines := strings.Split(content, "\n")
 	visible := limitLines(lines, panelInnerHeight(height))
 	return m.panelStyle(width, height).Render(strings.Join(visible, "\n"))
-}
-
-func (m model) standardOutputContent(content string) string {
-	if strings.TrimSpace(content) != "" {
-		return content
-	}
-	return ""
 }
 
 func (m model) executionOutput(currentStageID string) string {

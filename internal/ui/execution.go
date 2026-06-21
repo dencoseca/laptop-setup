@@ -484,21 +484,3 @@ func currentLogStageID(stageOrder []string, statuses map[string]state.StageStatu
 	}
 	return ""
 }
-
-func filteredLogLines(lines []tailedLogLine, stageID string, limit int) []string {
-	if limit <= 0 {
-		return nil
-	}
-
-	filtered := make([]string, 0, limit)
-	for _, line := range lines {
-		if stageID != "" && line.StageID != stageID {
-			continue
-		}
-		filtered = append(filtered, line.Line)
-	}
-	if len(filtered) <= limit {
-		return filtered
-	}
-	return append([]string(nil), filtered[len(filtered)-limit:]...)
-}
