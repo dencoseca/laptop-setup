@@ -162,10 +162,6 @@ func parseConfigWithDefaultPath(args []string, stderr io.Writer, defaultStatePat
 	return cfg, nil
 }
 
-func modeName(dryRun bool) state.Mode {
-	return state.ModeFromDryRun(dryRun)
-}
-
 func parseCSV(raw string) []string {
 	if strings.TrimSpace(raw) == "" {
 		return nil

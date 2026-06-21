@@ -43,7 +43,7 @@ func (s tuiExecutionService) PrepareExecution(ctx context.Context, request ui.Ex
 		runState = &state.RunState{
 			RunID:        state.NewRunID(now),
 			StartAt:      now.UTC(),
-			Mode:         modeName(dryRun),
+			Mode:         state.ModeFromDryRun(dryRun),
 			ResolvedPlan: request.Plan,
 			Decisions:    request.Decisions,
 			SelectedIDs:  request.SelectedIDs,

@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/dencoseca/laptop-setup/internal/execution"
 	"github.com/dencoseca/laptop-setup/internal/stages"
+	"github.com/dencoseca/laptop-setup/internal/state"
 )
 
 func (m model) View() string {
@@ -137,13 +138,6 @@ func selectionMarker(selected bool) string {
 	return lipgloss.NewStyle().Foreground(mutedColor).Render("○")
 }
 
-func radioMarker(selected bool) string {
-	if selected {
-		return lipgloss.NewStyle().Bold(true).Foreground(successColor).Render("●")
-	}
-	return lipgloss.NewStyle().Foreground(mutedColor).Render("○")
-}
-
 func (m *model) viewReview() string {
 	plan, err := m.resolvePlan()
 	m.plan = plan
@@ -154,7 +148,7 @@ func (m *model) viewReview() string {
 
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s\n\n", lipgloss.NewStyle().Bold(true).Render("Execution Plan Review"))
-	fmt.Fprintf(&b, "Mode: %s\n", modeName(m.effectiveDryRun()))
+	fmt.Fprintf(&b, "Mode: %s\n", state.ModeFromDryRun(m.effectiveDryRun()))
 	if !m.resumeRun {
 		fmt.Fprintf(&b, "Selected packages/apps: %d\n", len(m.selectedBrewIDs()))
 	}
@@ -204,11 +198,11 @@ func (m model) viewExecuting() string {
 }
 
 func (m model) viewInteractiveCommand() string {
-	return m.renderDashboard(m.interactiveDashboardStatus(), m.previewJourney(), m.standardOutputContent(m.viewInteractivePrompt()))
+	return m.renderDashboard(m.interactiveDashboardStatus(), m.previewJourney(), m.viewInteractivePrompt())
 }
 
 func (m model) viewConfigFlow(output string) string {
-	return m.renderDashboard(m.configurationDashboardStatus(), m.previewJourney(), m.standardOutputContent(output))
+	return m.renderDashboard(m.configurationDashboardStatus(), m.previewJourney(), output)
 }
 
 func (m model) viewInteractivePrompt() string {
@@ -228,11 +222,11 @@ func (m model) viewInteractivePrompt() string {
 }
 
 func (m model) viewFailureScreen() string {
-	return m.renderDashboard(m.failureDashboardStatus(), m.previewJourney(), m.standardOutputContent(m.viewFailure()))
+	return m.renderDashboard(m.failureDashboardStatus(), m.previewJourney(), m.viewFailure())
 }
 
 func (m model) viewSummaryScreen() string {
-	return m.renderDashboard(m.summaryDashboardStatus(), m.previewJourney(), m.standardOutputContent(m.viewSummary()))
+	return m.renderDashboard(m.summaryDashboardStatus(), m.previewJourney(), m.viewSummary())
 }
 
 func (m model) viewFailure() string {

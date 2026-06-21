@@ -160,15 +160,17 @@ func TestCurrentLogStageIDPrefersRunningStage(t *testing.T) {
 	}
 }
 
-func TestFilteredLogLinesByStage(t *testing.T) {
-	lines := []tailedLogLine{
-		{StageID: "xcode_clt", Line: "a"},
-		{StageID: "brew_bundle", Line: "b"},
-		{StageID: "brew_bundle", Line: "c"},
-		{StageID: "git_config", Line: "d"},
+func TestFilteredDisplayLogLinesByStage(t *testing.T) {
+	m := model{
+		tailedLogs: []tailedLogLine{
+			{StageID: "xcode_clt", Line: "a"},
+			{StageID: "brew_bundle", Line: "b"},
+			{StageID: "brew_bundle", Line: "c"},
+			{StageID: "git_config", Line: "d"},
+		},
 	}
 
-	got := filteredLogLines(lines, "brew_bundle", 10)
+	got := m.filteredDisplayLogLines("brew_bundle", 10)
 	want := []string{"b", "c"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("filtered lines mismatch: got=%v want=%v", got, want)
@@ -306,7 +308,7 @@ func TestViewBrewSelectionRendersViewportInsteadOfFullList(t *testing.T) {
 	}
 }
 
-func TestViewSelectOptionsUsesRadioMarkersAndOmitsDescriptions(t *testing.T) {
+func TestViewSelectOptionsUsesSelectionMarkersAndOmitsDescriptions(t *testing.T) {
 	m := model{cursor: 0}
 	view := m.viewSelectOptions("Dev Tools: Node Toolchain", []selectOption{
 		{ID: string(stages.NodeToolchainVitePlus), Title: "vite+", Description: "Install Vite+ toolchain via official installer"},
@@ -314,8 +316,8 @@ func TestViewSelectOptionsUsesRadioMarkersAndOmitsDescriptions(t *testing.T) {
 	}, 0)
 
 	for _, fragment := range []string{
-		fmt.Sprintf("│ %s vite+", radioMarker(true)),
-		fmt.Sprintf("  %s pnpm + nvm", radioMarker(false)),
+		fmt.Sprintf("│ %s vite+", selectionMarker(true)),
+		fmt.Sprintf("  %s pnpm + nvm", selectionMarker(false)),
 	} {
 		if !strings.Contains(view, fragment) {
 			t.Fatalf("expected select view to contain %q, got %q", fragment, view)
@@ -1005,7 +1007,7 @@ func (s *recordingExecutionService) PrepareExecution(_ context.Context, request 
 	runState := &state.RunState{
 		RunID:        state.RunID("test-run"),
 		StartAt:      time.Now().UTC(),
-		Mode:         modeName(request.DryRun),
+		Mode:         state.ModeFromDryRun(request.DryRun),
 		ResolvedPlan: request.Plan,
 		Decisions:    request.Decisions,
 		SelectedIDs:  request.SelectedIDs,
