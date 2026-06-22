@@ -89,6 +89,169 @@ const (
 	screenQuitConfirm
 )
 
+const noScreen screen = -1
+
+type optionListKind int
+
+const (
+	optionListNone optionListKind = iota
+	optionListMacOS
+	optionListInstall
+	optionListBrew
+	optionListDevTools
+	optionListNodeToolchain
+	optionListDockerRuntime
+	optionListShellOptions
+	optionListManual
+)
+
+type screenSpec struct {
+	screen            screen
+	title             string
+	previous          screen
+	next              screen
+	hint              string
+	optionList        optionListKind
+	textInputSubtitle string
+}
+
+const (
+	shortcutContinueQuit = "Enter continue  CTRL+C quit"
+	shortcutContinueBack = "Enter continue  Esc back  CTRL+C quit"
+	shortcutToggleList   = "Up/down move  Space toggle  / filter  Enter continue  Esc back  CTRL+C quit"
+	shortcutSelectList   = "Up/down choose  / filter  Enter continue  Esc back  CTRL+C quit"
+	shortcutExecute      = "Enter execute  Esc back  CTRL+C quit"
+	shortcutQuitConfirm  = "CTRL+C quit  Esc return"
+)
+
+var configurationScreenSpecs = []screenSpec{
+	{
+		screen:   screenWelcome,
+		title:    "Interactive Setup",
+		previous: noScreen,
+		next:     screenMacOS,
+		hint:     shortcutContinueQuit,
+	},
+	{
+		screen:     screenMacOS,
+		title:      "MacOS Setup",
+		previous:   screenWelcome,
+		next:       screenInstall,
+		hint:       shortcutToggleList,
+		optionList: optionListMacOS,
+	},
+	{
+		screen:     screenInstall,
+		title:      "Install Apps/Packages",
+		previous:   screenMacOS,
+		next:       screenBrew,
+		hint:       shortcutToggleList,
+		optionList: optionListInstall,
+	},
+	{
+		screen:     screenBrew,
+		title:      "Package & App Selection",
+		previous:   screenInstall,
+		next:       screenDevTools,
+		hint:       shortcutToggleList,
+		optionList: optionListBrew,
+	},
+	{
+		screen:     screenDevTools,
+		title:      "Dev Tools Setup",
+		previous:   screenBrew,
+		next:       screenNodeToolchain,
+		hint:       shortcutToggleList,
+		optionList: optionListDevTools,
+	},
+	{
+		screen:     screenNodeToolchain,
+		title:      "Dev Tools: Node Toolchain",
+		previous:   screenDevTools,
+		next:       screenDockerRuntime,
+		hint:       shortcutSelectList,
+		optionList: optionListNodeToolchain,
+	},
+	{
+		screen:     screenDockerRuntime,
+		title:      "Dev Tools: Docker Runtime",
+		previous:   screenNodeToolchain,
+		next:       screenShellOptions,
+		hint:       shortcutSelectList,
+		optionList: optionListDockerRuntime,
+	},
+	{
+		screen:     screenShellOptions,
+		title:      "Dev Tools: Shell Setup Options",
+		previous:   screenDockerRuntime,
+		next:       screenManual,
+		hint:       shortcutToggleList,
+		optionList: optionListShellOptions,
+	},
+	{
+		screen:            screenGitName,
+		title:             "Git Identity: user.name",
+		previous:          screenShellOptions,
+		next:              screenGitEmail,
+		hint:              shortcutContinueBack,
+		textInputSubtitle: "Enter git user.name, or leave blank, then press Enter.",
+	},
+	{
+		screen:            screenGitEmail,
+		title:             "Git Identity: user.email",
+		previous:          screenGitName,
+		next:              screenManual,
+		hint:              shortcutContinueBack,
+		textInputSubtitle: "Enter git user.email, or leave blank, then press Enter.",
+	},
+	{
+		screen:     screenManual,
+		title:      "Manual Steps",
+		previous:   screenShellOptions,
+		next:       screenReview,
+		hint:       shortcutToggleList,
+		optionList: optionListManual,
+	},
+	{
+		screen:   screenReview,
+		title:    "Execution Plan Review",
+		previous: screenManual,
+		next:     noScreen,
+		hint:     shortcutExecute,
+	},
+}
+
+var nonConfigurationScreenTitles = map[screen]string{
+	screenExecuting:   "Executing Plan",
+	screenInteractive: "Terminal Authorization",
+	screenFailure:     "Stage Failure",
+	screenSummary:     "Run Summary",
+	screenQuitConfirm: "Quit Confirmation",
+}
+
+func configurationScreenSpec(current screen) (screenSpec, bool) {
+	for _, spec := range configurationScreenSpecs {
+		if spec.screen == current {
+			return spec, true
+		}
+	}
+	return screenSpec{}, false
+}
+
+func screenSpecFor(current screen) (screenSpec, bool) {
+	if spec, ok := configurationScreenSpec(current); ok {
+		return spec, true
+	}
+	if title, ok := nonConfigurationScreenTitles[current]; ok {
+		spec := screenSpec{screen: current, title: title}
+		if current == screenQuitConfirm {
+			spec.hint = shortcutQuitConfirm
+		}
+		return spec, true
+	}
+	return screenSpec{}, false
+}
+
 type toggleOption struct {
 	ID       string
 	Title    string
@@ -446,15 +609,18 @@ func (m model) updateKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if m.resumeRun {
 				m.screen = screenReview
 			} else {
-				m.screen = screenMacOS
+				spec, _ := configurationScreenSpec(screenWelcome)
+				m.screen = spec.next
 			}
 			m.cursor = 0
 		}
-	case screenMacOS:
-		return m.updateToggleListScreen(key, &m.macOSOptions, screenWelcome, screenInstall)
-	case screenInstall:
-		return m.updateToggleListScreen(key, &m.installOptions, screenMacOS, screenBrew)
+	case screenMacOS, screenInstall, screenDevTools, screenManual:
+		spec, _ := configurationScreenSpec(m.screen)
+		if options := m.toggleOptionsForList(spec.optionList); options != nil {
+			return m.updateToggleListScreen(key, options, m.previousScreenFor(spec), m.nextScreenFor(spec))
+		}
 	case screenBrew:
+		spec, _ := configurationScreenSpec(screenBrew)
 		m.ensureBrewList()
 		if m.brewList.SettingFilter() || m.brewList.IsFiltered() {
 			switch key.String() {
@@ -474,8 +640,8 @@ func (m model) updateKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 		switch key.String() {
 		case "esc":
-			m.screen = screenInstall
-			m.cursor = 0
+			m.screen = m.previousScreenFor(spec)
+			m.cursor = m.defaultCursorForScreen(m.screen)
 		case " ":
 			selected := m.brewList.SelectedItem()
 			if item, ok := selected.(brewListItem); ok {
@@ -483,28 +649,30 @@ func (m model) updateKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.refreshBrewListItems()
 			}
 		case "enter":
-			m.screen = screenDevTools
-			m.cursor = 0
+			m.screen = m.nextScreenFor(spec)
+			m.cursor = m.defaultCursorForScreen(m.screen)
 		default:
 			var cmd tea.Cmd
 			m.brewList, cmd = m.brewList.Update(key)
 			m.cursor = m.brewList.GlobalIndex()
 			return m, cmd
 		}
-	case screenDevTools:
-		return m.updateToggleListScreen(key, &m.devOptions, screenBrew, screenNodeToolchain)
-	case screenNodeToolchain:
-		return m.updateSelectListScreen(key, &m.nodeSelection, screenDevTools, screenDockerRuntime)
-	case screenDockerRuntime:
-		return m.updateSelectListScreen(key, &m.dockerSelection, screenNodeToolchain, screenShellOptions)
+	case screenNodeToolchain, screenDockerRuntime:
+		spec, _ := configurationScreenSpec(m.screen)
+		_, selected := m.selectOptionsForList(spec.optionList)
+		if selected != nil {
+			return m.updateSelectListScreen(key, selected, m.previousScreenFor(spec), m.nextScreenFor(spec))
+		}
 	case screenShellOptions:
-		return m.updateShellOptionsScreen(key)
+		spec, _ := configurationScreenSpec(screenShellOptions)
+		return m.updateShellOptionsScreen(key, spec)
 	case screenGitName:
+		spec, _ := configurationScreenSpec(screenGitName)
 		switch key.String() {
 		case "esc":
 			m.inputError = ""
 			m.gitNameInput.Blur()
-			m.screen = screenShellOptions
+			m.screen = m.previousScreenFor(spec)
 			m.cursor = m.optionCursor(m.shellOptions, string(stages.StageGitConfig))
 			return m, nil
 		case "enter":
@@ -513,41 +681,41 @@ func (m model) updateKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.gitNameInput.SetValue(name)
 			m.gitNameInput.Blur()
 			m.gitEmailInput.Focus()
-			m.screen = screenGitEmail
+			m.screen = m.nextScreenFor(spec)
 			return m, textinput.Blink
 		}
 		var cmd tea.Cmd
 		m.gitNameInput, cmd = m.gitNameInput.Update(key)
 		return m, cmd
 	case screenGitEmail:
+		spec, _ := configurationScreenSpec(screenGitEmail)
 		switch key.String() {
 		case "esc":
 			m.inputError = ""
 			m.gitEmailInput.Blur()
 			m.gitNameInput.Focus()
-			m.screen = screenGitName
+			m.screen = m.previousScreenFor(spec)
 			return m, textinput.Blink
 		case "enter":
 			email := strings.TrimSpace(m.gitEmailInput.Value())
 			m.inputError = ""
 			m.gitEmailInput.SetValue(email)
 			m.gitEmailInput.Blur()
-			m.screen = screenManual
+			m.screen = m.nextScreenFor(spec)
 			m.cursor = 0
 			return m, nil
 		}
 		var cmd tea.Cmd
 		m.gitEmailInput, cmd = m.gitEmailInput.Update(key)
 		return m, cmd
-	case screenManual:
-		return m.updateToggleListScreen(key, &m.manualOptions, m.manualBackScreen(), screenReview)
 	case screenReview:
+		spec, _ := configurationScreenSpec(screenReview)
 		switch key.String() {
 		case "esc":
 			if m.resumeRun {
 				m.screen = screenWelcome
 			} else {
-				m.screen = screenManual
+				m.screen = m.previousScreenFor(spec)
 			}
 			m.cursor = 0
 		case "enter":
@@ -752,6 +920,26 @@ func (m *model) manualBackScreen() screen {
 	return screenShellOptions
 }
 
+func (m *model) previousScreenFor(spec screenSpec) screen {
+	if spec.screen == screenManual {
+		return m.manualBackScreen()
+	}
+	if spec.previous == noScreen {
+		return spec.screen
+	}
+	return spec.previous
+}
+
+func (m *model) nextScreenFor(spec screenSpec) screen {
+	if spec.screen == screenShellOptions && m.stageSelected(string(stages.StageGitConfig)) {
+		return screenGitName
+	}
+	if spec.next == noScreen {
+		return spec.screen
+	}
+	return spec.next
+}
+
 func (m *model) effectiveDryRun() bool {
 	if m.resumeRun && m.current != nil {
 		return m.current.Mode.IsDryRun()
@@ -868,21 +1056,6 @@ type dashboardJourney struct {
 	StageOrder  []string
 	Statuses    map[string]state.StageStatus
 	CurrentStep string
-}
-
-var configurationScreenOrder = []screen{
-	screenWelcome,
-	screenMacOS,
-	screenInstall,
-	screenBrew,
-	screenDevTools,
-	screenNodeToolchain,
-	screenDockerRuntime,
-	screenShellOptions,
-	screenGitName,
-	screenGitEmail,
-	screenManual,
-	screenReview,
 }
 
 func (m model) renderDocument(content string) string {
@@ -1092,6 +1265,14 @@ func shortcutBindingsForHint(hint string) []key.Binding {
 	case "Up/down choose  Enter continue  Esc back  CTRL+C quit":
 		return []key.Binding{
 			shortcutBinding("↑/↓", "choose"),
+			shortcutBinding("enter", "continue"),
+			shortcutBinding("esc", "back"),
+			shortcutBinding("ctrl+c", "quit"),
+		}
+	case "Up/down choose  / filter  Enter continue  Esc back  CTRL+C quit":
+		return []key.Binding{
+			shortcutBinding("↑/↓", "choose"),
+			shortcutBinding("/", "filter"),
 			shortcutBinding("enter", "continue"),
 			shortcutBinding("esc", "back"),
 			shortcutBinding("ctrl+c", "quit"),
@@ -1375,22 +1556,10 @@ func (m model) configurationDashboardStatus() dashboardStatus {
 }
 
 func configurationShortcutHint(current screen) string {
-	switch current {
-	case screenWelcome:
-		return "Enter continue  CTRL+C quit"
-	case screenMacOS, screenInstall, screenDevTools, screenShellOptions, screenManual:
-		return "Up/down move  Space toggle  / filter  Enter continue  Esc back  CTRL+C quit"
-	case screenBrew:
-		return "Up/down move  Space toggle  / filter  Enter continue  Esc back  CTRL+C quit"
-	case screenNodeToolchain, screenDockerRuntime:
-		return "Up/down choose  / filter  Enter continue  Esc back  CTRL+C quit"
-	case screenReview:
-		return "Enter execute  Esc back  CTRL+C quit"
-	case screenQuitConfirm:
-		return "CTRL+C quit  Esc return"
-	default:
-		return "Enter continue  Esc back  CTRL+C quit"
+	if spec, ok := screenSpecFor(current); ok && strings.TrimSpace(spec.hint) != "" {
+		return spec.hint
 	}
+	return shortcutContinueBack
 }
 
 func (m model) failureDashboardStatus() dashboardStatus {
@@ -1529,9 +1698,9 @@ func stageStatusMapToStrings(statuses map[state.StageID]state.StageStatus) map[s
 }
 
 func configurationStepPosition(current screen) (int, int) {
-	total := len(configurationScreenOrder)
-	for index, candidate := range configurationScreenOrder {
-		if current == candidate {
+	total := len(configurationScreenSpecs)
+	for index, spec := range configurationScreenSpecs {
+		if current == spec.screen {
 			return index + 1, total
 		}
 	}
@@ -1539,9 +1708,9 @@ func configurationStepPosition(current screen) (int, int) {
 }
 
 func configurationProgressPercent(current screen) int {
-	totalTransitions := maxInt(1, len(configurationScreenOrder)-1)
-	for index, candidate := range configurationScreenOrder {
-		if current == candidate {
+	totalTransitions := maxInt(1, len(configurationScreenSpecs)-1)
+	for index, spec := range configurationScreenSpecs {
+		if current == spec.screen {
 			return index * 100 / totalTransitions
 		}
 	}
@@ -1549,44 +1718,10 @@ func configurationProgressPercent(current screen) int {
 }
 
 func screenTitle(current screen) string {
-	switch current {
-	case screenWelcome:
-		return "Interactive Setup"
-	case screenMacOS:
-		return "MacOS Setup"
-	case screenInstall:
-		return "Install Apps/Packages"
-	case screenBrew:
-		return "Package & App Selection"
-	case screenDevTools:
-		return "Dev Tools Setup"
-	case screenNodeToolchain:
-		return "Dev Tools: Node Toolchain"
-	case screenDockerRuntime:
-		return "Dev Tools: Docker Runtime"
-	case screenShellOptions:
-		return "Dev Tools: Shell Setup Options"
-	case screenGitName:
-		return "Git Identity: user.name"
-	case screenGitEmail:
-		return "Git Identity: user.email"
-	case screenManual:
-		return "Manual Steps"
-	case screenReview:
-		return "Execution Plan Review"
-	case screenExecuting:
-		return "Executing Plan"
-	case screenInteractive:
-		return "Terminal Authorization"
-	case screenFailure:
-		return "Stage Failure"
-	case screenSummary:
-		return "Run Summary"
-	case screenQuitConfirm:
-		return "Quit Confirmation"
-	default:
-		return "Laptop Setup"
+	if spec, ok := screenSpecFor(current); ok && strings.TrimSpace(spec.title) != "" {
+		return spec.title
 	}
+	return "Laptop Setup"
 }
 
 func (m model) stageTitle(stageID string) string {

@@ -287,7 +287,7 @@ func TestViewBrewSelectionRendersViewportInsteadOfFullList(t *testing.T) {
 		brewSelected: selected,
 	}
 
-	view := ansi.Strip(m.viewBrewSelection())
+	view := ansi.Strip(m.viewBrewSelection("Package & App Selection"))
 	if !strings.Contains(view, "│ ● pkg-15") {
 		t.Fatalf("expected current cursor row to be visible, got %q", view)
 	}
@@ -388,7 +388,7 @@ func TestViewBrewSelectionHidesEllipsisAtEndOfList(t *testing.T) {
 		brewSelected: selected,
 	}
 
-	view := ansi.Strip(m.viewBrewSelection())
+	view := ansi.Strip(m.viewBrewSelection("Package & App Selection"))
 	if !strings.Contains(view, "│ ● pkg-23") {
 		t.Fatalf("expected last row to be visible and selected, got %q", view)
 	}
@@ -704,6 +704,138 @@ func TestConfigurationProgressStartsAtZeroAndEndsAtComplete(t *testing.T) {
 	reviewStatus := model{screen: screenReview}.configurationDashboardStatus()
 	if reviewStatus.ConfigurationProgressPct != 100 {
 		t.Fatalf("expected configuration progress to be complete on review, got %d", reviewStatus.ConfigurationProgressPct)
+	}
+}
+
+func TestConfigurationScreenSpecsDriveFlowMetadata(t *testing.T) {
+	gotOrder := make([]screen, 0, len(configurationScreenSpecs))
+	for _, spec := range configurationScreenSpecs {
+		gotOrder = append(gotOrder, spec.screen)
+	}
+	wantOrder := []screen{
+		screenWelcome,
+		screenMacOS,
+		screenInstall,
+		screenBrew,
+		screenDevTools,
+		screenNodeToolchain,
+		screenDockerRuntime,
+		screenShellOptions,
+		screenGitName,
+		screenGitEmail,
+		screenManual,
+		screenReview,
+	}
+	if !reflect.DeepEqual(gotOrder, wantOrder) {
+		t.Fatalf("configuration screen order mismatch:\nwant=%v\n got=%v", wantOrder, gotOrder)
+	}
+
+	tests := []struct {
+		screen     screen
+		title      string
+		hint       string
+		optionList optionListKind
+	}{
+		{screenWelcome, "Interactive Setup", shortcutContinueQuit, optionListNone},
+		{screenMacOS, "MacOS Setup", shortcutToggleList, optionListMacOS},
+		{screenInstall, "Install Apps/Packages", shortcutToggleList, optionListInstall},
+		{screenBrew, "Package & App Selection", shortcutToggleList, optionListBrew},
+		{screenDevTools, "Dev Tools Setup", shortcutToggleList, optionListDevTools},
+		{screenNodeToolchain, "Dev Tools: Node Toolchain", shortcutSelectList, optionListNodeToolchain},
+		{screenDockerRuntime, "Dev Tools: Docker Runtime", shortcutSelectList, optionListDockerRuntime},
+		{screenShellOptions, "Dev Tools: Shell Setup Options", shortcutToggleList, optionListShellOptions},
+		{screenGitName, "Git Identity: user.name", shortcutContinueBack, optionListNone},
+		{screenGitEmail, "Git Identity: user.email", shortcutContinueBack, optionListNone},
+		{screenManual, "Manual Steps", shortcutToggleList, optionListManual},
+		{screenReview, "Execution Plan Review", shortcutExecute, optionListNone},
+	}
+
+	for _, tt := range tests {
+		spec, ok := configurationScreenSpec(tt.screen)
+		if !ok {
+			t.Fatalf("expected spec for screen %v", tt.screen)
+		}
+		if spec.optionList != tt.optionList {
+			t.Fatalf("option list kind for screen %v: want=%v got=%v", tt.screen, tt.optionList, spec.optionList)
+		}
+		if got := screenTitle(tt.screen); got != tt.title {
+			t.Fatalf("title for screen %v: want=%q got=%q", tt.screen, tt.title, got)
+		}
+		if got := configurationShortcutHint(tt.screen); got != tt.hint {
+			t.Fatalf("hint for screen %v: want=%q got=%q", tt.screen, tt.hint, got)
+		}
+	}
+}
+
+func TestConfigurationScreenSpecsDriveOptionListRouting(t *testing.T) {
+	m := model{
+		nodeSelection:   1,
+		dockerSelection: 0,
+		macOSOptions: []toggleOption{
+			{ID: "xcode_clt", Title: "Xcode Command Line Tools", Selected: true},
+		},
+		installOptions: []toggleOption{
+			{ID: "brew_bundle", Title: "Brew Bundle", Selected: true},
+		},
+		devOptions: []toggleOption{
+			{ID: "git_config", Title: "Git Configuration", Selected: false},
+		},
+		nodeOptions: []selectOption{
+			{ID: string(stages.NodeToolchainVitePlus), Title: "vite+"},
+			{ID: string(stages.NodeToolchainNvmPnpm), Title: "pnpm + nvm"},
+		},
+		dockerOptions: []selectOption{
+			{ID: string(stages.DockerRuntimeColima), Title: "colima"},
+		},
+		shellOptions: []toggleOption{
+			{ID: stages.DecisionShellInstallOhMyZsh, Title: "Install oh-my-zsh", Selected: true},
+		},
+		manualOptions: []toggleOption{
+			{ID: "manual_app_store_apps", Title: "Manual App Store Apps", Selected: true},
+		},
+	}
+
+	tests := []struct {
+		screen       screen
+		itemIndex    int
+		wantID       string
+		wantLabel    string
+		wantSelected bool
+	}{
+		{screenMacOS, 0, "xcode_clt", "Xcode Command Line Tools", true},
+		{screenInstall, 0, "brew_bundle", "Brew Bundle", true},
+		{screenDevTools, 0, "git_config", "Git Configuration", false},
+		{screenNodeToolchain, 1, string(stages.NodeToolchainNvmPnpm), "pnpm + nvm", true},
+		{screenDockerRuntime, 0, string(stages.DockerRuntimeColima), "colima", true},
+		{screenShellOptions, 0, stages.DecisionShellInstallOhMyZsh, "Install oh-my-zsh", true},
+		{screenManual, 0, "manual_app_store_apps", "Manual App Store Apps", true},
+	}
+
+	for _, tt := range tests {
+		if !isOptionListScreen(tt.screen) {
+			t.Fatalf("expected screen %v to use the shared option list", tt.screen)
+		}
+		items := m.optionListItemsForScreen(tt.screen)
+		if len(items) <= tt.itemIndex {
+			t.Fatalf("screen %v returned too few items: %d", tt.screen, len(items))
+		}
+		item, ok := items[tt.itemIndex].(optionListItem)
+		if !ok {
+			t.Fatalf("screen %v item type = %T, want optionListItem", tt.screen, items[tt.itemIndex])
+		}
+		if item.ID != tt.wantID || item.Label != tt.wantLabel || item.Selected != tt.wantSelected {
+			t.Fatalf("screen %v routed item mismatch: got=%+v", tt.screen, item)
+		}
+	}
+
+	if isOptionListScreen(screenBrew) {
+		t.Fatal("brew screen should keep using the brew list, not the shared option list")
+	}
+	if items := m.optionListItemsForScreen(screenBrew); items != nil {
+		t.Fatalf("brew screen should not route through optionListItemsForScreen, got %v", items)
+	}
+	if got := m.defaultCursorForScreen(screenNodeToolchain); got != 1 {
+		t.Fatalf("expected node default cursor from spec-backed selection, got %d", got)
 	}
 }
 
