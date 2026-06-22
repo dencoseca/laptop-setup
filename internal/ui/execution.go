@@ -6,7 +6,6 @@ import (
 	"errors"
 	"io"
 	"os"
-	"os/exec"
 	"strings"
 	"time"
 
@@ -56,7 +55,7 @@ type limitedOutputBuffer struct {
 }
 
 type capturingExecCommand struct {
-	cmd    *exec.Cmd
+	cmd    *runner.ExecCommand
 	stdout *limitedOutputBuffer
 	stderr *limitedOutputBuffer
 }
@@ -99,21 +98,15 @@ func (c capturingExecCommand) Run() error {
 }
 
 func (c capturingExecCommand) SetStdin(reader io.Reader) {
-	if c.cmd.Stdin == nil {
-		c.cmd.Stdin = reader
-	}
+	c.cmd.SetStdin(reader)
 }
 
 func (c capturingExecCommand) SetStdout(writer io.Writer) {
-	if c.cmd.Stdout == nil {
-		c.cmd.Stdout = io.MultiWriter(writer, c.stdout)
-	}
+	c.cmd.SetStdout(io.MultiWriter(writer, c.stdout))
 }
 
 func (c capturingExecCommand) SetStderr(writer io.Writer) {
-	if c.cmd.Stderr == nil {
-		c.cmd.Stderr = io.MultiWriter(writer, c.stderr)
-	}
+	c.cmd.SetStderr(io.MultiWriter(writer, c.stderr))
 }
 
 func (m *model) startExecutionFromReview() (tea.Model, tea.Cmd) {
@@ -285,43 +278,29 @@ func startExecutionWorker(
 
 func runInteractiveCommand(request interactiveCommandRequest) tea.Cmd {
 	command := request.Command
-	cmd := exec.Command(command.Name, command.Args...)
-	cmd.Dir = command.Dir
-	if len(command.Env) > 0 {
-		cmd.Env = append(cmd.Environ(), command.Env...)
-	}
+	cmd, buildErr := runner.NewExecCommand(context.Background(), command)
 	stdout := newLimitedOutputBuffer(maxInteractiveOutputCaptureBytes)
 	stderr := newLimitedOutputBuffer(maxInteractiveOutputCaptureBytes)
+	if buildErr != nil {
+		return func() tea.Msg {
+			return interactiveCommandFinishedMsg{
+				Request: request,
+				Result:  interactiveCommandResult{Err: buildErr},
+			}
+		}
+	}
 	execCommand := capturingExecCommand{
 		cmd:    cmd,
 		stdout: stdout,
 		stderr: stderr,
 	}
 	return tea.Exec(execCommand, func(err error) tea.Msg {
-		result := runner.Result{ExitCode: 0, Stdout: stdout.String(), Stderr: stderr.String()}
-		if err != nil {
-			result.ExitCode = commandExitCode(err)
-			err = &runner.CommandError{
-				Command:  command,
-				ExitCode: result.ExitCode,
-				Stdout:   result.Stdout,
-				Stderr:   result.Stderr,
-				Err:      err,
-			}
-		}
+		result, err := runner.ResultFromCommand(command, stdout.String(), stderr.String(), err)
 		return interactiveCommandFinishedMsg{
 			Request: request,
 			Result:  interactiveCommandResult{Result: result, Err: err},
 		}
 	})
-}
-
-func commandExitCode(err error) int {
-	var exitErr *exec.ExitError
-	if errors.As(err, &exitErr) {
-		return exitErr.ExitCode()
-	}
-	return -1
 }
 
 func waitForExecutionUpdate(updates <-chan tea.Msg) tea.Cmd {
