@@ -200,7 +200,7 @@ func (m *model) updateOptionListFilter(key tea.KeyMsg) (tea.Cmd, bool) {
 func (m *model) reloadBrewEntries() error {
 	store := m.templates
 	if store == nil {
-		store = stages.FilesystemTemplateStore{RepoRoot: m.repoRoot}
+		store = stages.NewFilesystemTemplateStore(m.repoRoot, nil)
 	}
 	entries, _, err := store.LoadBrewEntries("Brewfile")
 	if err != nil {

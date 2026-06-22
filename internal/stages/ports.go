@@ -20,6 +20,8 @@ const (
 	defaultAppleSiliconBrewPath = "/opt/homebrew/bin/brew"
 )
 
+var errRepositoryRootRequired = errors.New("repository root is required")
+
 type FileSystem interface {
 	MkdirAll(path string, perm fs.FileMode) error
 	ReadFile(name string) ([]byte, error)
@@ -79,86 +81,47 @@ func (OSFileSystem) Remove(name string) error {
 	return os.Remove(name)
 }
 
-type FilesystemTemplateStore struct {
-	RepoRoot string
-	FS       FileSystem
-}
-
 type FSTemplateStore struct {
-	FS         fs.FS
-	SourceName string
-	FileSystem FileSystem
+	FS               fs.FS
+	SourceName       string
+	SourceDir        string
+	FileSystem       FileSystem
+	requireSourceDir bool
 }
 
-func (s FilesystemTemplateStore) LoadBrewEntries(name string) ([]BrewEntry, string, error) {
-	path, err := s.templatePath(name)
-	if err != nil {
-		return nil, "", err
+func NewFilesystemTemplateStore(repoRoot string, fsys FileSystem) FSTemplateStore {
+	store := FSTemplateStore{
+		FileSystem:       fsys,
+		requireSourceDir: true,
 	}
-	content, err := s.fileSystem().ReadFile(path)
-	if err != nil {
-		return nil, "", fmt.Errorf("read Brewfile: %w", err)
+	if strings.TrimSpace(repoRoot) == "" {
+		return store
 	}
-	return parseBrewEntries(string(content)), path, nil
-}
-
-func (s FilesystemTemplateStore) Read(name string) ([]byte, string, error) {
-	path, err := s.templatePath(name)
-	if err != nil {
-		return nil, "", err
-	}
-	content, err := s.fileSystem().ReadFile(path)
-	if err != nil {
-		return nil, "", fmt.Errorf("read template %s: %w", name, err)
-	}
-	return content, path, nil
-}
-
-func (s FilesystemTemplateStore) WriteGeneratedBrewfile(runDir string, sourcePath string, entries []BrewEntry) (string, error) {
-	return writeGeneratedBrewfile(s.fileSystem(), runDir, sourcePath, entries)
-}
-
-func (s FilesystemTemplateStore) Copy(name string, destination string) error {
-	sourcePath, err := s.templatePath(name)
-	if err != nil {
-		return err
-	}
-	fs := s.fileSystem()
-	payload, err := fs.ReadFile(sourcePath)
-	if err != nil {
-		return fmt.Errorf("read source file: %w", err)
-	}
-	return copyTemplatePayload(fs, destination, payload)
-}
-
-func (s FilesystemTemplateStore) templatePath(name string) (string, error) {
-	if strings.TrimSpace(s.RepoRoot) == "" {
-		return "", errors.New("repository root is required")
-	}
-	return filepath.Join(s.RepoRoot, "templates", name), nil
-}
-
-func (s FilesystemTemplateStore) fileSystem() FileSystem {
-	if s.FS != nil {
-		return s.FS
-	}
-	return OSFileSystem{}
+	store.SourceDir = filepath.Join(repoRoot, "templates")
+	store.FS = os.DirFS(store.SourceDir)
+	return store
 }
 
 func (s FSTemplateStore) LoadBrewEntries(name string) ([]BrewEntry, string, error) {
-	content, err := fs.ReadFile(s.templateFS(), name)
+	content, sourcePath, err := s.readTemplate(name)
 	if err != nil {
+		if errors.Is(err, errRepositoryRootRequired) {
+			return nil, "", err
+		}
 		return nil, "", fmt.Errorf("read Brewfile: %w", err)
 	}
-	return parseBrewEntries(string(content)), s.sourcePath(name), nil
+	return parseBrewEntries(string(content)), sourcePath, nil
 }
 
 func (s FSTemplateStore) Read(name string) ([]byte, string, error) {
-	content, err := fs.ReadFile(s.templateFS(), name)
+	content, sourcePath, err := s.readTemplate(name)
 	if err != nil {
+		if errors.Is(err, errRepositoryRootRequired) {
+			return nil, "", err
+		}
 		return nil, "", fmt.Errorf("read template %s: %w", name, err)
 	}
-	return content, s.sourcePath(name), nil
+	return content, sourcePath, nil
 }
 
 func (s FSTemplateStore) WriteGeneratedBrewfile(runDir string, sourcePath string, entries []BrewEntry) (string, error) {
@@ -166,22 +129,46 @@ func (s FSTemplateStore) WriteGeneratedBrewfile(runDir string, sourcePath string
 }
 
 func (s FSTemplateStore) Copy(name string, destination string) error {
-	payload, err := fs.ReadFile(s.templateFS(), name)
+	payload, _, err := s.readTemplate(name)
 	if err != nil {
+		if errors.Is(err, errRepositoryRootRequired) {
+			return err
+		}
 		return fmt.Errorf("read source file: %w", err)
 	}
 	fsys := s.fileSystem()
 	return copyTemplatePayload(fsys, destination, payload)
 }
 
-func (s FSTemplateStore) templateFS() fs.FS {
-	if s.FS != nil {
-		return s.FS
+func (s FSTemplateStore) readTemplate(name string) ([]byte, string, error) {
+	templateFS, err := s.templateFS()
+	if err != nil {
+		return nil, "", err
 	}
-	return os.DirFS("templates")
+	content, err := fs.ReadFile(templateFS, name)
+	if err != nil {
+		return nil, "", err
+	}
+	return content, s.sourcePath(name), nil
+}
+
+func (s FSTemplateStore) templateFS() (fs.FS, error) {
+	if s.FS != nil {
+		return s.FS, nil
+	}
+	if strings.TrimSpace(s.SourceDir) != "" {
+		return os.DirFS(s.SourceDir), nil
+	}
+	if s.requireSourceDir {
+		return nil, errRepositoryRootRequired
+	}
+	return os.DirFS("templates"), nil
 }
 
 func (s FSTemplateStore) sourcePath(name string) string {
+	if strings.TrimSpace(s.SourceDir) != "" {
+		return filepath.Join(s.SourceDir, name)
+	}
 	sourceName := strings.TrimSpace(s.SourceName)
 	if sourceName == "" {
 		sourceName = "embedded templates"
@@ -320,10 +307,7 @@ func (execCtx ExecutionContext) templateStore() TemplateStore {
 	if execCtx.TemplateStore != nil {
 		return execCtx.TemplateStore
 	}
-	return FilesystemTemplateStore{
-		RepoRoot: execCtx.RepoRoot,
-		FS:       execCtx.fileSystem(),
-	}
+	return NewFilesystemTemplateStore(execCtx.RepoRoot, execCtx.fileSystem())
 }
 
 func (execCtx ExecutionContext) packageManager() PackageManager {

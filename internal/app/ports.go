@@ -144,7 +144,7 @@ func (f filesystemRunLogFactory) Open(runID state.RunID) (RunLogs, error) {
 type filesystemTemplateStoreFactory struct{}
 
 func (filesystemTemplateStoreFactory) New(repoRoot string, fs stages.FileSystem) stages.TemplateStore {
-	return stages.FilesystemTemplateStore{RepoRoot: repoRoot, FS: fs}
+	return stages.NewFilesystemTemplateStore(repoRoot, fs)
 }
 
 type embeddedTemplateStoreFactory struct{}
