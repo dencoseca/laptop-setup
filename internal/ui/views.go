@@ -15,31 +15,12 @@ import (
 
 func (m model) View() string {
 	var content string
+	if spec, ok := configurationScreenSpec(m.screen); ok {
+		content = m.viewConfigurationScreen(spec)
+		return m.viewConfigFlow(content)
+	}
+
 	switch m.screen {
-	case screenWelcome:
-		content = m.viewWelcome()
-	case screenMacOS:
-		content = m.viewToggleOptions("MacOS Setup", m.macOSOptions)
-	case screenInstall:
-		content = m.viewToggleOptions("Install Apps/Packages", m.installOptions)
-	case screenBrew:
-		content = m.viewBrewSelection()
-	case screenDevTools:
-		content = m.viewToggleOptions("Dev Tools Setup", m.devOptions)
-	case screenNodeToolchain:
-		content = m.viewSelectOptions("Dev Tools: Node Toolchain", m.nodeOptions, m.nodeSelection)
-	case screenDockerRuntime:
-		content = m.viewSelectOptions("Dev Tools: Docker Runtime", m.dockerOptions, m.dockerSelection)
-	case screenShellOptions:
-		content = m.viewToggleOptions("Dev Tools: Shell Setup Options", m.shellOptions)
-	case screenGitName:
-		content = m.viewTextInput("Git Identity: user.name", "Enter git user.name, or leave blank, then press Enter.", m.gitNameInput)
-	case screenGitEmail:
-		content = m.viewTextInput("Git Identity: user.email", "Enter git user.email, or leave blank, then press Enter.", m.gitEmailInput)
-	case screenManual:
-		content = m.viewToggleOptions("Manual Steps", m.manualOptions)
-	case screenReview:
-		content = m.viewReview()
 	case screenExecuting:
 		return m.viewExecuting()
 	case screenInteractive:
@@ -54,6 +35,29 @@ func (m model) View() string {
 		content = ""
 	}
 	return m.viewConfigFlow(content)
+}
+
+func (m model) viewConfigurationScreen(spec screenSpec) string {
+	switch spec.screen {
+	case screenWelcome:
+		return m.viewWelcome()
+	case screenBrew:
+		return m.viewBrewSelection(spec.title)
+	case screenGitName:
+		return m.viewTextInput(spec.title, spec.textInputSubtitle, m.gitNameInput)
+	case screenGitEmail:
+		return m.viewTextInput(spec.title, spec.textInputSubtitle, m.gitEmailInput)
+	case screenReview:
+		return m.viewReview()
+	default:
+		if options := m.toggleOptionsForList(spec.optionList); options != nil {
+			return m.viewToggleOptions(spec.title, *options)
+		}
+		if options, selected := m.selectOptionsForList(spec.optionList); options != nil && selected != nil {
+			return m.viewSelectOptions(spec.title, *options, *selected)
+		}
+		return ""
+	}
 }
 
 func (m model) viewWelcome() string {
@@ -94,9 +98,9 @@ func (m model) viewSelectOptions(title string, options []selectOption, selected 
 	return b.String()
 }
 
-func (m model) viewBrewSelection() string {
+func (m model) viewBrewSelection(title string) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "%s\n\n", lipgloss.NewStyle().Bold(true).Render("Package & App Selection"))
+	fmt.Fprintf(&b, "%s\n\n", lipgloss.NewStyle().Bold(true).Render(title))
 
 	if len(m.brewEntries) == 0 {
 		fmt.Fprintf(&b, "No package or app entries found in the Brewfile template.\n")

@@ -127,7 +127,7 @@ func (m *model) updateSelectListScreen(
 	return *m, nil
 }
 
-func (m *model) updateShellOptionsScreen(key tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m *model) updateShellOptionsScreen(key tea.KeyMsg, spec screenSpec) (tea.Model, tea.Cmd) {
 	m.ensureOptionList()
 	if cmd, handled := m.updateOptionListFilter(key); handled {
 		return *m, cmd
@@ -135,8 +135,8 @@ func (m *model) updateShellOptionsScreen(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	switch key.String() {
 	case "esc":
-		m.screen = screenDockerRuntime
-		m.cursor = m.defaultCursorForScreen(screenDockerRuntime)
+		m.screen = m.previousScreenFor(spec)
+		m.cursor = m.defaultCursorForScreen(m.screen)
 	case " ":
 		if item, ok := m.optionList.SelectedItem().(optionListItem); ok && item.Index >= 0 && item.Index < len(m.shellOptions) {
 			if m.shellOptions[item.Index].Critical {
@@ -148,13 +148,14 @@ func (m *model) updateShellOptionsScreen(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	case "enter":
 		m.inputError = ""
-		if m.stageSelected(string(stages.StageGitConfig)) {
+		next := m.nextScreenFor(spec)
+		if next == screenGitName {
 			m.screen = screenGitName
 			m.gitNameInput.Focus()
 			return *m, textinput.Blink
 		}
-		m.screen = screenManual
-		m.cursor = m.defaultCursorForScreen(screenManual)
+		m.screen = next
+		m.cursor = m.defaultCursorForScreen(m.screen)
 	default:
 		var cmd tea.Cmd
 		m.optionList, cmd = m.optionList.Update(key)
@@ -291,25 +292,46 @@ func selectListItems(options []selectOption, selected int) []list.Item {
 	return items
 }
 
-func (m model) optionListItemsForScreen(current screen) []list.Item {
-	switch current {
-	case screenMacOS:
-		return m.toggleListItems(m.macOSOptions)
-	case screenInstall:
-		return m.toggleListItems(m.installOptions)
-	case screenDevTools:
-		return m.toggleListItems(m.devOptions)
-	case screenNodeToolchain:
-		return selectListItems(m.nodeOptions, m.nodeSelection)
-	case screenDockerRuntime:
-		return selectListItems(m.dockerOptions, m.dockerSelection)
-	case screenShellOptions:
-		return m.toggleListItems(m.shellOptions)
-	case screenManual:
-		return m.toggleListItems(m.manualOptions)
+func (m *model) toggleOptionsForList(kind optionListKind) *[]toggleOption {
+	switch kind {
+	case optionListMacOS:
+		return &m.macOSOptions
+	case optionListInstall:
+		return &m.installOptions
+	case optionListDevTools:
+		return &m.devOptions
+	case optionListShellOptions:
+		return &m.shellOptions
+	case optionListManual:
+		return &m.manualOptions
 	default:
 		return nil
 	}
+}
+
+func (m *model) selectOptionsForList(kind optionListKind) (*[]selectOption, *int) {
+	switch kind {
+	case optionListNodeToolchain:
+		return &m.nodeOptions, &m.nodeSelection
+	case optionListDockerRuntime:
+		return &m.dockerOptions, &m.dockerSelection
+	default:
+		return nil, nil
+	}
+}
+
+func (m model) optionListItemsForScreen(current screen) []list.Item {
+	spec, ok := configurationScreenSpec(current)
+	if !ok {
+		return nil
+	}
+	if options := m.toggleOptionsForList(spec.optionList); options != nil {
+		return m.toggleListItems(*options)
+	}
+	if options, selected := m.selectOptionsForList(spec.optionList); options != nil && selected != nil {
+		return selectListItems(*options, *selected)
+	}
+	return nil
 }
 
 func (m *model) ensureOptionList() {
@@ -370,23 +392,20 @@ func (m model) optionListHeight() int {
 }
 
 func isOptionListScreen(current screen) bool {
-	switch current {
-	case screenMacOS, screenInstall, screenDevTools, screenNodeToolchain, screenDockerRuntime, screenShellOptions, screenManual:
-		return true
-	default:
-		return false
-	}
+	spec, ok := configurationScreenSpec(current)
+	return ok && spec.optionList != optionListNone && spec.optionList != optionListBrew
 }
 
 func (m model) defaultCursorForScreen(current screen) int {
-	switch current {
-	case screenNodeToolchain:
-		return m.nodeSelection
-	case screenDockerRuntime:
-		return m.dockerSelection
-	default:
+	spec, ok := configurationScreenSpec(current)
+	if !ok {
 		return 0
 	}
+	_, selected := m.selectOptionsForList(spec.optionList)
+	if selected == nil {
+		return 0
+	}
+	return *selected
 }
 
 func (m model) brewListItems() []list.Item {
