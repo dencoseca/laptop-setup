@@ -57,6 +57,7 @@ var macOSDefaults = []macOSDefault{
 	{Domain: "-g", Key: "KeyRepeat", Type: "-int", Value: "1"},
 	{Domain: "-g", Key: "AppleWindowTabbingMode", Type: "-string", Value: "always"},
 	{Domain: "com.apple.dock", Key: "autohide", Type: "-bool", Value: "true", Restart: "Dock"},
+	{Domain: "com.apple.dock", Key: "no-bouncing", Type: "-bool", Value: "TRUE", Restart: "Dock"},
 	{Domain: "com.apple.dock", Key: "tilesize", Type: "-int", Value: "60", Restart: "Dock"},
 	{Domain: "com.apple.dock", Key: "show-recents", Type: "-bool", Value: "false", Restart: "Dock"},
 	{Domain: "com.apple.dock", Key: "show-process-indicators", Type: "-bool", Value: "false", Restart: "Dock"},

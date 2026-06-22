@@ -573,6 +573,51 @@ func TestRunMacOSDefaultsSkipsMatchingDefaults(t *testing.T) {
 	}
 }
 
+func TestRunMacOSDefaultsWritesDockNoBouncingWhenMissing(t *testing.T) {
+	values := make(map[string]string, len(macOSDefaults))
+	for _, setting := range macOSDefaults {
+		if setting.Domain == "com.apple.dock" && setting.Key == "no-bouncing" {
+			continue
+		}
+		values[setting.Domain+"\x00"+setting.Key] = setting.Value
+	}
+	runnerStub := &defaultsRunner{values: values}
+	execCtx := ExecutionContext{Runner: runnerStub}
+
+	check, err := precheckMacOSDefaults(context.Background(), execCtx)
+	if err != nil {
+		t.Fatalf("precheckMacOSDefaults returned error: %v", err)
+	}
+	if check.Satisfied {
+		t.Fatal("expected macOS defaults precheck to detect missing Dock no-bouncing value")
+	}
+
+	if err := runMacOSDefaults(context.Background(), execCtx); err != nil {
+		t.Fatalf("runMacOSDefaults returned error: %v", err)
+	}
+
+	if got := runnerStub.values["com.apple.dock\x00no-bouncing"]; got != "TRUE" {
+		t.Fatalf("expected Dock no-bouncing value to be TRUE, got %q", got)
+	}
+
+	var wroteNoBouncing bool
+	var restartedDock bool
+	for _, command := range runnerStub.commands {
+		switch command.String() {
+		case "defaults write com.apple.dock no-bouncing -bool TRUE":
+			wroteNoBouncing = true
+		case "killall Dock":
+			restartedDock = true
+		}
+	}
+	if !wroteNoBouncing {
+		t.Fatal("expected runMacOSDefaults to write Dock no-bouncing default")
+	}
+	if !restartedDock {
+		t.Fatal("expected runMacOSDefaults to restart Dock after writing no-bouncing default")
+	}
+}
+
 func TestRunNodeToolchainInstallUsesViteChoice(t *testing.T) {
 	runnerStub := &recordingRunner{lookPathErr: errors.New("not found")}
 	err := runNodeToolchainInstall(context.Background(), ExecutionContext{
