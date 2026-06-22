@@ -83,7 +83,7 @@ func GenerateBrewfile(execCtx ExecutionContext) (string, []string, error) {
 }
 func ResolveSelectedBrewIDs(repoRoot string) ([]string, error) {
 	if strings.TrimSpace(repoRoot) == "" {
-		return nil, errors.New("repository root is required")
+		return nil, errRepositoryRootRequired
 	}
 	entries, err := LoadBrewEntries(filepath.Join(repoRoot, "templates", defaultBrewTemplate))
 	if err != nil {

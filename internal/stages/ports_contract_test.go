@@ -2,6 +2,7 @@ package stages
 
 import (
 	"context"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
@@ -10,7 +11,7 @@ import (
 	"testing/fstest"
 )
 
-func TestFilesystemTemplateStoreContract(t *testing.T) {
+func TestLocalTemplateStoreContract(t *testing.T) {
 	repoRoot := t.TempDir()
 	runDir := filepath.Join(t.TempDir(), "runs", "run-1")
 	templatesDir := filepath.Join(repoRoot, "templates")
@@ -28,7 +29,7 @@ func TestFilesystemTemplateStoreContract(t *testing.T) {
 		t.Fatalf("write zshrc template: %v", err)
 	}
 
-	store := FilesystemTemplateStore{RepoRoot: repoRoot}
+	store := NewFilesystemTemplateStore(repoRoot, nil)
 	entries, sourcePath, err := store.LoadBrewEntries("Brewfile")
 	if err != nil {
 		t.Fatalf("LoadBrewEntries returned error: %v", err)
@@ -59,6 +60,7 @@ func TestFilesystemTemplateStoreContract(t *testing.T) {
 	if len(generatedEntries) != 1 || generatedEntries[0].ID != "jq" {
 		t.Fatalf("generated entries mismatch: %+v", generatedEntries)
 	}
+	assertGeneratedBrewfileSource(t, generatedPath, sourcePath)
 	assertPathPerm(t, runDir, 0o700)
 	assertPathPerm(t, generatedPath, 0o600)
 
@@ -76,7 +78,7 @@ func TestFilesystemTemplateStoreContract(t *testing.T) {
 	assertPathPerm(t, destination, 0o600)
 }
 
-func TestFSTemplateStoreContract(t *testing.T) {
+func TestEmbeddedTemplateStoreContract(t *testing.T) {
 	runDir := filepath.Join(t.TempDir(), "runs", "run-1")
 	store := FSTemplateStore{
 		FS: fstest.MapFS{
@@ -124,6 +126,7 @@ func TestFSTemplateStoreContract(t *testing.T) {
 	if len(generatedEntries) != 1 || generatedEntries[0].ID != "jq" {
 		t.Fatalf("generated entries mismatch: %+v", generatedEntries)
 	}
+	assertGeneratedBrewfileSource(t, generatedPath, sourcePath)
 	assertPathPerm(t, runDir, 0o700)
 	assertPathPerm(t, generatedPath, 0o600)
 
@@ -141,6 +144,49 @@ func TestFSTemplateStoreContract(t *testing.T) {
 	assertPathPerm(t, destination, 0o600)
 }
 
+func TestFSTemplateStoreWritesThroughFileSystemPort(t *testing.T) {
+	fsys := &recordingFileSystem{}
+	store := FSTemplateStore{
+		FS: fstest.MapFS{
+			"Brewfile": {
+				Data: []byte(`brew "jq"` + "\n"),
+			},
+			"zshrc": {
+				Data: []byte("export TEST=1\n"),
+			},
+		},
+		SourceName: "test templates",
+		FileSystem: fsys,
+	}
+
+	entries, sourcePath, err := store.LoadBrewEntries("Brewfile")
+	if err != nil {
+		t.Fatalf("LoadBrewEntries returned error: %v", err)
+	}
+	runDir := filepath.Join(t.TempDir(), "runs", "run-1")
+	if _, err = store.WriteGeneratedBrewfile(runDir, sourcePath, entries); err != nil {
+		t.Fatalf("WriteGeneratedBrewfile returned error: %v", err)
+	}
+
+	destination := filepath.Join(t.TempDir(), ".zshrc")
+	if err = store.Copy("zshrc", destination); err != nil {
+		t.Fatalf("Copy returned error: %v", err)
+	}
+
+	if !slices.Contains(fsys.mkdirAllPaths, runDir) {
+		t.Fatalf("expected generated Brewfile run directory to use FileSystem.MkdirAll, got %v", fsys.mkdirAllPaths)
+	}
+	if !slices.Contains(fsys.mkdirAllPaths, filepath.Dir(destination)) {
+		t.Fatalf("expected copied template destination directory to use FileSystem.MkdirAll, got %v", fsys.mkdirAllPaths)
+	}
+	if len(fsys.writeFilePaths) < 2 {
+		t.Fatalf("expected generated and copied templates to use FileSystem.WriteFile, got %v", fsys.writeFilePaths)
+	}
+	if len(fsys.renamePaths) < 2 {
+		t.Fatalf("expected generated and copied templates to use FileSystem.Rename, got %v", fsys.renamePaths)
+	}
+}
+
 func assertPathPerm(t *testing.T, path string, want os.FileMode) {
 	t.Helper()
 	info, err := os.Stat(path)
@@ -150,6 +196,41 @@ func assertPathPerm(t *testing.T, path string, want os.FileMode) {
 	if got := info.Mode().Perm(); got != want {
 		t.Fatalf("permissions for %s: got=%#o want=%#o", path, got, want)
 	}
+}
+
+func assertGeneratedBrewfileSource(t *testing.T, path string, sourcePath string) {
+	t.Helper()
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read generated Brewfile: %v", err)
+	}
+	want := "# Source: " + sourcePath + "\n"
+	if !strings.Contains(string(content), want) {
+		t.Fatalf("generated Brewfile source mismatch: want line %q in %q", want, content)
+	}
+}
+
+type recordingFileSystem struct {
+	OSFileSystem
+
+	mkdirAllPaths  []string
+	writeFilePaths []string
+	renamePaths    []string
+}
+
+func (f *recordingFileSystem) MkdirAll(path string, perm fs.FileMode) error {
+	f.mkdirAllPaths = append(f.mkdirAllPaths, path)
+	return f.OSFileSystem.MkdirAll(path, perm)
+}
+
+func (f *recordingFileSystem) WriteFile(name string, data []byte, perm fs.FileMode) error {
+	f.writeFilePaths = append(f.writeFilePaths, name)
+	return f.OSFileSystem.WriteFile(name, data, perm)
+}
+
+func (f *recordingFileSystem) Rename(oldpath string, newpath string) error {
+	f.renamePaths = append(f.renamePaths, newpath)
+	return f.OSFileSystem.Rename(oldpath, newpath)
 }
 
 func TestHomebrewPackageManagerContract(t *testing.T) {
