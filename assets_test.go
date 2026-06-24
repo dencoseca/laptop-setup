@@ -35,8 +35,8 @@ func TestTemplatesIncludeWatchPortHelpers(t *testing.T) {
 	}
 
 	for _, want := range []string{
+		`wp() {`,
 		`watch -n 1 "lsof -nP -iTCP:\"$1\" -sTCP:LISTEN"`,
-		`alias wp="_watch_port"`,
 		`alias wap="watch -n 1 'lsof -nP -iTCP -sTCP:LISTEN'"`,
 	} {
 		if !strings.Contains(string(zshrc), want) {
