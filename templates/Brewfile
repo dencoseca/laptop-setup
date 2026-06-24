@@ -2,6 +2,7 @@
 brew "jq"
 brew "ripgrep"
 brew "tree"
+brew "watch"
 brew "starship"
 brew "git"
 brew "docker"
