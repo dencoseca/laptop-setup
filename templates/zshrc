@@ -77,6 +77,11 @@ alias dt="cd \"$HOME/Desktop\""
 alias oif="open -a Finder ./"
 alias nq="networkQuality"
 alias trc="tree -d -L 3 \"$HOME/Developer/repos\""
+_watch_port() {
+  watch -n 1 "lsof -nP -iTCP:\"$1\" -sTCP:LISTEN"
+}
+alias wp="_watch_port"
+alias wap="watch -n 1 'lsof -nP -iTCP -sTCP:LISTEN'"
 alias npmls="npm list -g --depth=0"
 alias l="ls -lh"
 alias upbrew="brew update && brew upgrade && brew cleanup && brew doctor"
