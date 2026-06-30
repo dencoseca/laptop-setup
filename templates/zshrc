@@ -67,6 +67,11 @@ grnr() {
     fi
 }
 
+sqrb() {
+  local msg="${1:-squishy squashy}"
+  git reset --soft $(git merge-base main HEAD) && git commit -m "$msg" && git rebase main
+}
+
 alias src="source \"$HOME/.zshrc\""
 alias zshc="edit \"$HOME/.zshrc\""
 alias zshb="cp \"$HOME/.zshrc\" \"$HOME/.zshrc.bak\""
