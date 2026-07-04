@@ -1759,7 +1759,11 @@ func (m model) summaryDashboardStatus() dashboardStatus {
 	badge := "Completed"
 	badgeTone := successColor
 	heading := "Run finished"
-	if m.runErr != nil {
+	if m.runErr == nil && m.effectiveDryRun() {
+		badge = "Dry run"
+		badgeTone = warningColor
+		heading = "Dry-run finished"
+	} else if m.runErr != nil {
 		if errors.Is(m.runErr, execution.ErrAborted) || errors.Is(m.runErr, context.Canceled) {
 			badge = "Aborted"
 			badgeTone = warningColor

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -376,17 +377,17 @@ func (m model) viewSummary() string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s\n\n", lipgloss.NewStyle().Bold(true).Render("Run Summary"))
 
-	if m.runErr == nil {
-		fmt.Fprintf(&b, "%s\n", labelValue("Status", "completed"))
-	} else if errors.Is(m.runErr, execution.ErrAborted) || errors.Is(m.runErr, context.Canceled) {
-		fmt.Fprintf(&b, "%s\n", labelValue("Status", "aborted"))
-	} else {
-		fmt.Fprintf(&b, "%s\n", labelValue("Status", "failed"))
+	status := m.summaryStatus()
+	fmt.Fprintf(&b, "%s\n", labelValue("Status", status.label))
+	fmt.Fprintf(&b, "%s\n", status.message)
+	if status.failed && m.runErr != nil {
 		fmt.Fprintf(&b, "%s\n", lipgloss.NewStyle().Foreground(failureColor).Render("Error: "+m.runErr.Error()))
 	}
 
 	completed, skipped, failed := stageCounts(m.stageStatuses)
 	fmt.Fprintf(&b, "\n%s\n", labelValue("Stage counts", fmt.Sprintf("completed=%d skipped=%d failed=%d", completed, skipped, failed)))
+	m.writeSummaryStageSection(&b, "Skipped stages", []stages.Status{stages.StatusSkipped})
+	m.writeSummaryStageSection(&b, "Failed stages", []stages.Status{stages.StatusFailed})
 	if m.humanLogPath != "" {
 		fmt.Fprintf(&b, "%s\n", labelValue("Run log", m.humanLogPath))
 	}
@@ -398,6 +399,128 @@ func (m model) viewSummary() string {
 	for _, item := range manualApps {
 		fmt.Fprintf(&b, "- %s\n", item)
 	}
+	m.writeSummaryNextSteps(&b)
 	fmt.Fprintf(&b, "\nPress Enter to exit.")
 	return b.String()
+}
+
+type summaryStatus struct {
+	label   string
+	message string
+	failed  bool
+}
+
+func (m model) summaryStatus() summaryStatus {
+	if m.runErr == nil {
+		if m.effectiveDryRun() {
+			return summaryStatus{
+				label:   "dry-run completed",
+				message: lipgloss.NewStyle().Foreground(warningColor).Render("No system changes were applied."),
+			}
+		}
+		return summaryStatus{
+			label:   "completed",
+			message: lipgloss.NewStyle().Foreground(successColor).Render("All runnable stages reached a terminal state."),
+		}
+	}
+	if errors.Is(m.runErr, execution.ErrAborted) || errors.Is(m.runErr, context.Canceled) {
+		return summaryStatus{
+			label:   "aborted",
+			message: lipgloss.NewStyle().Foreground(warningColor).Render("The run stopped before the remaining stages could finish."),
+		}
+	}
+	return summaryStatus{
+		label:   "failed",
+		message: lipgloss.NewStyle().Foreground(failureColor).Render("A stage failed before the run could complete."),
+		failed:  true,
+	}
+}
+
+func (m model) writeSummaryStageSection(b *strings.Builder, title string, matching []stages.Status) {
+	lines := m.summaryStageLines(matching)
+	if len(lines) == 0 {
+		return
+	}
+	fmt.Fprintf(b, "%s:\n", title)
+	for _, line := range lines {
+		fmt.Fprintf(b, "- %s\n", line)
+	}
+}
+
+func (m model) summaryStageLines(matching []stages.Status) []string {
+	matches := make(map[stages.Status]struct{}, len(matching))
+	for _, status := range matching {
+		matches[status] = struct{}{}
+	}
+
+	lines := []string{}
+	for _, stageID := range m.summaryStageOrder() {
+		stageStatus := m.stageStatuses[stageID]
+		status := stages.Status(normalizedStageStatus(stageStatus))
+		if _, ok := matches[status]; !ok {
+			continue
+		}
+		line := m.stageTitle(stageID)
+		if strings.TrimSpace(stageStatus.LastError) != "" {
+			line = fmt.Sprintf("%s: %s", line, stageStatus.LastError)
+		}
+		lines = append(lines, line)
+	}
+	return lines
+}
+
+func (m model) summaryStageOrder() []string {
+	if len(m.stageOrder) > 0 {
+		return slices.Clone(m.stageOrder)
+	}
+	if m.runState != nil && len(m.runState.ResolvedPlan) > 0 {
+		return stageIDsToStrings(m.runState.ResolvedPlan)
+	}
+	if len(m.catalog) > 0 {
+		ids := make([]string, 0, len(m.catalog))
+		for _, stage := range m.catalog {
+			ids = append(ids, stage.ID.String())
+		}
+		return ids
+	}
+	ids := make([]string, 0, len(m.stageStatuses))
+	for stageID := range m.stageStatuses {
+		ids = append(ids, stageID)
+	}
+	slices.Sort(ids)
+	return ids
+}
+
+func (m model) writeSummaryNextSteps(b *strings.Builder) {
+	nextSteps := m.summaryNextSteps()
+	if len(nextSteps) == 0 {
+		return
+	}
+	fmt.Fprintf(b, "\nNext steps:\n")
+	for _, step := range nextSteps {
+		fmt.Fprintf(b, "- %s\n", step)
+	}
+}
+
+func (m model) summaryNextSteps() []string {
+	if m.effectiveDryRun() && m.runErr == nil {
+		return []string{"Run again without --dry-run when you are ready to apply these changes."}
+	}
+
+	steps := []string{}
+	if m.stageChangedMachine(stages.StageHomebrewInstall) || m.stageChangedMachine(stages.StageShellSetup) {
+		steps = append(steps, "Restart your terminal or run exec zsh so shell changes are loaded.")
+	}
+	if len(m.summaryStageLines([]stages.Status{stages.StatusFailed})) > 0 {
+		steps = append(steps, "Review the run log, fix the failed stage, then resume the run.")
+	}
+	if len(steps) == 0 && m.runErr == nil {
+		steps = append(steps, "Review the manual App Store reminders above.")
+	}
+	return steps
+}
+
+func (m model) stageChangedMachine(stageID stages.StageID) bool {
+	status := stages.Status(normalizedStageStatus(m.stageStatuses[stageID.String()]))
+	return status == stages.StatusSuccess
 }
