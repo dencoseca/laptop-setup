@@ -329,7 +329,7 @@ func (m model) viewInteractiveCommand() string {
 }
 
 func (m model) viewConfigFlow(output string) string {
-	return m.renderConfigurationFlow(m.configurationDashboardStatus(), m.previewJourney(), output)
+	return m.renderDashboard(m.configurationDashboardStatus(), m.previewJourney(), output)
 }
 
 func (m model) viewInteractivePrompt() string {

@@ -1125,124 +1125,6 @@ func (m model) renderDashboard(status dashboardStatus, journey dashboardJourney,
 	return m.screenStyle(width, height).Render(framed)
 }
 
-func (m model) renderConfigurationFlow(status dashboardStatus, journey dashboardJourney, output string) string {
-	width, height := m.viewDimensions()
-	contentWidth := maxInt(20, width-4)
-	contentHeight := maxInt(12, height-2)
-	columnGap := 2
-	shortcutHint := m.renderDashboardShortcutHint(contentWidth, status.Hint)
-	shortcutHintHeight := lipgloss.Height(shortcutHint)
-	if shortcutHint == "" {
-		shortcutHintHeight = 0
-	}
-	shortcutGapHeight := 0
-	if shortcutHint != "" {
-		shortcutGapHeight = 1
-	}
-
-	if dashboardUsesStackedLayout(contentWidth) {
-		return m.renderStackedConfigurationFlow(contentWidth, contentHeight, shortcutHint, shortcutHintHeight, shortcutGapHeight, status, output, width, height)
-	}
-
-	headerHeight := minInt(9, maxInt(8, contentHeight/4))
-	if headerHeight > contentHeight-5-shortcutHintHeight-shortcutGapHeight {
-		headerHeight = maxInt(6, contentHeight-5-shortcutHintHeight-shortcutGapHeight)
-	}
-	bodyHeight := maxInt(5, contentHeight-headerHeight-1-shortcutHintHeight-shortcutGapHeight)
-
-	titlePanelMinWidth := 42
-	statusMinWidth := 20
-	titleWidth := maxInt(30, ((contentWidth-columnGap)*3)/5)
-	if contentWidth >= titlePanelMinWidth+columnGap+statusMinWidth {
-		titleWidth = maxInt(titlePanelMinWidth, titleWidth)
-	}
-	statusWidth := maxInt(statusMinWidth, contentWidth-titleWidth-columnGap)
-	if titleWidth+columnGap+statusWidth > contentWidth {
-		titleWidth = maxInt(20, contentWidth-statusWidth-columnGap)
-	}
-
-	header := lipgloss.JoinHorizontal(
-		lipgloss.Top,
-		m.renderTitlePanel(titleWidth, headerHeight),
-		"  ",
-		m.renderConfigurationStatusPanel(statusWidth, headerHeight, status),
-	)
-
-	var body string
-	if configurationJourneyHelpful(m.screen, journey) {
-		journeyWidth, focusWidth := configurationBodyWidths(contentWidth, columnGap)
-		body = lipgloss.JoinHorizontal(
-			lipgloss.Top,
-			m.renderJourneyPanel(journeyWidth, bodyHeight, journey),
-			"  ",
-			m.renderConfigurationContentPanel(focusWidth, bodyHeight, output),
-		)
-	} else {
-		body = m.renderConfigurationContentPanel(contentWidth, bodyHeight, output)
-	}
-
-	blocks := []string{header, "", body}
-	if shortcutHint != "" {
-		blocks = append(blocks, "", shortcutHint)
-	}
-	layout := lipgloss.JoinVertical(lipgloss.Left, blocks...)
-	framed := lipgloss.Place(contentWidth, contentHeight, lipgloss.Left, lipgloss.Top, layout)
-	return m.screenStyle(width, height).Render(framed)
-}
-
-func (m model) renderStackedConfigurationFlow(
-	contentWidth int,
-	contentHeight int,
-	shortcutHint string,
-	shortcutHintHeight int,
-	shortcutGapHeight int,
-	status dashboardStatus,
-	output string,
-	viewWidth int,
-	viewHeight int,
-) string {
-	gapCount := 2
-	if shortcutHint != "" {
-		gapCount++
-	}
-	availableHeight := maxInt(10, contentHeight-shortcutHintHeight-shortcutGapHeight-gapCount)
-	titleHeight := minInt(9, maxInt(6, availableHeight/4))
-	statusHeight := minInt(9, maxInt(7, availableHeight/4))
-	outputHeight := maxInt(4, availableHeight-titleHeight-statusHeight)
-
-	buildLayout := func(renderedOutputHeight int) string {
-		blocks := []string{
-			m.renderTitlePanel(contentWidth, titleHeight),
-			"",
-			m.renderConfigurationStatusPanel(contentWidth, statusHeight, status),
-			"",
-			m.renderConfigurationContentPanel(contentWidth, renderedOutputHeight, output),
-		}
-		if shortcutHint != "" {
-			blocks = append(blocks, "", shortcutHint)
-		}
-		return lipgloss.JoinVertical(lipgloss.Left, blocks...)
-	}
-	layout := buildLayout(outputHeight)
-	if overflow := lipgloss.Height(layout) - contentHeight; overflow > 0 {
-		outputHeight = maxInt(1, outputHeight-overflow)
-		layout = buildLayout(outputHeight)
-	}
-	if overflow := lipgloss.Height(layout) - contentHeight; overflow > 0 {
-		statusHeight = maxInt(5, statusHeight-overflow)
-		layout = buildLayout(outputHeight)
-	}
-	if overflow := lipgloss.Height(layout) - contentHeight; overflow > 0 {
-		titleHeight = maxInt(4, titleHeight-overflow)
-		layout = buildLayout(outputHeight)
-	}
-	if lipgloss.Height(layout) > contentHeight {
-		layout = strings.Join(limitLines(strings.Split(layout, "\n"), contentHeight), "\n")
-	}
-	framed := lipgloss.Place(contentWidth, contentHeight, lipgloss.Left, lipgloss.Top, layout)
-	return m.screenStyle(viewWidth, viewHeight).Render(framed)
-}
-
 func (m model) renderStackedDashboard(
 	contentWidth int,
 	contentHeight int,
@@ -1318,28 +1200,6 @@ func dashboardBodyWidths(contentWidth int, columnGap int) (int, int) {
 	return journeyWidth, outputWidth
 }
 
-func configurationBodyWidths(contentWidth int, columnGap int) (int, int) {
-	availableWidth := contentWidth - columnGap
-	journeyWidth := minInt(34, maxInt(24, availableWidth/4))
-	focusWidth := maxInt(24, contentWidth-journeyWidth-columnGap)
-	if journeyWidth+columnGap+focusWidth > contentWidth {
-		journeyWidth = maxInt(20, contentWidth-focusWidth-columnGap)
-	}
-	return journeyWidth, focusWidth
-}
-
-func configurationJourneyHelpful(current screen, journey dashboardJourney) bool {
-	if len(journey.StageOrder) == 0 {
-		return false
-	}
-	switch current {
-	case screenWelcome, screenGitName, screenGitEmail, screenQuitConfirm:
-		return false
-	default:
-		return true
-	}
-}
-
 func (m model) renderTitlePanel(width int, height int) string {
 	innerWidth := panelInnerWidth(width)
 	markText := "LS"
@@ -1395,25 +1255,6 @@ func (m model) renderDashboardStatusPanel(width int, height int, status dashboar
 		renderProgressBar(barWidth, status.ConfigurationProgressPct),
 		lipgloss.NewStyle().Bold(true).Foreground(accentAltColor).Render("Apply"),
 		renderProgressBar(barWidth, status.ExecutionProgressPct),
-	}
-	return m.panelStyle(width, height).Render(strings.Join(limitLines(lines, panelInnerHeight(height)), "\n"))
-}
-
-func (m model) renderConfigurationStatusPanel(width int, height int, status dashboardStatus) string {
-	innerWidth := panelInnerWidth(width)
-	barWidth := maxInt(10, minInt(24, innerWidth-2))
-	statusBadge := lipgloss.NewStyle().
-		Bold(true).
-		Padding(0, 1).
-		Foreground(whiteColor).
-		Background(status.BadgeTone).
-		Render(strings.ToUpper(status.Badge))
-	lines := []string{
-		panelHeader("Status"),
-		statusBadge,
-		lipgloss.NewStyle().Bold(true).Foreground(textColor).Render(truncateLine(status.Heading, innerWidth)),
-		lipgloss.NewStyle().Foreground(mutedColor).Render(truncateLine(status.Summary, innerWidth)),
-		renderProgressBar(barWidth, status.ConfigurationProgressPct),
 	}
 	return m.panelStyle(width, height).Render(strings.Join(limitLines(lines, panelInnerHeight(height)), "\n"))
 }
@@ -1682,12 +1523,6 @@ func isCompleteStageStatus(status string) bool {
 
 func (m model) renderOutputPanel(width int, height int, content string) string {
 	lines := append([]string{panelHeader("Details"), ""}, strings.Split(content, "\n")...)
-	visible := limitLines(lines, panelInnerHeight(height))
-	return m.panelStyle(width, height).Render(strings.Join(visible, "\n"))
-}
-
-func (m model) renderConfigurationContentPanel(width int, height int, content string) string {
-	lines := strings.Split(content, "\n")
 	visible := limitLines(lines, panelInnerHeight(height))
 	return m.panelStyle(width, height).Render(strings.Join(visible, "\n"))
 }
