@@ -941,9 +941,14 @@ func (m *model) effectiveDryRun() bool {
 }
 
 func (m *model) syncInputWidths() {
-	inputWidth := minInt(72, maxInt(24, m.width-16))
+	inputWidth := m.textInputWidth()
 	m.gitNameInput.Width = inputWidth
 	m.gitEmailInput.Width = inputWidth
+}
+
+func (m model) textInputWidth() int {
+	innerWidth, _ := m.outputPanelInnerSize()
+	return minInt(72, maxInt(1, innerWidth-4))
 }
 
 func readGitIdentity(homeDir string) (string, string) {

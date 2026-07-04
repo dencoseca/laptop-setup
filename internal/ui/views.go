@@ -117,6 +117,7 @@ func (m model) viewBrewSelection(title string) string {
 
 func (m model) viewTextInput(title string, subtitle string, input textinput.Model) string {
 	var b strings.Builder
+	input.Width = m.textInputWidth()
 	fmt.Fprintf(&b, "%s\n\n", lipgloss.NewStyle().Bold(true).Render(title))
 	fmt.Fprintf(&b, "%s\n\n", lipgloss.NewStyle().Foreground(mutedColor).Render(subtitle))
 	field := lipgloss.NewStyle().
