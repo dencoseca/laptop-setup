@@ -2,6 +2,7 @@ package ui
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"path/filepath"
@@ -227,6 +228,154 @@ func TestViewSummaryIncludesManualAppStoreReminders(t *testing.T) {
 		if !strings.Contains(summary, "- "+item) {
 			t.Fatalf("expected manual app %q in summary, got %q", item, summary)
 		}
+	}
+}
+
+func TestViewSummaryVariantsUseDistinctCopy(t *testing.T) {
+	tests := []struct {
+		name      string
+		model     model
+		fragments []string
+		absent    []string
+	}{
+		{
+			name: "completed",
+			model: summaryTestModel(map[string]state.StageStatus{
+				"xcode_clt": {Status: stages.StatusSuccess},
+			}, nil, false),
+			fragments: []string{
+				"Status: completed",
+				"All runnable stages reached a terminal state.",
+			},
+		},
+		{
+			name: "failed",
+			model: summaryTestModel(map[string]state.StageStatus{
+				"brew_bundle": {Status: stages.StatusFailed, LastError: "installer failed"},
+			}, errors.New("stage failed for brew bundle"), false),
+			fragments: []string{
+				"Status: failed",
+				"A stage failed before the run could complete.",
+				"Error: stage failed for brew bundle",
+				"Failed stages:",
+				"- Brew Bundle: installer failed",
+				"Review the run log, fix the failed stage, then resume the run.",
+			},
+			absent: []string{"- brew_bundle"},
+		},
+		{
+			name: "aborted",
+			model: summaryTestModel(map[string]state.StageStatus{
+				"xcode_clt": {Status: stages.StatusSuccess},
+			}, context.Canceled, false),
+			fragments: []string{
+				"Status: aborted",
+				"The run stopped before the remaining stages could finish.",
+			},
+			absent: []string{"Error:"},
+		},
+		{
+			name: "dry-run",
+			model: summaryTestModel(map[string]state.StageStatus{
+				"shell_setup": {Status: stages.StatusSimulatedSuccess},
+			}, nil, true),
+			fragments: []string{
+				"Status: dry-run completed",
+				"No system changes were applied.",
+				"Run again without --dry-run when you are ready to apply these changes.",
+			},
+			absent: []string{"exec zsh"},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			summary := ansi.Strip(test.model.viewSummary())
+			for _, fragment := range test.fragments {
+				if !strings.Contains(summary, fragment) {
+					t.Fatalf("expected summary to contain %q, got %q", fragment, summary)
+				}
+			}
+			for _, fragment := range test.absent {
+				if strings.Contains(summary, fragment) {
+					t.Fatalf("expected summary not to contain %q, got %q", fragment, summary)
+				}
+			}
+		})
+	}
+}
+
+func TestSummaryDashboardMakesDryRunObvious(t *testing.T) {
+	m := summaryTestModel(map[string]state.StageStatus{
+		"shell_setup": {Status: stages.StatusSimulatedSuccess},
+	}, nil, true)
+
+	status := m.summaryDashboardStatus()
+	if status.Badge != "Dry run" {
+		t.Fatalf("expected dry-run summary badge, got %q", status.Badge)
+	}
+	if status.Heading != "Dry-run finished" {
+		t.Fatalf("expected dry-run summary heading, got %q", status.Heading)
+	}
+}
+
+func TestViewSummaryListsSkippedStagesWithTitles(t *testing.T) {
+	m := summaryTestModel(map[string]state.StageStatus{
+		"manual_app_store_apps": {Status: stages.StatusSkipped},
+	}, nil, false)
+
+	summary := ansi.Strip(m.viewSummary())
+	for _, fragment := range []string{
+		"Skipped stages:",
+		"- Manual App Store Apps",
+	} {
+		if !strings.Contains(summary, fragment) {
+			t.Fatalf("expected skipped stage title in summary, got %q", summary)
+		}
+	}
+	if strings.Contains(summary, "manual_app_store_apps") {
+		t.Fatalf("expected skipped stage to use title, got %q", summary)
+	}
+}
+
+func TestViewSummaryShellNextStepOnlyWhenShellChanged(t *testing.T) {
+	withoutShellChange := summaryTestModel(map[string]state.StageStatus{
+		"xcode_clt": {Status: stages.StatusSuccess},
+	}, nil, false)
+	if summary := ansi.Strip(withoutShellChange.viewSummary()); strings.Contains(summary, "exec zsh") {
+		t.Fatalf("expected no shell restart step without shell changes, got %q", summary)
+	}
+
+	withShellChange := summaryTestModel(map[string]state.StageStatus{
+		"shell_setup": {Status: stages.StatusSuccess},
+	}, nil, false)
+	if summary := ansi.Strip(withShellChange.viewSummary()); !strings.Contains(summary, "Restart your terminal or run exec zsh") {
+		t.Fatalf("expected shell restart step after shell setup, got %q", summary)
+	}
+}
+
+func summaryTestModel(statuses map[string]state.StageStatus, runErr error, dryRun bool) model {
+	catalog := []stages.Stage{
+		{ID: "xcode_clt", Title: "Xcode Command Line Tools"},
+		{ID: "brew_bundle", Title: "Brew Bundle"},
+		{ID: "shell_setup", Title: "Shell Setup"},
+		{ID: "manual_app_store_apps", Title: "Manual App Store Apps"},
+	}
+	stageMap := make(map[string]stages.Stage, len(catalog))
+	stageOrder := make([]string, 0, len(catalog))
+	for _, stage := range catalog {
+		stageMap[stage.ID.String()] = stage
+		stageOrder = append(stageOrder, stage.ID.String())
+	}
+	return model{
+		catalog:       catalog,
+		stageMap:      stageMap,
+		stageOrder:    stageOrder,
+		stageStatuses: statuses,
+		runErr:        runErr,
+		config:        Config{DryRun: dryRun},
+		humanLogPath:  "/tmp/run.log",
+		eventsLogPath: "/tmp/events.jsonl",
 	}
 }
 
