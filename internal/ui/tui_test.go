@@ -1502,8 +1502,55 @@ func reviewScreenTestModel() model {
 }
 
 func TestViewConfigurationMatchesWindowDimensions(t *testing.T) {
+	m := modelWithConfigurationDimensions(screenDevTools)
+
+	view := m.View()
+	if got, want := lipgloss.Width(view), 117; got != want {
+		t.Fatalf("expected view width=%d, got=%d", want, got)
+	}
+	if got, want := lipgloss.Height(view), 41; got != want {
+		t.Fatalf("expected view height=%d, got=%d", want, got)
+	}
+}
+
+func TestViewGitIdentityInputsStayWithinWindowDimensions(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		screen screen
+		value  string
+	}{
+		{
+			name:   "name",
+			screen: screenGitName,
+			value:  "Ada Lovelace With A Very Long Git Username That Should Scroll Inside The Input",
+		},
+		{
+			name:   "email",
+			screen: screenGitEmail,
+			value:  "ada.lovelace.with.a.very.long.email.address.for.testing@example.invalid",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := modelWithConfigurationDimensions(tc.screen)
+			m.gitNameInput.Focus()
+			m.gitEmailInput.Focus()
+			m.gitNameInput.SetValue(tc.value)
+			m.gitEmailInput.SetValue(tc.value)
+
+			view := m.View()
+			if got, want := lipgloss.Width(view), 117; got != want {
+				t.Fatalf("expected view width=%d, got=%d", want, got)
+			}
+			if got, want := lipgloss.Height(view), 41; got != want {
+				t.Fatalf("expected view height=%d, got=%d", want, got)
+			}
+		})
+	}
+}
+
+func modelWithConfigurationDimensions(screen screen) model {
 	m := model{
-		screen: screenDevTools,
+		screen: screen,
 		width:  117,
 		height: 41,
 		catalog: []stages.Stage{
@@ -1532,14 +1579,10 @@ func TestViewConfigurationMatchesWindowDimensions(t *testing.T) {
 			{ID: "git_config", Title: "Git Configuration", Selected: true},
 		},
 	}
-
-	view := m.View()
-	if got, want := lipgloss.Width(view), 117; got != want {
-		t.Fatalf("expected view width=%d, got=%d", want, got)
-	}
-	if got, want := lipgloss.Height(view), 41; got != want {
-		t.Fatalf("expected view height=%d, got=%d", want, got)
-	}
+	m.gitNameInput = textinput.New()
+	m.gitEmailInput = textinput.New()
+	m.syncInputWidths()
+	return m
 }
 
 type noOpRunner struct{}
