@@ -62,17 +62,16 @@ func (m model) viewConfigurationScreen(spec screenSpec) string {
 
 func (m model) viewWelcome() string {
 	var b strings.Builder
-	title := lipgloss.NewStyle().Bold(true).Render("Laptop Setup")
+	title := lipgloss.NewStyle().Bold(true).Foreground(textColor).Render("Laptop Setup")
 	fmt.Fprintf(&b, "%s\n\n", title)
 	if m.resumeRun {
-		fmt.Fprintf(&b, "Resume run: %s\n", m.current.RunID)
-		fmt.Fprintf(&b, "Mode: %s\n\n", m.current.Mode)
-		fmt.Fprintf(&b, "Press Enter to review and continue.\n")
+		fmt.Fprintf(&b, "%s\n", labelValue("Resume run", m.current.RunID.String()))
+		fmt.Fprintf(&b, "%s\n\n", labelValue("Mode", m.current.Mode.String()))
+		fmt.Fprintf(&b, "%s\n", lipgloss.NewStyle().Foreground(mutedColor).Render("Review the saved plan and continue where it left off."))
 	} else {
-		fmt.Fprintf(&b, "Interactive setup will collect phase decisions, show plan review, and execute stages.\n\n")
-		fmt.Fprintf(&b, "Press Enter to continue.\n")
+		fmt.Fprintf(&b, "Choose what this Mac needs, review the generated plan, then let the runner apply it stage by stage.\n\n")
+		fmt.Fprintf(&b, "%s\n", lipgloss.NewStyle().Foreground(mutedColor).Render("Prechecks mark work that is already complete before anything runs."))
 	}
-	fmt.Fprintf(&b, "Press CTRL+C to quit.")
 	return b.String()
 }
 
@@ -118,12 +117,16 @@ func (m model) viewBrewSelection(title string) string {
 func (m model) viewTextInput(title string, subtitle string, input textinput.Model) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s\n\n", lipgloss.NewStyle().Bold(true).Render(title))
-	fmt.Fprintf(&b, "%s\n\n", subtitle)
-	fmt.Fprintf(&b, "%s\n", input.View())
+	fmt.Fprintf(&b, "%s\n\n", lipgloss.NewStyle().Foreground(mutedColor).Render(subtitle))
+	field := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(borderColor).
+		Padding(0, 1).
+		Render(input.View())
+	fmt.Fprintf(&b, "%s\n", field)
 	if m.inputError != "" {
-		fmt.Fprintf(&b, "\n%s\n", m.inputError)
+		fmt.Fprintf(&b, "\n%s\n", lipgloss.NewStyle().Foreground(failureColor).Render(m.inputError))
 	}
-	fmt.Fprintf(&b, "\nPress Enter to continue, Esc to go back.")
 	return b.String()
 }
 
@@ -152,30 +155,29 @@ func (m *model) viewReview() string {
 
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s\n\n", lipgloss.NewStyle().Bold(true).Render("Execution Plan Review"))
-	fmt.Fprintf(&b, "Mode: %s\n", state.ModeFromDryRun(m.effectiveDryRun()))
+	fmt.Fprintf(&b, "%s\n", labelValue("Mode", state.ModeFromDryRun(m.effectiveDryRun()).String()))
 	if !m.resumeRun {
-		fmt.Fprintf(&b, "Selected packages/apps: %d\n", len(m.selectedBrewIDs()))
+		fmt.Fprintf(&b, "%s\n", labelValue("Selected packages/apps", fmt.Sprintf("%d", len(m.selectedBrewIDs()))))
 	}
 	decisions := m.effectiveDecisions()
-	fmt.Fprintf(&b, "Node toolchain: %s\n", selectOptionTitle(m.nodeOptions, string(stages.NodeToolchainFromDecisions(decisions))))
-	fmt.Fprintf(&b, "Docker runtime: %s\n", selectOptionTitle(m.dockerOptions, string(stages.DockerRuntimeFromDecisions(decisions))))
-	fmt.Fprintf(&b, "Shell: oh-my-zsh=%t, zshrc=%t, starship=%t\n",
+	fmt.Fprintf(&b, "%s\n", labelValue("Node toolchain", selectOptionTitle(m.nodeOptions, string(stages.NodeToolchainFromDecisions(decisions)))))
+	fmt.Fprintf(&b, "%s\n", labelValue("Docker runtime", selectOptionTitle(m.dockerOptions, string(stages.DockerRuntimeFromDecisions(decisions)))))
+	fmt.Fprintf(&b, "%s\n", labelValue("Shell", fmt.Sprintf("oh-my-zsh=%t, zshrc=%t, starship=%t",
 		stages.ShellInstallOhMyZsh(decisions),
 		stages.ShellApplyZshrcTemplate(decisions),
 		stages.ShellApplyStarshipTemplate(decisions),
-	)
+	)))
 	if m.stageSelected(string(stages.StageGitConfig)) {
 		name, email := stages.GitIdentityFromDecisions(decisions)
-		fmt.Fprintf(&b, "Git identity: %s <%s>\n", name, email)
+		fmt.Fprintf(&b, "%s\n", labelValue("Git identity", fmt.Sprintf("%s <%s>", name, email)))
 	}
 	fmt.Fprintf(&b, "\nStages:\n")
 	for _, stageID := range m.plan {
 		fmt.Fprintf(&b, "- %s\n", m.stageTitle(stageID))
 	}
 	if m.planError != "" {
-		fmt.Fprintf(&b, "\nPlan error: %s\n", m.planError)
+		fmt.Fprintf(&b, "\n%s\n", lipgloss.NewStyle().Foreground(failureColor).Render("Plan error: "+m.planError))
 	}
-	fmt.Fprintf(&b, "\nPress Enter to execute, Esc to go back.")
 	return b.String()
 }
 
@@ -237,9 +239,9 @@ func (m model) viewFailure() string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s\n\n", lipgloss.NewStyle().Bold(true).Render("Stage Failure"))
 	if m.failurePrompt != nil {
-		fmt.Fprintf(&b, "Stage: %s\n", m.failurePrompt.Title)
-		fmt.Fprintf(&b, "Attempt: %d\n", m.failurePrompt.Attempt)
-		fmt.Fprintf(&b, "Error: %s\n\n", m.failurePrompt.Message)
+		fmt.Fprintf(&b, "%s\n", labelValue("Stage", m.failurePrompt.Title))
+		fmt.Fprintf(&b, "%s\n", labelValue("Attempt", fmt.Sprintf("%d", m.failurePrompt.Attempt)))
+		fmt.Fprintf(&b, "%s\n\n", lipgloss.NewStyle().Foreground(failureColor).Render("Error: "+m.failurePrompt.Message))
 	}
 	fmt.Fprintf(&b, "Actions:\n")
 	fmt.Fprintf(&b, "- Enter: Retry stage\n")
@@ -255,21 +257,21 @@ func (m model) viewSummary() string {
 	fmt.Fprintf(&b, "%s\n\n", lipgloss.NewStyle().Bold(true).Render("Run Summary"))
 
 	if m.runErr == nil {
-		fmt.Fprintf(&b, "Status: completed\n")
+		fmt.Fprintf(&b, "%s\n", labelValue("Status", "completed"))
 	} else if errors.Is(m.runErr, execution.ErrAborted) || errors.Is(m.runErr, context.Canceled) {
-		fmt.Fprintf(&b, "Status: aborted\n")
+		fmt.Fprintf(&b, "%s\n", labelValue("Status", "aborted"))
 	} else {
-		fmt.Fprintf(&b, "Status: failed\n")
-		fmt.Fprintf(&b, "Error: %s\n", m.runErr)
+		fmt.Fprintf(&b, "%s\n", labelValue("Status", "failed"))
+		fmt.Fprintf(&b, "%s\n", lipgloss.NewStyle().Foreground(failureColor).Render("Error: "+m.runErr.Error()))
 	}
 
 	completed, skipped, failed := stageCounts(m.stageStatuses)
-	fmt.Fprintf(&b, "\nStage counts: completed=%d skipped=%d failed=%d\n", completed, skipped, failed)
+	fmt.Fprintf(&b, "\n%s\n", labelValue("Stage counts", fmt.Sprintf("completed=%d skipped=%d failed=%d", completed, skipped, failed)))
 	if m.humanLogPath != "" {
-		fmt.Fprintf(&b, "Run log: %s\n", m.humanLogPath)
+		fmt.Fprintf(&b, "%s\n", labelValue("Run log", m.humanLogPath))
 	}
 	if m.eventsLogPath != "" {
-		fmt.Fprintf(&b, "Events log: %s\n", m.eventsLogPath)
+		fmt.Fprintf(&b, "%s\n", labelValue("Events log", m.eventsLogPath))
 	}
 	fmt.Fprintf(&b, "\nManual App Store reminders:\n")
 	manualApps := stages.ManualAppStoreApps()
