@@ -517,7 +517,7 @@ func TestRenderJourneyLineLeftAlignsNameAndRightAlignsStatus(t *testing.T) {
 	if strings.Contains(line, "01") {
 		t.Fatalf("expected journey line to omit sequence number, got %q", line)
 	}
-	if !strings.HasSuffix(line, "live") {
+	if !strings.HasSuffix(line, "running") {
 		t.Fatalf("expected status to be right-aligned at row end, got %q", line)
 	}
 	if got, want := lipgloss.Width(line), 36; got != want {
@@ -541,6 +541,64 @@ func TestRenderJourneyLineUsesCompletionTickForFinishedStages(t *testing.T) {
 	if !strings.HasPrefix(alreadyDoneLine, "✓ Xcode Command Line Tools") {
 		t.Fatalf("expected already-done current stage to keep tick prefix, got %q", alreadyDoneLine)
 	}
+}
+
+func TestRenderJourneyPanelGroupsStagesByPhase(t *testing.T) {
+	m := model{
+		stageMap: map[string]stages.Stage{
+			"xcode_clt":             {ID: "xcode_clt", Title: "Xcode Command Line Tools"},
+			"brew_bundle":           {ID: "brew_bundle", Title: "Brew Bundle"},
+			"node_toolchain":        {ID: "node_toolchain", Title: "Node Toolchain"},
+			"manual_app_store_apps": {ID: "manual_app_store_apps", Title: "Manual App Store Apps"},
+		},
+	}
+
+	view := ansi.Strip(m.renderJourneyPanel(46, 22, dashboardJourney{
+		StageOrder: []string{
+			"xcode_clt",
+			"brew_bundle",
+			"node_toolchain",
+			"manual_app_store_apps",
+		},
+		Statuses: map[string]state.StageStatus{
+			"xcode_clt":             {Status: stages.StatusAlreadyDone},
+			"brew_bundle":           {Status: stages.StatusPending},
+			"node_toolchain":        {Status: stages.StatusRunning},
+			"manual_app_store_apps": {Status: stages.StatusSkipped},
+		},
+		CurrentStep: "node_toolchain",
+	}))
+
+	for _, fragment := range []string{
+		"macOS",
+		"Packages",
+		"Dev tools",
+		"Manual",
+		"ready",
+		"pending",
+		"running",
+		"skipped",
+	} {
+		if !strings.Contains(view, fragment) {
+			t.Fatalf("expected grouped journey to contain %q, got %q", fragment, view)
+		}
+	}
+
+	assertInOrder := func(before string, after string) {
+		t.Helper()
+		beforeIndex := strings.Index(view, before)
+		afterIndex := strings.Index(view, after)
+		if beforeIndex == -1 || afterIndex == -1 || beforeIndex >= afterIndex {
+			t.Fatalf("expected %q before %q in grouped journey, got %q", before, after, view)
+		}
+	}
+	assertInOrder("macOS", "Xcode Command Line Tools")
+	assertInOrder("Packages", "Brew Bundle")
+	assertInOrder("Dev tools", "Node Toolchain")
+	assertInOrder("Manual", "Manual App Store Apps")
+	assertInOrder("Xcode Command Line Tools", "Packages")
+	assertInOrder("Brew Bundle", "Dev tools")
+	assertInOrder("Node Toolchain", "Manual")
 }
 
 func TestPreviewJourneyCarriesPrecheckStatuses(t *testing.T) {

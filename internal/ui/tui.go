@@ -44,6 +44,12 @@ var (
 	phaseManualStages = []string{
 		string(stages.StageManualAppStoreApps),
 	}
+	journeyPhaseGroups = []journeyPhaseGroup{
+		{Title: "macOS", StageIDs: phaseMacOSStages},
+		{Title: "Packages", StageIDs: phaseInstallStages},
+		{Title: "Dev tools", StageIDs: phaseDevStages},
+		{Title: "Manual", StageIDs: phaseManualStages},
+	}
 )
 
 type Config struct {
@@ -1045,6 +1051,11 @@ type dashboardJourney struct {
 	CurrentStep string
 }
 
+type journeyPhaseGroup struct {
+	Title    string
+	StageIDs []string
+}
+
 func (m model) renderDocument(content string) string {
 	width, height := m.viewDimensions()
 	canvasWidth := maxInt(20, width-4)
@@ -1398,15 +1409,77 @@ func (m model) renderJourneyPanel(width int, height int, journey dashboardJourne
 	lineBudget := panelInnerHeight(height)
 	lines := make([]string, 0, maxInt(1, len(journey.StageOrder)+2))
 	lines = append(lines, panelHeader("Journey"), "")
-	for _, stageID := range journey.StageOrder {
-		status := normalizedStageStatus(journey.Statuses[stageID])
-		lines = append(lines, m.renderJourneyLine(innerWidth, stageID, journey.CurrentStep, status))
-	}
 	if len(journey.StageOrder) == 0 {
 		lines = append(lines, lipgloss.NewStyle().Foreground(mutedColor).Render("No stages selected yet"))
+	} else {
+		lines = append(lines, m.renderGroupedJourneyLines(innerWidth, journey)...)
 	}
 	lines = limitLines(lines, lineBudget)
 	return m.panelStyle(width, height).Render(strings.Join(lines, "\n"))
+}
+
+func (m model) renderGroupedJourneyLines(width int, journey dashboardJourney) []string {
+	lines := []string{}
+	renderedStages := make(map[string]struct{}, len(journey.StageOrder))
+	for _, group := range journeyPhaseGroups {
+		groupStageIDs := journeyStageIDsInGroup(journey.StageOrder, group.StageIDs)
+		if len(groupStageIDs) == 0 {
+			continue
+		}
+		if len(lines) > 0 {
+			lines = append(lines, "")
+		}
+		lines = append(lines, renderJourneyPhaseHeader(group.Title, width))
+		for _, stageID := range groupStageIDs {
+			status := normalizedStageStatus(journey.Statuses[stageID])
+			lines = append(lines, m.renderJourneyLine(width, stageID, journey.CurrentStep, status))
+			renderedStages[stageID] = struct{}{}
+		}
+	}
+
+	unknownStageIDs := journeyStageIDsNotRendered(journey.StageOrder, renderedStages)
+	if len(unknownStageIDs) > 0 {
+		if len(lines) > 0 {
+			lines = append(lines, "")
+		}
+		lines = append(lines, renderJourneyPhaseHeader("Other", width))
+		for _, stageID := range unknownStageIDs {
+			status := normalizedStageStatus(journey.Statuses[stageID])
+			lines = append(lines, m.renderJourneyLine(width, stageID, journey.CurrentStep, status))
+		}
+	}
+	return lines
+}
+
+func journeyStageIDsInGroup(stageOrder []string, groupStageIDs []string) []string {
+	groupSet := make(map[string]struct{}, len(groupStageIDs))
+	for _, stageID := range groupStageIDs {
+		groupSet[stageID] = struct{}{}
+	}
+	out := make([]string, 0, len(groupStageIDs))
+	for _, stageID := range stageOrder {
+		if _, ok := groupSet[stageID]; ok {
+			out = append(out, stageID)
+		}
+	}
+	return out
+}
+
+func journeyStageIDsNotRendered(stageOrder []string, rendered map[string]struct{}) []string {
+	out := []string{}
+	for _, stageID := range stageOrder {
+		if _, ok := rendered[stageID]; !ok {
+			out = append(out, stageID)
+		}
+	}
+	return out
+}
+
+func renderJourneyPhaseHeader(title string, width int) string {
+	return lipgloss.NewStyle().
+		Bold(true).
+		Foreground(accentColor).
+		Render(truncateLine(title, width))
 }
 
 func (m model) renderJourneyLine(width int, stageID string, currentStep string, status string) string {
@@ -1892,17 +1965,17 @@ func statusLabel(status string) string {
 	case string(stages.StatusSuccess):
 		return "done"
 	case string(stages.StatusSimulatedSuccess):
-		return "sim"
+		return "dry-run"
 	case string(stages.StatusSkipped):
-		return "skip"
+		return "skipped"
 	case string(stages.StatusFailed):
-		return "fail"
+		return "failed"
 	case string(stages.StatusAlreadyDone):
 		return "ready"
 	case string(stages.StatusRunning):
-		return "live"
+		return "running"
 	default:
-		return "next"
+		return "pending"
 	}
 }
 
