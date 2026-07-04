@@ -1181,6 +1181,177 @@ func TestViewReviewHidesInternalStageIDs(t *testing.T) {
 	}
 }
 
+func TestViewReviewRendersStructuredPlanSummary(t *testing.T) {
+	m := reviewScreenTestModel()
+
+	view := ansi.Strip(m.viewReview())
+	for _, fragment := range []string{
+		"MODE",
+		"Mode: normal",
+		"PACKAGE SUMMARY",
+		"Selected packages/apps: 2 of 3",
+		"Brewfile entries: jq, ripgrep",
+		"KEY DECISIONS",
+		"Node toolchain: pnpm + nvm",
+		"Docker runtime: colima",
+		"Shell: oh-my-zsh=false, zshrc=true, starship=false",
+		"Git identity: Alice <alice@example.com>",
+		"PLANNED STAGES",
+		"- Xcode Command Line Tools",
+		"- Brew Bundle",
+		"- Git Configuration",
+		"SKIPPED OR ALREADY SATISFIED",
+	} {
+		if !strings.Contains(view, fragment) {
+			t.Fatalf("expected structured review to contain %q, got %q", fragment, view)
+		}
+	}
+	for _, internalID := range []string{"xcode_clt", "brew_bundle", "git_config"} {
+		if strings.Contains(view, internalID) {
+			t.Fatalf("expected review to hide internal stage id %q, got %q", internalID, view)
+		}
+	}
+}
+
+func TestViewReviewMakesDryRunObvious(t *testing.T) {
+	m := reviewScreenTestModel()
+	m.config.DryRun = true
+
+	view := ansi.Strip(m.viewReview())
+	for _, fragment := range []string{
+		"Mode: dry-run",
+		"Dry-run preview: no changes will be applied.",
+	} {
+		if !strings.Contains(view, fragment) {
+			t.Fatalf("expected dry-run review to contain %q, got %q", fragment, view)
+		}
+	}
+
+	status := m.configurationDashboardStatus()
+	if status.Badge != "Dry run" {
+		t.Fatalf("expected dry-run badge, got %q", status.Badge)
+	}
+}
+
+func TestViewReviewShowsSkippedAndAlreadySatisfiedStages(t *testing.T) {
+	m := reviewScreenTestModel()
+	m.config.Skip = []string{"git_config"}
+	m.stageStatuses = map[string]state.StageStatus{
+		"xcode_clt": {Status: stages.StatusAlreadyDone},
+	}
+
+	view := ansi.Strip(m.viewReview())
+	for _, fragment := range []string{
+		"Already satisfied: Xcode Command Line Tools",
+		"Skipped: Git Configuration",
+	} {
+		if !strings.Contains(view, fragment) {
+			t.Fatalf("expected skipped/already-satisfied review to contain %q, got %q", fragment, view)
+		}
+	}
+	if strings.Contains(view, "git_config") {
+		t.Fatalf("expected skipped stage to use title, got %q", view)
+	}
+}
+
+func TestViewReviewHighlightsPlanErrors(t *testing.T) {
+	m := reviewScreenTestModel()
+	m.catalog = []stages.Stage{
+		{ID: "brew_bundle", Title: "Brew Bundle"},
+	}
+	m.stageMap = map[string]stages.Stage{
+		"brew_bundle": {ID: "brew_bundle", Title: "Brew Bundle"},
+	}
+	m.installOptions = []toggleOption{
+		{ID: "brew_bundle", Title: "Brew Bundle", Selected: true},
+	}
+	m.devOptions = nil
+	m.brewEntries = nil
+	m.brewSelected = nil
+
+	view := ansi.Strip(m.viewReview())
+	for _, fragment := range []string{
+		"PLAN ERROR",
+		"Brew Bundle selected with no package/app entries",
+	} {
+		if !strings.Contains(view, fragment) {
+			t.Fatalf("expected plan error review to contain %q, got %q", fragment, view)
+		}
+	}
+	if strings.Contains(view, "brew_bundle") {
+		t.Fatalf("expected plan error to use stage title, got %q", view)
+	}
+	status := m.configurationDashboardStatus()
+	if status.Badge != "Plan error" {
+		t.Fatalf("expected plan-error badge, got %q", status.Badge)
+	}
+}
+
+func reviewScreenTestModel() model {
+	m := model{
+		screen: screenReview,
+		width:  120,
+		height: 36,
+		catalog: []stages.Stage{
+			{ID: "xcode_clt", Title: "Xcode Command Line Tools"},
+			{ID: "brew_bundle", Title: "Brew Bundle"},
+			{ID: "node_toolchain", Title: "Node Toolchain"},
+			{ID: "docker_config", Title: "Docker Configuration"},
+			{ID: "shell_setup", Title: "Shell Setup"},
+			{ID: "git_config", Title: "Git Configuration"},
+		},
+		stageMap: map[string]stages.Stage{
+			"xcode_clt":      {ID: "xcode_clt", Title: "Xcode Command Line Tools"},
+			"brew_bundle":    {ID: "brew_bundle", Title: "Brew Bundle"},
+			"node_toolchain": {ID: "node_toolchain", Title: "Node Toolchain"},
+			"docker_config":  {ID: "docker_config", Title: "Docker Configuration"},
+			"shell_setup":    {ID: "shell_setup", Title: "Shell Setup"},
+			"git_config":     {ID: "git_config", Title: "Git Configuration"},
+		},
+		macOSOptions: []toggleOption{
+			{ID: "xcode_clt", Title: "Xcode Command Line Tools", Selected: true},
+		},
+		installOptions: []toggleOption{
+			{ID: "brew_bundle", Title: "Brew Bundle", Selected: true},
+		},
+		devOptions: []toggleOption{
+			{ID: "node_toolchain", Title: "Node Toolchain", Selected: true},
+			{ID: "docker_config", Title: "Docker Configuration", Selected: true},
+			{ID: "shell_setup", Title: "Shell Setup", Selected: true},
+			{ID: "git_config", Title: "Git Configuration", Selected: true},
+		},
+		brewEntries: []stages.BrewEntry{
+			{ID: "jq", Kind: "brew"},
+			{ID: "ripgrep", Kind: "brew"},
+			{ID: "visual-studio-code", Kind: "cask"},
+		},
+		brewSelected: map[string]bool{
+			"jq":      true,
+			"ripgrep": true,
+		},
+		nodeOptions: []selectOption{
+			{ID: string(stages.NodeToolchainVitePlus), Title: "vite+"},
+			{ID: string(stages.NodeToolchainNvmPnpm), Title: "pnpm + nvm"},
+		},
+		dockerOptions: []selectOption{
+			{ID: string(stages.DockerRuntimeColima), Title: "colima"},
+		},
+		shellOptions: []toggleOption{
+			{ID: stages.DecisionShellInstallOhMyZsh, Title: "Install oh-my-zsh", Selected: false},
+			{ID: stages.DecisionShellApplyZshrc, Title: "Write zshrc", Selected: true},
+			{ID: stages.DecisionShellApplyStarship, Title: "Write starship", Selected: false},
+		},
+		nodeSelection:   1,
+		dockerSelection: 0,
+		stageStatuses:   make(map[string]state.StageStatus),
+	}
+	m.gitNameInput = textinput.New()
+	m.gitEmailInput = textinput.New()
+	m.gitNameInput.SetValue("Alice")
+	m.gitEmailInput.SetValue("alice@example.com")
+	return m
+}
+
 func TestViewConfigurationMatchesWindowDimensions(t *testing.T) {
 	m := model{
 		screen: screenDevTools,
