@@ -386,33 +386,20 @@ const (
 	defaultViewHeight     = 40
 )
 
-var bootstrapTitleArtLines = []string{
-	"██████╗  ██████╗  ██████╗ ████████╗███████╗████████╗██████╗  █████╗ ██████╗",
-	"██╔══██╗██╔═══██╗██╔═══██╗╚══██╔══╝██╔════╝╚══██╔══╝██╔══██╗██╔══██╗██╔══██╗",
-	"██████╔╝██║   ██║██║   ██║   ██║   ███████╗   ██║   ██████╔╝███████║██████╔╝",
-	"██╔══██╗██║   ██║██║   ██║   ██║   ╚════██║   ██║   ██╔══██╗██╔══██║██╔═══╝",
-	"██████╔╝╚██████╔╝╚██████╔╝   ██║   ███████║   ██║   ██║  ██║██║  ██║██║",
-	"╚═════╝  ╚═════╝  ╚═════╝    ╚═╝   ╚══════╝   ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝",
-}
-
-var bootstrapCompactTitleArtLines = []string{
-	"▗▄▄▖  ▗▄▖  ▗▄▖▗▄▄▄▖▗▄▄▖▗▄▄▄▖▗▄▄▖  ▗▄▖ ▗▄▄▖",
-	"▐▌ ▐▌▐▌ ▐▌▐▌ ▐▌ █ ▐▌     █  ▐▌ ▐▌▐▌ ▐▌▐▌ ▐▌",
-	"▐▛▀▚▖▐▌ ▐▌▐▌ ▐▌ █  ▝▀▚▖  █  ▐▛▀▚▖▐▛▀▜▌▐▛▀▘",
-	"▐▙▄▞▘▝▚▄▞▘▝▚▄▞▘ █ ▗▄▄▞▘  █  ▐▌ ▐▌▐▌ ▐▌▐▌",
-}
-
 var (
-	textColor        = lipgloss.AdaptiveColor{Light: "#0F172A", Dark: "#E5E7EB"}
-	mutedColor       = lipgloss.AdaptiveColor{Light: "#475569", Dark: "#A1A1AA"}
-	dimColor         = lipgloss.AdaptiveColor{Light: "#CBD5E1", Dark: "#30303A"}
-	borderColor      = lipgloss.AdaptiveColor{Light: "#64748B", Dark: "#D1D5DB"}
-	accentColor      = lipgloss.AdaptiveColor{Light: "#7C3AED", Dark: "#A855F7"}
-	accentAltColor   = lipgloss.AdaptiveColor{Light: "#0284C7", Dark: "#22D3EE"}
-	successColor     = lipgloss.AdaptiveColor{Light: "#059669", Dark: "#34D399"}
-	warningColor     = lipgloss.AdaptiveColor{Light: "#B45309", Dark: "#F59E0B"}
-	failureColor     = lipgloss.AdaptiveColor{Light: "#DC2626", Dark: "#F87171"}
-	pendingToneColor = lipgloss.AdaptiveColor{Light: "#64748B", Dark: "#94A3B8"}
+	textColor        = lipgloss.AdaptiveColor{Light: "#111827", Dark: "#F8FAFC"}
+	mutedColor       = lipgloss.AdaptiveColor{Light: "#4B5563", Dark: "#B6C2CF"}
+	dimColor         = lipgloss.AdaptiveColor{Light: "#D1D5DB", Dark: "#374151"}
+	borderColor      = lipgloss.AdaptiveColor{Light: "#D7DEE8", Dark: "#334155"}
+	accentColor      = lipgloss.AdaptiveColor{Light: "#0F766E", Dark: "#2DD4BF"}
+	accentAltColor   = lipgloss.AdaptiveColor{Light: "#2563EB", Dark: "#60A5FA"}
+	successColor     = lipgloss.AdaptiveColor{Light: "#16A34A", Dark: "#4ADE80"}
+	warningColor     = lipgloss.AdaptiveColor{Light: "#D97706", Dark: "#FBBF24"}
+	failureColor     = lipgloss.AdaptiveColor{Light: "#E11D48", Dark: "#FB7185"}
+	pendingToneColor = lipgloss.AdaptiveColor{Light: "#6B7280", Dark: "#94A3B8"}
+	panelSurface     = lipgloss.AdaptiveColor{Light: "#FFFFFF", Dark: "#111827"}
+	screenSurface    = lipgloss.AdaptiveColor{Light: "#F8FAFC", Dark: "#0B1120"}
+	whiteColor       = lipgloss.AdaptiveColor{Light: "#FFFFFF", Dark: "#0B1120"}
 )
 
 func Run(ctx context.Context, options Options) error {
@@ -445,11 +432,13 @@ func Run(ctx context.Context, options Options) error {
 	gitNameInput.Placeholder = "Git user.name"
 	gitNameInput.CharLimit = 128
 	gitNameInput.Prompt = "> "
+	styleTextInput(&gitNameInput)
 
 	gitEmailInput := textinput.New()
 	gitEmailInput.Placeholder = "Git user.email"
 	gitEmailInput.CharLimit = 128
 	gitEmailInput.Prompt = "> "
+	styleTextInput(&gitEmailInput)
 
 	m := model{
 		ctx:              runCtx,
@@ -1081,15 +1070,20 @@ func (m model) renderDashboard(status dashboardStatus, journey dashboardJourney,
 	if shortcutHint != "" {
 		shortcutGapHeight = 1
 	}
-	headerHeight := maxInt(13, contentHeight/3)
+
+	if dashboardUsesStackedLayout(contentWidth) {
+		return m.renderStackedDashboard(contentWidth, contentHeight, shortcutHint, shortcutHintHeight, shortcutGapHeight, status, journey, output, width, height)
+	}
+
+	headerHeight := maxInt(11, contentHeight/3)
 	if headerHeight > contentHeight-6-shortcutHintHeight-shortcutGapHeight {
 		headerHeight = maxInt(6, contentHeight-6-shortcutHintHeight-shortcutGapHeight)
 	}
 	bodyHeight := maxInt(6, contentHeight-headerHeight-1-shortcutHintHeight-shortcutGapHeight)
 
-	titlePanelMinWidth := bootstrapTitleArtWidth() + 6
+	titlePanelMinWidth := 42
 	statusMinWidth := 20
-	titleWidth := maxInt(24, ((contentWidth-columnGap)*2)/3)
+	titleWidth := maxInt(30, ((contentWidth-columnGap)*3)/5)
 	if contentWidth >= titlePanelMinWidth+columnGap+statusMinWidth {
 		titleWidth = maxInt(titlePanelMinWidth, titleWidth)
 	}
@@ -1122,6 +1116,71 @@ func (m model) renderDashboard(status dashboardStatus, journey dashboardJourney,
 	return m.screenStyle(width, height).Render(framed)
 }
 
+func (m model) renderStackedDashboard(
+	contentWidth int,
+	contentHeight int,
+	shortcutHint string,
+	shortcutHintHeight int,
+	shortcutGapHeight int,
+	status dashboardStatus,
+	journey dashboardJourney,
+	output string,
+	viewWidth int,
+	viewHeight int,
+) string {
+	gapCount := 3
+	if shortcutHint == "" {
+		gapCount = 2
+	}
+	availableHeight := maxInt(10, contentHeight-shortcutHintHeight-shortcutGapHeight-gapCount)
+	titleHeight := minInt(7, maxInt(5, availableHeight/4))
+	statusHeight := minInt(9, maxInt(7, availableHeight/3))
+	bodyHeight := maxInt(4, availableHeight-titleHeight-statusHeight)
+	journeyHeight := maxInt(3, bodyHeight/2)
+	outputHeight := maxInt(3, bodyHeight-journeyHeight)
+
+	buildLayout := func(renderedOutputHeight int) string {
+		blocks := []string{
+			m.renderTitlePanel(contentWidth, titleHeight),
+			"",
+			m.renderDashboardStatusPanel(contentWidth, statusHeight, status),
+			"",
+			m.renderJourneyPanel(contentWidth, journeyHeight, journey),
+			m.renderOutputPanel(contentWidth, renderedOutputHeight, output),
+		}
+		if shortcutHint != "" {
+			blocks = append(blocks, "", shortcutHint)
+		}
+		return lipgloss.JoinVertical(lipgloss.Left, blocks...)
+	}
+	layout := buildLayout(outputHeight)
+	if overflow := lipgloss.Height(layout) - contentHeight; overflow > 0 {
+		outputHeight = maxInt(1, outputHeight-overflow)
+		layout = buildLayout(outputHeight)
+	}
+	if overflow := lipgloss.Height(layout) - contentHeight; overflow > 0 {
+		journeyHeight = maxInt(1, journeyHeight-overflow)
+		layout = buildLayout(outputHeight)
+	}
+	if overflow := lipgloss.Height(layout) - contentHeight; overflow > 0 {
+		statusHeight = maxInt(5, statusHeight-overflow)
+		layout = buildLayout(outputHeight)
+	}
+	if overflow := lipgloss.Height(layout) - contentHeight; overflow > 0 {
+		titleHeight = maxInt(4, titleHeight-overflow)
+		layout = buildLayout(outputHeight)
+	}
+	if lipgloss.Height(layout) > contentHeight {
+		layout = strings.Join(limitLines(strings.Split(layout, "\n"), contentHeight), "\n")
+	}
+	framed := lipgloss.Place(contentWidth, contentHeight, lipgloss.Left, lipgloss.Top, layout)
+	return m.screenStyle(viewWidth, viewHeight).Render(framed)
+}
+
+func dashboardUsesStackedLayout(contentWidth int) bool {
+	return contentWidth < 88
+}
+
 func dashboardBodyWidths(contentWidth int, columnGap int) (int, int) {
 	availableWidth := contentWidth - columnGap
 	journeyWidth := maxInt(24, (availableWidth*2)/5)
@@ -1134,19 +1193,29 @@ func dashboardBodyWidths(contentWidth int, columnGap int) (int, int) {
 
 func (m model) renderTitlePanel(width int, height int) string {
 	innerWidth := panelInnerWidth(width)
-	innerHeight := panelInnerHeight(height)
+	markText := "LS"
+	mark := lipgloss.NewStyle().
+		Bold(true).
+		Padding(0, 1).
+		Foreground(whiteColor).
+		Background(accentColor).
+		Render(markText)
+	eyebrow := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(accentColor).
+		Render(truncateLine("APPLE SILICON SETUP", maxInt(1, innerWidth-lipgloss.Width(markText)-4)))
+	title := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(textColor).
+		Render(truncateLine("Laptop Setup", innerWidth))
 	tagline := lipgloss.NewStyle().
 		Foreground(mutedColor).
-		Render(truncateLine("Initiating CHAPEAUX, stand by for awesomeness...", innerWidth))
-
-	lines := []string{lipgloss.NewStyle().Bold(true).Foreground(accentColor).Render("BOOTSTRAP")}
-	switch {
-	case innerWidth >= bootstrapTitleArtWidth() && innerHeight >= len(bootstrapTitleArtLines)+2:
-		lines = renderBootstrapTitleArt(bootstrapTitleArtLines)
-	case innerWidth >= titleArtWidth(bootstrapCompactTitleArtLines) && innerHeight >= len(bootstrapCompactTitleArtLines)+2:
-		lines = renderBootstrapTitleArt(bootstrapCompactTitleArtLines)
-	}
-	lines = append(lines, "", tagline)
+		Render(truncateLine("Plan, apply, and resume a workstation bootstrap.", innerWidth))
+	prompt := lipgloss.NewStyle().
+		Foreground(dimColor).
+		Render(truncateLine("Apple Silicon onboarding, without the terminal clutter.", innerWidth))
+	topLine := lipgloss.JoinHorizontal(lipgloss.Center, mark, "  ", eyebrow)
+	lines := []string{topLine, "", title, tagline, prompt}
 	content := lipgloss.JoinVertical(lipgloss.Left, lines...)
 	return m.panelStyle(width, height).
 		Align(lipgloss.Left).
@@ -1159,7 +1228,9 @@ func (m model) renderDashboardStatusPanel(width int, height int, status dashboar
 	barWidth := maxInt(10, minInt(24, innerWidth-2))
 	statusBadge := lipgloss.NewStyle().
 		Bold(true).
-		Foreground(status.BadgeTone).
+		Padding(0, 1).
+		Foreground(whiteColor).
+		Background(status.BadgeTone).
 		Render(strings.ToUpper(status.Badge))
 	badgeLine := statusBadge
 	if status.Spinner {
@@ -1167,13 +1238,12 @@ func (m model) renderDashboardStatusPanel(width int, height int, status dashboar
 	}
 	badgeLine = m.renderStatusPanelTopLine(innerWidth, badgeLine)
 	lines := []string{
+		panelHeader("Status"),
 		badgeLine,
-		"",
-		truncateLine(status.Heading, innerWidth),
-		"",
+		lipgloss.NewStyle().Bold(true).Foreground(textColor).Render(truncateLine(status.Heading, innerWidth)),
+		lipgloss.NewStyle().Foreground(mutedColor).Render(truncateLine(status.Summary, innerWidth)),
 		lipgloss.NewStyle().Bold(true).Foreground(accentAltColor).Render("Plan"),
 		renderProgressBar(barWidth, status.ConfigurationProgressPct),
-		"",
 		lipgloss.NewStyle().Bold(true).Foreground(accentAltColor).Render("Apply"),
 		renderProgressBar(barWidth, status.ExecutionProgressPct),
 	}
@@ -1328,7 +1398,8 @@ func formatElapsed(elapsed time.Duration) string {
 func (m model) renderJourneyPanel(width int, height int, journey dashboardJourney) string {
 	innerWidth := panelInnerWidth(width)
 	lineBudget := panelInnerHeight(height)
-	lines := make([]string, 0, maxInt(1, len(journey.StageOrder)))
+	lines := make([]string, 0, maxInt(1, len(journey.StageOrder)+2))
+	lines = append(lines, panelHeader("Journey"), "")
 	for _, stageID := range journey.StageOrder {
 		status := normalizedStageStatus(journey.Statuses[stageID])
 		lines = append(lines, m.renderJourneyLine(innerWidth, stageID, journey.CurrentStep, status))
@@ -1367,7 +1438,7 @@ func stageStatusMarker(status string) string {
 	if isCompleteStageStatus(status) {
 		return "✓"
 	}
-	return "•"
+	return "○"
 }
 
 func isCompleteStageStatus(status string) bool {
@@ -1380,7 +1451,7 @@ func isCompleteStageStatus(status string) bool {
 }
 
 func (m model) renderOutputPanel(width int, height int, content string) string {
-	lines := strings.Split(content, "\n")
+	lines := append([]string{panelHeader("Details"), ""}, strings.Split(content, "\n")...)
 	visible := limitLines(lines, panelInnerHeight(height))
 	return m.panelStyle(width, height).Render(strings.Join(visible, "\n"))
 }
@@ -1388,7 +1459,7 @@ func (m model) renderOutputPanel(width int, height int, content string) string {
 func (m model) executionOutput(currentStageID string) string {
 	lines := []string{}
 	if currentStageID != "" {
-		lines = append(lines, lipgloss.NewStyle().Foreground(mutedColor).Render("Stage: "+m.stageTitle(currentStageID)))
+		lines = append(lines, labelValue("Stage", m.stageTitle(currentStageID)))
 	} else {
 		lines = append(lines, lipgloss.NewStyle().Foreground(mutedColor).Render("Stage waiting"))
 	}
@@ -1438,12 +1509,33 @@ func (m model) displayLogLine(line tailedLogLine) string {
 func (m model) panelStyle(width int, height int) lipgloss.Style {
 	style := lipgloss.NewStyle().
 		Padding(1, 2).
-		Border(lipgloss.NormalBorder()).
+		Border(lipgloss.RoundedBorder()).
 		BorderForeground(borderColor).
+		Background(panelSurface).
 		Foreground(textColor)
 	return style.
 		Width(maxInt(1, width-2)).
 		Height(maxInt(1, height-2))
+}
+
+func panelHeader(value string) string {
+	return lipgloss.NewStyle().
+		Bold(true).
+		Foreground(accentColor).
+		Render(strings.ToUpper(value))
+}
+
+func labelValue(label string, value string) string {
+	labelText := lipgloss.NewStyle().Bold(true).Foreground(mutedColor).Render(label + ":")
+	valueText := lipgloss.NewStyle().Foreground(textColor).Render(value)
+	return lipgloss.JoinHorizontal(lipgloss.Center, labelText, " ", valueText)
+}
+
+func styleTextInput(input *textinput.Model) {
+	input.PromptStyle = lipgloss.NewStyle().Foreground(accentColor).Bold(true)
+	input.TextStyle = lipgloss.NewStyle().Foreground(textColor)
+	input.PlaceholderStyle = lipgloss.NewStyle().Foreground(dimColor)
+	input.Cursor.Style = lipgloss.NewStyle().Foreground(accentAltColor)
 }
 
 func (m model) executionProgress() executionProgress {
@@ -1734,6 +1826,7 @@ func (m model) stageTitle(stageID string) string {
 func (m model) screenStyle(width int, height int) lipgloss.Style {
 	return lipgloss.NewStyle().
 		Padding(1, 2).
+		Background(screenSurface).
 		Foreground(textColor)
 }
 
@@ -1822,17 +1915,17 @@ func renderProgressBar(width int, percent int) string {
 	percent = maxInt(0, minInt(100, percent))
 	bar := progress.New(
 		progress.WithWidth(width),
-		progress.WithDefaultGradient(),
+		progress.WithSolidFill("#2DD4BF"),
 	)
-	bar.EmptyColor = "#30303A"
+	bar.EmptyColor = "#334155"
 	bar.PercentageStyle = lipgloss.NewStyle().Foreground(mutedColor)
 	if percent == 100 {
-		bar.FullColor = "#34D399"
+		bar.FullColor = "#4ADE80"
 		bar = progress.New(
 			progress.WithWidth(width),
-			progress.WithSolidFill("#34D399"),
+			progress.WithSolidFill("#4ADE80"),
 		)
-		bar.EmptyColor = "#30303A"
+		bar.EmptyColor = "#334155"
 		bar.PercentageStyle = lipgloss.NewStyle().Foreground(mutedColor)
 	}
 	return bar.ViewAs(float64(percent) / 100)
@@ -1858,37 +1951,6 @@ func truncateLine(value string, width int) string {
 	return value[:width-3] + "..."
 }
 
-func bootstrapTitleArtWidth() int {
-	return titleArtWidth(bootstrapTitleArtLines)
-}
-
-func titleArtWidth(lines []string) int {
-	width := 0
-	for _, line := range lines {
-		width = maxInt(width, lipgloss.Width(line))
-	}
-	return width
-}
-
-func renderBootstrapTitleArt(lines []string) []string {
-	palette := []lipgloss.TerminalColor{
-		accentColor,
-		accentAltColor,
-		successColor,
-		warningColor,
-		failureColor,
-		accentAltColor,
-	}
-	rendered := make([]string, 0, len(lines))
-	for index, line := range lines {
-		rendered = append(rendered, lipgloss.NewStyle().
-			Bold(true).
-			Foreground(palette[index%len(palette)]).
-			Render(line))
-	}
-	return rendered
-}
-
 func (m model) outputPanelLineBudget() int {
 	_, height := m.outputPanelInnerSize()
 	return height
@@ -1898,10 +1960,20 @@ func (m model) outputPanelInnerSize() (int, int) {
 	width, height := m.viewDimensions()
 	contentWidth := maxInt(20, width-4)
 	contentHeight := maxInt(12, height-2)
+	if dashboardUsesStackedLayout(contentWidth) {
+		shortcutHintHeight := 1
+		shortcutGapHeight := 1
+		availableHeight := maxInt(10, contentHeight-shortcutHintHeight-shortcutGapHeight-3)
+		titleHeight := minInt(7, maxInt(5, availableHeight/4))
+		statusHeight := minInt(9, maxInt(7, availableHeight/3))
+		bodyHeight := maxInt(4, availableHeight-titleHeight-statusHeight)
+		outputHeight := maxInt(3, bodyHeight-(bodyHeight/2))
+		return panelInnerWidth(contentWidth), panelInnerHeight(outputHeight)
+	}
 	columnGap := 2
 	shortcutHintHeight := 1
 	shortcutGapHeight := 1
-	headerHeight := maxInt(13, contentHeight/3)
+	headerHeight := maxInt(11, contentHeight/3)
 	if headerHeight > contentHeight-6-shortcutHintHeight-shortcutGapHeight {
 		headerHeight = maxInt(6, contentHeight-6-shortcutHintHeight-shortcutGapHeight)
 	}

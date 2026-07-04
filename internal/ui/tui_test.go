@@ -444,8 +444,11 @@ func TestViewExecutingRendersDashboardLayout(t *testing.T) {
 	view := m.View()
 
 	for _, fragment := range []string{
-		"██████╗  ██████╗",
-		"Initiating CHAPEAUX, stand by for awesomeness...",
+		"APPLE SILICON SETUP",
+		"Laptop Setup",
+		"STATUS",
+		"JOURNEY",
+		"DETAILS",
 		"Plan",
 		"Apply",
 		"Stage: Brew Bundle",
@@ -456,7 +459,7 @@ func TestViewExecutingRendersDashboardLayout(t *testing.T) {
 			t.Fatalf("expected execution view to contain %q, got %q", fragment, view)
 		}
 	}
-	for _, fragment := range []string{"LIVE STATUS", "RUN STATUS", "JOURNEY", "STANDARD OUTPUT"} {
+	for _, fragment := range []string{"LIVE STATUS", "RUN STATUS", "STANDARD OUTPUT"} {
 		if strings.Contains(view, fragment) {
 			t.Fatalf("expected execution view to omit panel title %q, got %q", fragment, view)
 		}
@@ -464,11 +467,10 @@ func TestViewExecutingRendersDashboardLayout(t *testing.T) {
 	if strings.Contains(view, "brew_bundle") {
 		t.Fatalf("expected execution view to hide internal stage id, got %q", view)
 	}
-	if strings.Contains(view, "2 of 3") || strings.Contains(view, "finished") {
-		t.Fatalf("expected execution view to omit status summary counts, got %q", view)
-	}
 	if !strings.Contains(view, "┌") {
-		t.Fatalf("expected bordered execution view, got %q", view)
+		if !strings.Contains(view, "╭") {
+			t.Fatalf("expected bordered execution view, got %q", view)
+		}
 	}
 	if strings.Contains(view, "completed xcode") {
 		t.Fatalf("expected execution log view to filter to current stage, got %q", view)
@@ -556,23 +558,24 @@ func TestPreviewJourneyCarriesPrecheckStatuses(t *testing.T) {
 	}
 }
 
-func TestRenderTitlePanelUsesCompactFallback(t *testing.T) {
+func TestRenderTitlePanelUsesModernBrandBlock(t *testing.T) {
 	var m model
-	width := maxInt(
-		titleArtWidth(bootstrapCompactTitleArtLines),
-		lipgloss.Width("Initiating CHAPEAUX, stand by for awesomeness..."),
-	) + 6
+	width := lipgloss.Width("Plan, apply, and resume a workstation bootstrap.") + 6
 
-	view := m.renderTitlePanel(width, len(bootstrapCompactTitleArtLines)+6)
+	view := m.renderTitlePanel(width, 9)
 
-	if !strings.Contains(view, "▗▄▄▖  ▗▄▖") {
-		t.Fatalf("expected compact fallback title art, got %q", view)
+	for _, fragment := range []string{
+		"LS",
+		"APPLE SILICON SETUP",
+		"Laptop Setup",
+		"Plan, apply, and resume a workstation bootstrap.",
+	} {
+		if !strings.Contains(view, fragment) {
+			t.Fatalf("expected title panel to contain %q, got %q", fragment, view)
+		}
 	}
 	if strings.Contains(view, "██████╗") {
-		t.Fatalf("expected compact fallback instead of large title art, got %q", view)
-	}
-	if !strings.Contains(view, "Initiating CHAPEAUX, stand by for awesomeness...") {
-		t.Fatalf("expected tagline in compact fallback, got %q", view)
+		t.Fatalf("expected modern brand block instead of title art, got %q", view)
 	}
 }
 
@@ -611,29 +614,14 @@ func TestRenderDashboardStatusPanelLeftAlignsBadgeWithContent(t *testing.T) {
 	if badgeLineIndex == -1 || headingLineIndex == -1 || configLineIndex == -1 || executionLineIndex == -1 {
 		t.Fatalf("expected badge, heading, and both progress labels in status panel, got %q", view)
 	}
-	if got, want := strings.Index(lines[badgeLineIndex], "CONFIGURING"), strings.Index(lines[headingLineIndex], "Package & App Selection"); got != want {
-		t.Fatalf("expected badge and heading to start in same column, got badge=%d heading=%d view=%q", got, want, view)
-	}
-	if headingLineIndex != badgeLineIndex+2 {
-		t.Fatalf("expected one spacer line between badge and heading, got view=%q", view)
-	}
-	if strings.Trim(lines[badgeLineIndex+1], " │") != "" {
-		t.Fatalf("expected spacer line between badge and heading, got %q", lines[badgeLineIndex+1])
-	}
-	if strings.Trim(lines[headingLineIndex+1], " │") != "" {
-		t.Fatalf("expected spacer line after heading, got %q", lines[headingLineIndex+1])
+	if headingLineIndex != badgeLineIndex+1 {
+		t.Fatalf("expected compact status panel to put heading directly below badge, got view=%q", view)
 	}
 	if configLineIndex != headingLineIndex+2 {
-		t.Fatalf("expected config progress label directly below heading spacer, got view=%q", view)
+		t.Fatalf("expected plan progress label below status summary, got view=%q", view)
 	}
-	if executionLineIndex != configLineIndex+3 {
-		t.Fatalf("expected execution progress label below config progress bar, got view=%q", view)
-	}
-	if strings.Trim(lines[configLineIndex+2], " │") != "" {
-		t.Fatalf("expected spacer line between progress bars, got %q", lines[configLineIndex+2])
-	}
-	if strings.Contains(view, "4 of 13") {
-		t.Fatalf("expected status panel to omit stage count summary, got %q", view)
+	if executionLineIndex != configLineIndex+2 {
+		t.Fatalf("expected apply progress label below plan progress bar, got view=%q", view)
 	}
 	if strings.Contains(view, "stages selected") {
 		t.Fatalf("expected status panel to omit selected stage count, got %q", view)
@@ -859,7 +847,7 @@ func TestRenderDashboardPlacesShortcutHintBelowBody(t *testing.T) {
 	lastPanelBorderIndex := -1
 	hintLineIndex := -1
 	for index, line := range lines {
-		if strings.Contains(line, "└") {
+		if strings.ContainsAny(line, "└╰") {
 			lastPanelBorderIndex = index
 		}
 		if strings.Contains(line, "enter continue") {
@@ -990,8 +978,8 @@ func TestViewConfigurationUsesDashboardLayoutWithJourneyPreview(t *testing.T) {
 	view := m.View()
 
 	for _, fragment := range []string{
-		"██████╗  ██████╗",
-		"Initiating CHAPEAUX, stand by for awesomeness...",
+		"APPLE SILICON SETUP",
+		"Laptop Setup",
 		"Dev Tools Setup",
 		"Xcode Command Line Tools",
 		"Brew Bundle",
@@ -1001,7 +989,7 @@ func TestViewConfigurationUsesDashboardLayoutWithJourneyPreview(t *testing.T) {
 			t.Fatalf("expected configuration view to contain %q, got %q", fragment, view)
 		}
 	}
-	for _, fragment := range []string{"CONFIGURATION", "JOURNEY", "STANDARD OUTPUT"} {
+	for _, fragment := range []string{"CONFIGURATION", "STANDARD OUTPUT"} {
 		if strings.Contains(view, fragment) {
 			t.Fatalf("expected configuration view to omit panel title %q, got %q", fragment, view)
 		}
@@ -1010,6 +998,51 @@ func TestViewConfigurationUsesDashboardLayoutWithJourneyPreview(t *testing.T) {
 		if strings.Contains(view, fragment) {
 			t.Fatalf("expected configuration view to omit shortcut hint %q, got %q", fragment, view)
 		}
+	}
+}
+
+func TestRenderDashboardUsesStackedLayoutOnNarrowTerminals(t *testing.T) {
+	m := model{
+		width:  72,
+		height: 34,
+		stageOrder: []string{
+			"xcode_clt",
+			"brew_bundle",
+		},
+		stageMap: map[string]stages.Stage{
+			"xcode_clt":   {ID: "xcode_clt", Title: "Xcode Command Line Tools"},
+			"brew_bundle": {ID: "brew_bundle", Title: "Brew Bundle"},
+		},
+		stageStatuses: map[string]state.StageStatus{
+			"xcode_clt":   {Status: stages.StatusSuccess},
+			"brew_bundle": {Status: stages.StatusPending},
+		},
+	}
+
+	view := ansi.Strip(m.renderDashboard(dashboardStatus{
+		Badge:                    "Configuring",
+		BadgeTone:                accentAltColor,
+		Heading:                  "Package & App Selection",
+		Summary:                  "4 of 13",
+		ConfigurationProgressPct: 30,
+		ExecutionProgressPct:     0,
+		Hint:                     "Enter continue  Esc back  CTRL+C quit",
+	}, m.previewJourney(), "Choose the packages to install."))
+
+	if got, want := lipgloss.Width(view), 72; got != want {
+		t.Fatalf("expected stacked dashboard width=%d, got=%d", want, got)
+	}
+	if got, want := lipgloss.Height(view), 34; got != want {
+		t.Fatalf("expected stacked dashboard height=%d, got=%d", want, got)
+	}
+	statusIndex := strings.Index(view, "STATUS")
+	journeyIndex := strings.Index(view, "JOURNEY")
+	detailsIndex := strings.Index(view, "DETAILS")
+	if statusIndex == -1 || journeyIndex == -1 || detailsIndex == -1 {
+		t.Fatalf("expected stacked dashboard to include section headers, got %q", view)
+	}
+	if !(statusIndex < journeyIndex && journeyIndex < detailsIndex) {
+		t.Fatalf("expected stacked order status -> journey -> details, got %q", view)
 	}
 }
 
