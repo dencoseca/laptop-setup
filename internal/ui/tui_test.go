@@ -414,6 +414,17 @@ func TestRenderOutputPanelCapsRenderedHeight(t *testing.T) {
 	}
 }
 
+func TestDashboardBaseStylesDoNotPaintBroadBackgrounds(t *testing.T) {
+	m := model{}
+
+	if _, ok := m.panelStyle(56, 25).GetBackground().(lipgloss.NoColor); !ok {
+		t.Fatalf("expected panel style to leave terminal background unchanged")
+	}
+	if _, ok := m.screenStyle(120, 40).GetBackground().(lipgloss.NoColor); !ok {
+		t.Fatalf("expected screen style to leave terminal background unchanged")
+	}
+}
+
 func TestViewExecutingRendersDashboardLayout(t *testing.T) {
 	m := model{
 		screen: screenExecuting,

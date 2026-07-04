@@ -397,8 +397,6 @@ var (
 	warningColor     = lipgloss.AdaptiveColor{Light: "#D97706", Dark: "#FBBF24"}
 	failureColor     = lipgloss.AdaptiveColor{Light: "#E11D48", Dark: "#FB7185"}
 	pendingToneColor = lipgloss.AdaptiveColor{Light: "#6B7280", Dark: "#94A3B8"}
-	panelSurface     = lipgloss.AdaptiveColor{Light: "#FFFFFF", Dark: "#111827"}
-	screenSurface    = lipgloss.AdaptiveColor{Light: "#F8FAFC", Dark: "#0B1120"}
 	whiteColor       = lipgloss.AdaptiveColor{Light: "#FFFFFF", Dark: "#0B1120"}
 )
 
@@ -1511,7 +1509,6 @@ func (m model) panelStyle(width int, height int) lipgloss.Style {
 		Padding(1, 2).
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(borderColor).
-		Background(panelSurface).
 		Foreground(textColor)
 	return style.
 		Width(maxInt(1, width-2)).
@@ -1826,7 +1823,6 @@ func (m model) stageTitle(stageID string) string {
 func (m model) screenStyle(width int, height int) lipgloss.Style {
 	return lipgloss.NewStyle().
 		Padding(1, 2).
-		Background(screenSurface).
 		Foreground(textColor)
 }
 
@@ -1917,7 +1913,7 @@ func renderProgressBar(width int, percent int) string {
 		progress.WithWidth(width),
 		progress.WithSolidFill("#2DD4BF"),
 	)
-	bar.EmptyColor = "#334155"
+	bar.EmptyColor = "#64748B"
 	bar.PercentageStyle = lipgloss.NewStyle().Foreground(mutedColor)
 	if percent == 100 {
 		bar.FullColor = "#4ADE80"
@@ -1925,7 +1921,7 @@ func renderProgressBar(width int, percent int) string {
 			progress.WithWidth(width),
 			progress.WithSolidFill("#4ADE80"),
 		)
-		bar.EmptyColor = "#334155"
+		bar.EmptyColor = "#64748B"
 		bar.PercentageStyle = lipgloss.NewStyle().Foreground(mutedColor)
 	}
 	return bar.ViewAs(float64(percent) / 100)
