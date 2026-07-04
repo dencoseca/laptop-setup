@@ -1161,7 +1161,7 @@ func TestFormatElapsedUsesSecondsWithMilliseconds(t *testing.T) {
 	}
 }
 
-func TestViewConfigurationUsesDashboardLayoutWithJourneyPreview(t *testing.T) {
+func TestViewConfigurationUsesSimplifiedLayoutWithJourneyPreview(t *testing.T) {
 	m := model{
 		screen: screenDevTools,
 		width:  120,
@@ -1198,8 +1198,9 @@ func TestViewConfigurationUsesDashboardLayoutWithJourneyPreview(t *testing.T) {
 	for _, fragment := range []string{
 		"APPLE SILICON SETUP",
 		"Laptop Setup",
+		"STATUS",
+		"JOURNEY",
 		"Dev Tools Setup",
-		"Xcode Command Line Tools",
 		"Brew Bundle",
 		"Git Configuration",
 	} {
@@ -1207,7 +1208,7 @@ func TestViewConfigurationUsesDashboardLayoutWithJourneyPreview(t *testing.T) {
 			t.Fatalf("expected configuration view to contain %q, got %q", fragment, view)
 		}
 	}
-	for _, fragment := range []string{"CONFIGURATION", "STANDARD OUTPUT"} {
+	for _, fragment := range []string{"DETAILS", "CONFIGURATION", "STANDARD OUTPUT"} {
 		if strings.Contains(view, fragment) {
 			t.Fatalf("expected configuration view to omit panel title %q, got %q", fragment, view)
 		}
@@ -1216,6 +1217,23 @@ func TestViewConfigurationUsesDashboardLayoutWithJourneyPreview(t *testing.T) {
 		if strings.Contains(view, fragment) {
 			t.Fatalf("expected configuration view to omit shortcut hint %q, got %q", fragment, view)
 		}
+	}
+}
+
+func TestConfigurationBodyWidthsPrioritizeActiveContent(t *testing.T) {
+	journeyWidth, focusWidth := configurationBodyWidths(116, 2)
+
+	if got, want := journeyWidth, 28; got != want {
+		t.Fatalf("expected compact journey width=%d, got=%d", want, got)
+	}
+	if got, want := focusWidth, 86; got != want {
+		t.Fatalf("expected focused content width=%d, got=%d", want, got)
+	}
+	if focusWidth <= journeyWidth*2 {
+		t.Fatalf("expected focused content to be more than twice the journey rail: journey=%d focus=%d", journeyWidth, focusWidth)
+	}
+	if got, want := journeyWidth+2+focusWidth, 116; got != want {
+		t.Fatalf("expected widths plus gap=%d, got=%d", want, got)
 	}
 }
 
@@ -1261,6 +1279,57 @@ func TestRenderDashboardUsesStackedLayoutOnNarrowTerminals(t *testing.T) {
 	}
 	if !(statusIndex < journeyIndex && journeyIndex < detailsIndex) {
 		t.Fatalf("expected stacked order status -> journey -> details, got %q", view)
+	}
+}
+
+func TestViewConfigurationStacksWithoutJourneyOrDetailsOnNarrowTerminals(t *testing.T) {
+	m := model{
+		screen: screenDevTools,
+		width:  72,
+		height: 34,
+		catalog: []stages.Stage{
+			{ID: "xcode_clt", Title: "Xcode Command Line Tools"},
+			{ID: "brew_bundle", Title: "Brew Bundle"},
+			{ID: "git_config", Title: "Git Configuration"},
+		},
+		stageMap: map[string]stages.Stage{
+			"xcode_clt":   {ID: "xcode_clt", Title: "Xcode Command Line Tools"},
+			"brew_bundle": {ID: "brew_bundle", Title: "Brew Bundle"},
+			"git_config":  {ID: "git_config", Title: "Git Configuration"},
+		},
+		macOSOptions: []toggleOption{
+			{ID: "xcode_clt", Title: "Xcode Command Line Tools", Selected: true},
+		},
+		installOptions: []toggleOption{
+			{ID: "brew_bundle", Title: "Brew Bundle", Selected: true},
+		},
+		devOptions: []toggleOption{
+			{ID: "git_config", Title: "Git Configuration", Selected: true},
+		},
+	}
+
+	view := ansi.Strip(m.View())
+
+	if got, want := lipgloss.Width(view), 72; got != want {
+		t.Fatalf("expected narrow configuration width=%d, got=%d", want, got)
+	}
+	if got, want := lipgloss.Height(view), 34; got != want {
+		t.Fatalf("expected narrow configuration height=%d, got=%d", want, got)
+	}
+	for _, fragment := range []string{
+		"APPLE SILICON SETUP",
+		"STATUS",
+		"Dev Tools Setup",
+		"Git Configuration",
+	} {
+		if !strings.Contains(view, fragment) {
+			t.Fatalf("expected narrow configuration view to contain %q, got %q", fragment, view)
+		}
+	}
+	for _, fragment := range []string{"JOURNEY", "DETAILS"} {
+		if strings.Contains(view, fragment) {
+			t.Fatalf("expected narrow configuration view to omit %q, got %q", fragment, view)
+		}
 	}
 }
 
