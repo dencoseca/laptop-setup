@@ -150,16 +150,37 @@ func (m *model) viewReview() string {
 	m.plan = plan
 	m.planError = ""
 	if err != nil {
-		m.planError = err.Error()
+		m.planError = m.humanizeStageReferences(err.Error())
 	}
 
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s\n\n", lipgloss.NewStyle().Bold(true).Render("Execution Plan Review"))
-	fmt.Fprintf(&b, "%s\n", labelValue("Mode", state.ModeFromDryRun(m.effectiveDryRun()).String()))
-	if !m.resumeRun {
-		fmt.Fprintf(&b, "%s\n", labelValue("Selected packages/apps", fmt.Sprintf("%d", len(m.selectedBrewIDs()))))
+
+	if m.planError != "" {
+		fmt.Fprintf(&b, "%s\n", lipgloss.NewStyle().Bold(true).Foreground(failureColor).Render("PLAN ERROR"))
+		fmt.Fprintf(&b, "%s\n\n", lipgloss.NewStyle().Foreground(failureColor).Render(m.planError))
 	}
+
+	fmt.Fprintf(&b, "%s\n", reviewSectionTitle("Mode"))
+	mode := state.ModeFromDryRun(m.effectiveDryRun()).String()
+	fmt.Fprintf(&b, "%s\n", labelValue("Mode", mode))
+	if m.effectiveDryRun() {
+		fmt.Fprintf(&b, "%s\n", lipgloss.NewStyle().Bold(true).Foreground(warningColor).Render("Dry-run preview: no changes will be applied."))
+	}
+	if m.resumeRun && m.current != nil {
+		fmt.Fprintf(&b, "%s\n", labelValue("Resume run", m.current.RunID.String()))
+	}
+
+	if !m.resumeRun {
+		fmt.Fprintf(&b, "\n%s\n", reviewSectionTitle("Package Summary"))
+		fmt.Fprintf(&b, "%s\n", labelValue("Selected packages/apps", fmt.Sprintf("%d of %d", len(m.selectedBrewIDs()), len(m.brewEntries))))
+		if selected := m.selectedBrewIDs(); len(selected) > 0 {
+			fmt.Fprintf(&b, "%s\n", labelValue("Brewfile entries", summarizeReviewList(selected, 6)))
+		}
+	}
+
 	decisions := m.effectiveDecisions()
+	fmt.Fprintf(&b, "\n%s\n", reviewSectionTitle("Key Decisions"))
 	fmt.Fprintf(&b, "%s\n", labelValue("Node toolchain", selectOptionTitle(m.nodeOptions, string(stages.NodeToolchainFromDecisions(decisions)))))
 	fmt.Fprintf(&b, "%s\n", labelValue("Docker runtime", selectOptionTitle(m.dockerOptions, string(stages.DockerRuntimeFromDecisions(decisions)))))
 	fmt.Fprintf(&b, "%s\n", labelValue("Shell", fmt.Sprintf("oh-my-zsh=%t, zshrc=%t, starship=%t",
@@ -167,18 +188,117 @@ func (m *model) viewReview() string {
 		stages.ShellApplyZshrcTemplate(decisions),
 		stages.ShellApplyStarshipTemplate(decisions),
 	)))
-	if m.stageSelected(string(stages.StageGitConfig)) {
+	if m.stageSelected(string(stages.StageGitConfig)) || stringInSlice(string(stages.StageGitConfig), m.plan) {
 		name, email := stages.GitIdentityFromDecisions(decisions)
 		fmt.Fprintf(&b, "%s\n", labelValue("Git identity", fmt.Sprintf("%s <%s>", name, email)))
 	}
-	fmt.Fprintf(&b, "\nStages:\n")
+
+	fmt.Fprintf(&b, "\n%s\n", reviewSectionTitle("Planned Stages"))
+	if len(m.plan) == 0 {
+		fmt.Fprintf(&b, "%s\n", lipgloss.NewStyle().Foreground(mutedColor).Render("No stages resolved yet."))
+	}
 	for _, stageID := range m.plan {
 		fmt.Fprintf(&b, "- %s\n", m.stageTitle(stageID))
 	}
-	if m.planError != "" {
-		fmt.Fprintf(&b, "\n%s\n", lipgloss.NewStyle().Foreground(failureColor).Render("Plan error: "+m.planError))
+
+	fmt.Fprintf(&b, "\n%s\n", reviewSectionTitle("Skipped Or Already Satisfied"))
+	skippedOrSatisfied := m.reviewSkippedOrSatisfiedLines()
+	if len(skippedOrSatisfied) == 0 {
+		fmt.Fprintf(&b, "%s\n", lipgloss.NewStyle().Foreground(mutedColor).Render("None"))
+	}
+	for _, line := range skippedOrSatisfied {
+		fmt.Fprintf(&b, "- %s\n", line)
 	}
 	return b.String()
+}
+
+func reviewSectionTitle(title string) string {
+	return lipgloss.NewStyle().Bold(true).Foreground(accentColor).Render(strings.ToUpper(title))
+}
+
+func summarizeReviewList(items []string, limit int) string {
+	if limit <= 0 || len(items) == 0 {
+		return ""
+	}
+	if len(items) <= limit {
+		return strings.Join(items, ", ")
+	}
+	visible := strings.Join(items[:limit], ", ")
+	return fmt.Sprintf("%s, +%d more", visible, len(items)-limit)
+}
+
+func stringInSlice(needle string, haystack []string) bool {
+	for _, item := range haystack {
+		if item == needle {
+			return true
+		}
+	}
+	return false
+}
+
+func (m model) reviewSkippedOrSatisfiedLines() []string {
+	plannedSet := make(map[string]struct{}, len(m.plan))
+	for _, stageID := range m.plan {
+		plannedSet[stageID] = struct{}{}
+	}
+	selectedSet := make(map[string]struct{})
+	if !m.resumeRun {
+		collectSelected(selectedSet, m.macOSOptions)
+		collectSelected(selectedSet, m.installOptions)
+		collectSelected(selectedSet, m.devOptions)
+		collectSelected(selectedSet, m.manualOptions)
+	}
+	skipSet := make(map[string]struct{}, len(m.config.Skip))
+	for _, stageID := range m.config.Skip {
+		skipSet[strings.TrimSpace(stageID)] = struct{}{}
+	}
+
+	lines := []string{}
+	for _, stage := range m.catalog {
+		stageID := stage.ID.String()
+		title := m.stageTitle(stageID)
+		status := normalizedStageStatus(m.stageStatuses[stageID])
+		switch status {
+		case string(stages.StatusAlreadyDone):
+			lines = append(lines, fmt.Sprintf("Already satisfied: %s", title))
+			continue
+		case string(stages.StatusSkipped):
+			lines = append(lines, fmt.Sprintf("Skipped: %s", title))
+			continue
+		}
+
+		if _, planned := plannedSet[stageID]; planned {
+			continue
+		}
+		if _, skipped := skipSet[stageID]; skipped {
+			lines = append(lines, fmt.Sprintf("Skipped: %s", title))
+			continue
+		}
+		if m.resumeRun {
+			continue
+		}
+		if _, selected := selectedSet[stageID]; !selected {
+			lines = append(lines, fmt.Sprintf("Not selected: %s", title))
+			continue
+		}
+		if strings.TrimSpace(m.config.From) != "" || len(m.config.Only) > 0 {
+			lines = append(lines, fmt.Sprintf("Omitted by plan filters: %s", title))
+		}
+	}
+	return lines
+}
+
+func (m model) humanizeStageReferences(value string) string {
+	out := value
+	for _, stage := range m.catalog {
+		stageID := stage.ID.String()
+		title := strings.TrimSpace(stage.Title)
+		if stageID == "" || title == "" {
+			continue
+		}
+		out = strings.ReplaceAll(out, stageID, title)
+	}
+	return out
 }
 
 func selectOptionTitle(options []selectOption, id string) string {

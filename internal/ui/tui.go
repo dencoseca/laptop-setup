@@ -1699,6 +1699,14 @@ func (m model) configurationDashboardStatus() dashboardStatus {
 	if m.screen == screenReview {
 		badge = "Ready"
 		badgeTone = successColor
+		if m.effectiveDryRun() {
+			badge = "Dry run"
+			badgeTone = warningColor
+		}
+		if strings.TrimSpace(m.planError) != "" {
+			badge = "Plan error"
+			badgeTone = failureColor
+		}
 	} else if m.screen == screenWelcome {
 		badge = "Ready"
 		badgeTone = accentColor
