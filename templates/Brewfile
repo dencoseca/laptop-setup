@@ -10,6 +10,7 @@ brew "docker-buildx"
 brew "docker-compose"
 brew "docker-credential-helper"
 brew "colima"
+brew "switchaudio-osx"
 
 # casks
 cask "alfred"
