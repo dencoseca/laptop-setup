@@ -31,7 +31,7 @@ func TestEmbeddedTerminalSetupMatchesGhosttyStack(t *testing.T) {
 	templateFS := TemplateFS()
 
 	brewfile := mustReadTemplate(t, templateFS, "Brewfile")
-	for _, entry := range []string{`brew "fzf"`, `cask "ghostty"`} {
+	for _, entry := range []string{`brew "bat"`, `brew "fzf"`, `cask "ghostty"`} {
 		if !strings.Contains(brewfile, entry) {
 			t.Fatalf("expected Brewfile to contain %q", entry)
 		}

@@ -1,5 +1,6 @@
 # formulae
 brew "jq"
+brew "bat"
 brew "ripgrep"
 brew "tree"
 brew "watch"
