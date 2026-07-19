@@ -52,6 +52,7 @@ func TestReviewEnterPassesPhaseDecisionsToExecutionService(t *testing.T) {
 			{ID: stages.DecisionShellInstallOhMyZsh, Title: "Install oh-my-zsh", Selected: false},
 			{ID: stages.DecisionShellApplyZshrc, Title: "Write zshrc", Selected: true},
 			{ID: stages.DecisionShellApplyStarship, Title: "Write starship", Selected: false},
+			{ID: stages.DecisionShellApplyGhostty, Title: "Write Ghostty", Selected: true},
 		},
 		nodeSelection:   1,
 		dockerSelection: 0,
@@ -81,6 +82,9 @@ func TestReviewEnterPassesPhaseDecisionsToExecutionService(t *testing.T) {
 	}
 	if stages.ShellApplyStarshipTemplate(decisions) {
 		t.Fatalf("expected starship decision=false")
+	}
+	if !stages.ShellApplyGhosttyTemplate(decisions) {
+		t.Fatalf("expected Ghostty decision=true")
 	}
 	if got := stages.GitConfigModeFromDecisions(decisions); got != stages.GitConfigModeTemplate {
 		t.Fatalf("git mode mismatch: got=%s", got)
@@ -1343,7 +1347,7 @@ func TestViewReviewRendersStructuredPlanSummary(t *testing.T) {
 		"KEY DECISIONS",
 		"Node toolchain: pnpm + nvm",
 		"Docker runtime: colima",
-		"Shell: oh-my-zsh=false, zshrc=true, starship=false",
+		"Shell: oh-my-zsh=false, zshrc=true, starship=false, ghostty=false",
 		"Git identity: Alice <alice@example.com>",
 		"PLANNED STAGES",
 		"- Xcode Command Line Tools",
@@ -1489,6 +1493,7 @@ func reviewScreenTestModel() model {
 			{ID: stages.DecisionShellInstallOhMyZsh, Title: "Install oh-my-zsh", Selected: false},
 			{ID: stages.DecisionShellApplyZshrc, Title: "Write zshrc", Selected: true},
 			{ID: stages.DecisionShellApplyStarship, Title: "Write starship", Selected: false},
+			{ID: stages.DecisionShellApplyGhostty, Title: "Write Ghostty", Selected: false},
 		},
 		nodeSelection:   1,
 		dockerSelection: 0,

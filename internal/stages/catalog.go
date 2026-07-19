@@ -173,6 +173,7 @@ func DefaultCatalog() []Stage {
 				DecisionShellInstallOhMyZsh,
 				DecisionShellApplyZshrc,
 				DecisionShellApplyStarship,
+				DecisionShellApplyGhostty,
 			},
 			CanSkip:  true,
 			Critical: false,

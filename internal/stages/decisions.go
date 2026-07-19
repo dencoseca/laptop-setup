@@ -18,6 +18,7 @@ const (
 	DecisionShellInstallOhMyZsh = "shell.install_oh_my_zsh"
 	DecisionShellApplyZshrc     = "shell.apply_zshrc_template"
 	DecisionShellApplyStarship  = "shell.apply_starship_template"
+	DecisionShellApplyGhostty   = "shell.apply_ghostty_template"
 
 	DecisionGitConfigMode = "git.config_mode"
 	DecisionGitUserName   = "git.user_name"
@@ -78,6 +79,7 @@ type DecisionSet struct {
 	ShellInstallOhMyZsh bool
 	ShellApplyZshrc     bool
 	ShellApplyStarship  bool
+	ShellApplyGhostty   bool
 	GitConfigMode       GitConfigMode
 	GitUserName         string
 	GitUserEmail        string
@@ -90,6 +92,7 @@ func DefaultDecisions() DecisionSet {
 		ShellInstallOhMyZsh: true,
 		ShellApplyZshrc:     true,
 		ShellApplyStarship:  true,
+		ShellApplyGhostty:   true,
 		GitConfigMode:       GitConfigModeTemplate,
 	}
 }
@@ -134,6 +137,12 @@ func DecisionSetFromMap(values map[string]any) (DecisionSet, error) {
 				return DecisionSet{}, fmt.Errorf("%s: %w", key, err)
 			}
 			decisions.ShellApplyStarship = enabled
+		case DecisionShellApplyGhostty:
+			enabled, err := parseBool(value)
+			if err != nil {
+				return DecisionSet{}, fmt.Errorf("%s: %w", key, err)
+			}
+			decisions.ShellApplyGhostty = enabled
 		case DecisionGitConfigMode:
 			mode, err := parseGitConfigMode(value)
 			if err != nil {
@@ -174,6 +183,7 @@ func (decisions DecisionSet) ToMap() map[string]any {
 		DecisionShellInstallOhMyZsh: decisions.ShellInstallOhMyZsh,
 		DecisionShellApplyZshrc:     decisions.ShellApplyZshrc,
 		DecisionShellApplyStarship:  decisions.ShellApplyStarship,
+		DecisionShellApplyGhostty:   decisions.ShellApplyGhostty,
 		DecisionGitConfigMode:       string(decisions.GitConfigMode),
 		DecisionGitUserName:         decisions.GitUserName,
 		DecisionGitUserEmail:        decisions.GitUserEmail,
@@ -211,6 +221,7 @@ func (decisions DecisionSet) IsZero() bool {
 		!decisions.ShellInstallOhMyZsh &&
 		!decisions.ShellApplyZshrc &&
 		!decisions.ShellApplyStarship &&
+		!decisions.ShellApplyGhostty &&
 		decisions.GitConfigMode == "" &&
 		decisions.GitUserName == "" &&
 		decisions.GitUserEmail == ""
@@ -260,6 +271,10 @@ func ShellApplyZshrcTemplate(decisions DecisionSet) bool {
 
 func ShellApplyStarshipTemplate(decisions DecisionSet) bool {
 	return decisions.ShellApplyStarship
+}
+
+func ShellApplyGhosttyTemplate(decisions DecisionSet) bool {
+	return decisions.ShellApplyGhostty
 }
 
 func GitConfigModeFromDecisions(decisions DecisionSet) GitConfigMode {

@@ -29,6 +29,7 @@ func TestDecisionSetFromMap(t *testing.T) {
 				DecisionShellInstallOhMyZsh: false,
 				DecisionShellApplyZshrc:     true,
 				DecisionShellApplyStarship:  false,
+				DecisionShellApplyGhostty:   false,
 				DecisionGitConfigMode:       string(GitConfigModeTemplate),
 				DecisionGitUserName:         "  Alice  ",
 				DecisionGitUserEmail:        " alice@example.com ",
@@ -39,6 +40,7 @@ func TestDecisionSetFromMap(t *testing.T) {
 				ShellInstallOhMyZsh: false,
 				ShellApplyZshrc:     true,
 				ShellApplyStarship:  false,
+				ShellApplyGhostty:   false,
 				GitConfigMode:       GitConfigModeTemplate,
 				GitUserName:         "Alice",
 				GitUserEmail:        "alice@example.com",
@@ -69,6 +71,7 @@ func TestDecisionSetFromMap(t *testing.T) {
 				ShellInstallOhMyZsh: true,
 				ShellApplyZshrc:     true,
 				ShellApplyStarship:  true,
+				ShellApplyGhostty:   true,
 				GitConfigMode:       GitConfigModeCustom,
 			},
 		},
@@ -105,6 +108,7 @@ func TestDecisionSetFromMap(t *testing.T) {
 				got.ShellInstallOhMyZsh != tc.want.ShellInstallOhMyZsh ||
 				got.ShellApplyZshrc != tc.want.ShellApplyZshrc ||
 				got.ShellApplyStarship != tc.want.ShellApplyStarship ||
+				got.ShellApplyGhostty != tc.want.ShellApplyGhostty ||
 				got.GitConfigMode != tc.want.GitConfigMode ||
 				got.GitUserName != tc.want.GitUserName ||
 				got.GitUserEmail != tc.want.GitUserEmail {
@@ -124,5 +128,8 @@ func TestDecisionSetToMapPreservesJSONKeys(t *testing.T) {
 	}
 	if _, ok := out[DecisionSelectedStageIDs]; !ok {
 		t.Fatalf("expected selected stage ids key in map: %+v", out)
+	}
+	if out[DecisionShellApplyGhostty] != true {
+		t.Fatalf("expected Ghostty template decision in map: %+v", out)
 	}
 }

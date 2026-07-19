@@ -185,10 +185,11 @@ func (m *model) viewReview() string {
 	fmt.Fprintf(&b, "\n%s\n", reviewSectionTitle("Key Decisions"))
 	fmt.Fprintf(&b, "%s\n", labelValue("Node toolchain", selectOptionTitle(m.nodeOptions, string(stages.NodeToolchainFromDecisions(decisions)))))
 	fmt.Fprintf(&b, "%s\n", labelValue("Docker runtime", selectOptionTitle(m.dockerOptions, string(stages.DockerRuntimeFromDecisions(decisions)))))
-	fmt.Fprintf(&b, "%s\n", labelValue("Shell", fmt.Sprintf("oh-my-zsh=%t, zshrc=%t, starship=%t",
+	fmt.Fprintf(&b, "%s\n", labelValue("Shell", fmt.Sprintf("oh-my-zsh=%t, zshrc=%t, starship=%t, ghostty=%t",
 		stages.ShellInstallOhMyZsh(decisions),
 		stages.ShellApplyZshrcTemplate(decisions),
 		stages.ShellApplyStarshipTemplate(decisions),
+		stages.ShellApplyGhosttyTemplate(decisions),
 	)))
 	if m.stageSelected(string(stages.StageGitConfig)) || stringInSlice(string(stages.StageGitConfig), m.plan) {
 		name, email := stages.GitIdentityFromDecisions(decisions)
