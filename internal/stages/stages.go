@@ -551,7 +551,7 @@ func simulateShellSetup(_ context.Context, execCtx ExecutionContext) error {
 		return err
 	}
 	if ShellApplyGhosttyTemplate(execCtx.Decisions) {
-		return logSimulation(execCtx, "Would write templates/ghostty.config to ~/Library/Application Support/com.mitchellh.ghostty/config")
+		return logSimulation(execCtx, "Would write templates/ghostty.config to ~/.config/ghostty/config.ghostty")
 	}
 	return logSimulation(execCtx, "Would skip Ghostty config write by decision")
 }
@@ -726,7 +726,7 @@ func ohMyZshPluginPath(homeDir, name string) string {
 }
 
 func ghosttyConfigPath(homeDir string) string {
-	return filepath.Join(homeDir, "Library", "Application Support", "com.mitchellh.ghostty", "config")
+	return filepath.Join(homeDir, ".config", "ghostty", "config.ghostty")
 }
 
 func ensureHushLogin(execCtx ExecutionContext) error {

@@ -729,6 +729,14 @@ func TestRunShellSetupRespectsShellDecisions(t *testing.T) {
 	}
 }
 
+func TestGhosttyConfigPathUsesHomeConfigDirectory(t *testing.T) {
+	homeDir := filepath.Join("Users", "alice")
+	want := filepath.Join(homeDir, ".config", "ghostty", "config.ghostty")
+	if got := ghosttyConfigPath(homeDir); got != want {
+		t.Fatalf("ghosttyConfigPath() = %q, want %q", got, want)
+	}
+}
+
 func TestRunShellSetupSecondRunSkipsInstalledToolsAndMatchingFiles(t *testing.T) {
 	repoRoot := t.TempDir()
 	homeDir := t.TempDir()
