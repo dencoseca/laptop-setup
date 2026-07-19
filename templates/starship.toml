@@ -1,5 +1,3 @@
-add_newline = false
-
 [aws]
 disabled = true
 
