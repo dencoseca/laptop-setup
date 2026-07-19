@@ -35,4 +35,7 @@ Common flags:
 | `--dry-run` | simulate without system mutation |
 
 Package/app selection is configured interactively in the TUI.
+The default terminal setup installs Ghostty and configures it alongside
+oh-my-zsh, Starship, fuzzy history search, inline suggestions, syntax
+highlighting, and quiet login shells.
 No voice output feature is implemented.

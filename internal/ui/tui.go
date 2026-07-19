@@ -470,9 +470,10 @@ func Run(ctx context.Context, options Options) error {
 			{ID: string(stages.DockerRuntimeColima), Title: "colima"},
 		},
 		shellOptions: []toggleOption{
-			{ID: stages.DecisionShellInstallOhMyZsh, Title: "Install oh-my-zsh", Selected: true},
+			{ID: stages.DecisionShellInstallOhMyZsh, Title: "Install oh-my-zsh and shell plugins", Selected: true},
 			{ID: stages.DecisionShellApplyZshrc, Title: "Write ~/.zshrc from template", Selected: true},
 			{ID: stages.DecisionShellApplyStarship, Title: "Write starship.toml from template", Selected: true},
+			{ID: stages.DecisionShellApplyGhostty, Title: "Write Ghostty config from template", Selected: true},
 		},
 		manualOptions: optionsForStageIDs(options.Catalog, phaseManualStages),
 		brewSelected:  make(map[string]bool),
@@ -821,6 +822,7 @@ func (m *model) collectDecisions() stages.DecisionSet {
 	decisions.ShellInstallOhMyZsh = m.shellOptionEnabled(stages.DecisionShellInstallOhMyZsh)
 	decisions.ShellApplyZshrc = m.shellOptionEnabled(stages.DecisionShellApplyZshrc)
 	decisions.ShellApplyStarship = m.shellOptionEnabled(stages.DecisionShellApplyStarship)
+	decisions.ShellApplyGhostty = m.shellOptionEnabled(stages.DecisionShellApplyGhostty)
 	decisions.GitConfigMode = stages.GitConfigModeTemplate
 	decisions.GitUserName = strings.TrimSpace(m.gitNameInput.Value())
 	decisions.GitUserEmail = strings.TrimSpace(m.gitEmailInput.Value())

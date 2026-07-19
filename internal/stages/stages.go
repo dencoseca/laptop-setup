@@ -11,6 +11,16 @@ import (
 	"github.com/dencoseca/laptop-setup/internal/runner"
 )
 
+type ohMyZshPlugin struct {
+	Name string
+	URL  string
+}
+
+var requiredOhMyZshPlugins = []ohMyZshPlugin{
+	{Name: "zsh-autosuggestions", URL: "https://github.com/zsh-users/zsh-autosuggestions"},
+	{Name: "zsh-syntax-highlighting", URL: "https://github.com/zsh-users/zsh-syntax-highlighting"},
+}
+
 func precheckNotSatisfied(context.Context, ExecutionContext) (CheckResult, error) {
 	return CheckResult{Satisfied: false}, nil
 }
@@ -173,6 +183,13 @@ func precheckShellSetup(_ context.Context, execCtx ExecutionContext) (CheckResul
 		if !installed {
 			return CheckResult{Satisfied: false}, nil
 		}
+		pluginsInstalled, err := requiredShellPluginsInstalled(execCtx)
+		if err != nil {
+			return CheckResult{}, err
+		}
+		if !pluginsInstalled {
+			return CheckResult{Satisfied: false}, nil
+		}
 	}
 	if ShellApplyZshrcTemplate(execCtx.Decisions) {
 		same, err := destinationMatchesTemplate(execCtx, "zshrc", filepath.Join(execCtx.HomeDir, ".zshrc"))
@@ -182,9 +199,25 @@ func precheckShellSetup(_ context.Context, execCtx ExecutionContext) (CheckResul
 		if !same {
 			return CheckResult{Satisfied: false}, nil
 		}
+		hushLoginExists, err := regularFileExists(execCtx.fileSystem(), filepath.Join(execCtx.HomeDir, ".hushlogin"))
+		if err != nil {
+			return CheckResult{}, err
+		}
+		if !hushLoginExists {
+			return CheckResult{Satisfied: false}, nil
+		}
 	}
 	if ShellApplyStarshipTemplate(execCtx.Decisions) {
 		same, err := destinationMatchesTemplate(execCtx, "starship.toml", filepath.Join(execCtx.HomeDir, ".config", "starship.toml"))
+		if err != nil {
+			return CheckResult{}, err
+		}
+		if !same {
+			return CheckResult{Satisfied: false}, nil
+		}
+	}
+	if ShellApplyGhosttyTemplate(execCtx.Decisions) {
+		same, err := destinationMatchesTemplate(execCtx, "ghostty.config", ghosttyConfigPath(execCtx.HomeDir))
 		if err != nil {
 			return CheckResult{}, err
 		}
@@ -409,6 +442,7 @@ func runShellSetup(ctx context.Context, execCtx ExecutionContext) error {
 	installOhMyZsh := ShellInstallOhMyZsh(execCtx.Decisions)
 	applyZshrc := ShellApplyZshrcTemplate(execCtx.Decisions)
 	applyStarship := ShellApplyStarshipTemplate(execCtx.Decisions)
+	applyGhostty := ShellApplyGhosttyTemplate(execCtx.Decisions)
 
 	if installOhMyZsh {
 		installed, err := ohMyZshInstalled(execCtx)
@@ -430,10 +464,33 @@ func runShellSetup(ctx context.Context, execCtx ExecutionContext) error {
 	} else if err := logStageMessage(execCtx, "Skipping oh-my-zsh install by decision"); err != nil {
 		return err
 	}
+	if installOhMyZsh {
+		for _, plugin := range requiredOhMyZshPlugins {
+			installed, err := directoryExists(execCtx.fileSystem(), ohMyZshPluginPath(execCtx.HomeDir, plugin.Name))
+			if err != nil {
+				return err
+			}
+			if installed {
+				if err = logStageMessage(execCtx, plugin.Name+" already installed; skipping clone"); err != nil {
+					return err
+				}
+				continue
+			}
+			if err = runCommand(ctx, execCtx, runner.Command{
+				Name: "/usr/bin/git",
+				Args: []string{"clone", "--depth", "1", plugin.URL, ohMyZshPluginPath(execCtx.HomeDir, plugin.Name)},
+			}); err != nil {
+				return err
+			}
+		}
+	}
 
 	zshrcPath := filepath.Join(execCtx.HomeDir, ".zshrc")
 	if applyZshrc {
 		if err := copyFromTemplates(execCtx, "zshrc", zshrcPath); err != nil {
+			return err
+		}
+		if err := ensureHushLogin(execCtx); err != nil {
 			return err
 		}
 	} else if err := logStageMessage(execCtx, "Skipping ~/.zshrc template write by decision"); err != nil {
@@ -449,12 +506,23 @@ func runShellSetup(ctx context.Context, execCtx ExecutionContext) error {
 		return err
 	}
 
+	if applyGhostty {
+		if err := copyFromTemplates(execCtx, "ghostty.config", ghosttyConfigPath(execCtx.HomeDir)); err != nil {
+			return err
+		}
+	} else if err := logStageMessage(execCtx, "Skipping Ghostty config write by decision"); err != nil {
+		return err
+	}
+
 	return nil
 }
 
 func simulateShellSetup(_ context.Context, execCtx ExecutionContext) error {
 	if ShellInstallOhMyZsh(execCtx.Decisions) {
 		if err := logSimulation(execCtx, "Would install oh-my-zsh in unattended mode"); err != nil {
+			return err
+		}
+		if err := logSimulation(execCtx, "Would clone zsh-autosuggestions and zsh-syntax-highlighting into oh-my-zsh custom plugins"); err != nil {
 			return err
 		}
 	} else if err := logSimulation(execCtx, "Would skip oh-my-zsh install by decision"); err != nil {
@@ -468,14 +536,24 @@ func simulateShellSetup(_ context.Context, execCtx ExecutionContext) error {
 		if err := logSimulation(execCtx, "Would write templates/zshrc to ~/.zshrc"); err != nil {
 			return err
 		}
+		if err := logSimulation(execCtx, "Would create ~/.hushlogin when missing"); err != nil {
+			return err
+		}
 	} else if err := logSimulation(execCtx, "Would skip ~/.zshrc template write by decision"); err != nil {
 		return err
 	}
 
 	if ShellApplyStarshipTemplate(execCtx.Decisions) {
-		return logSimulation(execCtx, "Would write templates/starship.toml to ~/.config/starship.toml")
+		if err := logSimulation(execCtx, "Would write templates/starship.toml to ~/.config/starship.toml"); err != nil {
+			return err
+		}
+	} else if err := logSimulation(execCtx, "Would skip starship config write by decision"); err != nil {
+		return err
 	}
-	return logSimulation(execCtx, "Would skip starship config write by decision")
+	if ShellApplyGhosttyTemplate(execCtx.Decisions) {
+		return logSimulation(execCtx, "Would write templates/ghostty.config to ~/Library/Application Support/com.mitchellh.ghostty/config")
+	}
+	return logSimulation(execCtx, "Would skip Ghostty config write by decision")
 }
 
 func runGitConfig(_ context.Context, execCtx ExecutionContext) error {
@@ -628,6 +706,50 @@ func nvmInstalled(execCtx ExecutionContext) (bool, error) {
 
 func ohMyZshInstalled(execCtx ExecutionContext) (bool, error) {
 	return directoryExists(execCtx.fileSystem(), filepath.Join(execCtx.HomeDir, ".oh-my-zsh"))
+}
+
+func requiredShellPluginsInstalled(execCtx ExecutionContext) (bool, error) {
+	for _, plugin := range requiredOhMyZshPlugins {
+		installed, err := directoryExists(execCtx.fileSystem(), ohMyZshPluginPath(execCtx.HomeDir, plugin.Name))
+		if err != nil {
+			return false, err
+		}
+		if !installed {
+			return false, nil
+		}
+	}
+	return true, nil
+}
+
+func ohMyZshPluginPath(homeDir, name string) string {
+	return filepath.Join(homeDir, ".oh-my-zsh", "custom", "plugins", name)
+}
+
+func ghosttyConfigPath(homeDir string) string {
+	return filepath.Join(homeDir, "Library", "Application Support", "com.mitchellh.ghostty", "config")
+}
+
+func ensureHushLogin(execCtx ExecutionContext) error {
+	path := filepath.Join(execCtx.HomeDir, ".hushlogin")
+	exists, err := regularFileExists(execCtx.fileSystem(), path)
+	if err != nil || exists {
+		return err
+	}
+	if err = execCtx.fileSystem().WriteFile(path, []byte{}, 0o600); err != nil {
+		return fmt.Errorf("create .hushlogin: %w", err)
+	}
+	return nil
+}
+
+func regularFileExists(fsys FileSystem, path string) (bool, error) {
+	info, err := fsys.Stat(path)
+	if err == nil {
+		return !info.IsDir(), nil
+	}
+	if errors.Is(err, fs.ErrNotExist) {
+		return false, nil
+	}
+	return false, err
 }
 
 func directoryExists(fsys FileSystem, path string) (bool, error) {

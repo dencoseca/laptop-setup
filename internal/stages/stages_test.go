@@ -131,7 +131,7 @@ func TestLoadBrewEntries(t *testing.T) {
 	content := strings.Join([]string{
 		`# comment`,
 		`brew "jq"`,
-		`cask "warp"`,
+		`cask "ghostty"`,
 		`tap "homebrew/cask"`,
 		"",
 	}, "\n")
@@ -150,7 +150,7 @@ func TestLoadBrewEntries(t *testing.T) {
 	if entries[0].Kind != "brew" || entries[0].ID != "jq" {
 		t.Fatalf("unexpected first entry: %+v", entries[0])
 	}
-	if entries[1].Kind != "cask" || entries[1].ID != "warp" {
+	if entries[1].Kind != "cask" || entries[1].ID != "ghostty" {
 		t.Fatalf("unexpected second entry: %+v", entries[1])
 	}
 }
@@ -167,7 +167,7 @@ func TestGenerateBrewfileUsesSelectedIDs(t *testing.T) {
 	content := strings.Join([]string{
 		`brew "ripgrep"`,
 		`brew "jq"`,
-		`cask "warp"`,
+		`cask "ghostty"`,
 		"",
 	}, "\n")
 	if err := os.WriteFile(templatePath, []byte(content), 0o644); err != nil {
@@ -177,7 +177,7 @@ func TestGenerateBrewfileUsesSelectedIDs(t *testing.T) {
 	path, selectedIDs, err := GenerateBrewfile(ExecutionContext{
 		RepoRoot:        repoRoot,
 		RunDir:          runDir,
-		SelectedBrewIDs: []string{"warp", "ripgrep"},
+		SelectedBrewIDs: []string{"ghostty", "ripgrep"},
 	})
 	if err != nil {
 		t.Fatalf("generate Brewfile: %v", err)
@@ -186,7 +186,7 @@ func TestGenerateBrewfileUsesSelectedIDs(t *testing.T) {
 	if path != filepath.Join(runDir, "Brewfile.generated") {
 		t.Fatalf("unexpected generated path: %s", path)
 	}
-	expectedSelected := []string{"ripgrep", "warp"}
+	expectedSelected := []string{"ripgrep", "ghostty"}
 	if !slices.Equal(selectedIDs, expectedSelected) {
 		t.Fatalf("selected ids mismatch: got=%v want=%v", selectedIDs, expectedSelected)
 	}
@@ -198,7 +198,7 @@ func TestGenerateBrewfileUsesSelectedIDs(t *testing.T) {
 	if len(generatedEntries) != 2 {
 		t.Fatalf("expected 2 generated entries, got %d", len(generatedEntries))
 	}
-	if generatedEntries[0].ID != "ripgrep" || generatedEntries[1].ID != "warp" {
+	if generatedEntries[0].ID != "ripgrep" || generatedEntries[1].ID != "ghostty" {
 		t.Fatalf("unexpected generated entry order: %+v", generatedEntries)
 	}
 }
@@ -239,7 +239,7 @@ func TestRunBrewBundleUsesGeneratedBrewfileMatchingSelectedEntries(t *testing.T)
 	if err := os.WriteFile(filepath.Join(templatesDir, "Brewfile"), []byte(strings.Join([]string{
 		`brew "ripgrep"`,
 		`brew "jq"`,
-		`cask "warp"`,
+		`cask "ghostty"`,
 		"",
 	}, "\n")), 0o644); err != nil {
 		t.Fatalf("write template Brewfile: %v", err)
@@ -261,7 +261,7 @@ func TestRunBrewBundleUsesGeneratedBrewfileMatchingSelectedEntries(t *testing.T)
 		Runner:          runnerStub,
 		RepoRoot:        repoRoot,
 		RunDir:          runDir,
-		SelectedBrewIDs: []string{"jq", "warp"},
+		SelectedBrewIDs: []string{"jq", "ghostty"},
 		SetGeneratedBrewfilePath: func(path string) {
 			generatedPath = path
 		},
@@ -294,7 +294,7 @@ func TestRunBrewBundleUsesGeneratedBrewfileMatchingSelectedEntries(t *testing.T)
 		t.Fatalf("expected 2 generated entries, got %d", len(entries))
 	}
 	gotIDs := []string{entries[0].ID, entries[1].ID}
-	wantIDs := []string{"jq", "warp"}
+	wantIDs := []string{"jq", "ghostty"}
 	if !slices.Equal(gotIDs, wantIDs) {
 		t.Fatalf("generated brew entries mismatch: got=%v want=%v", gotIDs, wantIDs)
 	}
@@ -527,7 +527,7 @@ func TestResolveSelectedBrewIDs(t *testing.T) {
 		`brew "jq"`,
 		`brew "ripgrep"`,
 		`brew "jq"`,
-		`cask "warp"`,
+		`cask "ghostty"`,
 		"",
 	}, "\n")
 	if err := os.WriteFile(templatePath, []byte(content), 0o644); err != nil {
@@ -538,7 +538,7 @@ func TestResolveSelectedBrewIDs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolve selected brew ids: %v", err)
 	}
-	expected := []string{"jq", "ripgrep", "jq", "warp"}
+	expected := []string{"jq", "ripgrep", "jq", "ghostty"}
 	if !slices.Equal(ids, expected) {
 		t.Fatalf("selected id mismatch: got=%v want=%v", ids, expected)
 	}
@@ -677,6 +677,9 @@ func TestRunShellSetupRespectsShellDecisions(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(templatesDir, "starship.toml"), []byte("starship\n"), 0o644); err != nil {
 		t.Fatalf("write starship template: %v", err)
 	}
+	if err := os.WriteFile(filepath.Join(templatesDir, "ghostty.config"), []byte("ghostty\n"), 0o644); err != nil {
+		t.Fatalf("write Ghostty template: %v", err)
+	}
 	if err := os.WriteFile(filepath.Join(homeDir, ".zshrc"), []byte("old-zshrc\n"), 0o644); err != nil {
 		t.Fatalf("write existing zshrc: %v", err)
 	}
@@ -692,6 +695,7 @@ func TestRunShellSetupRespectsShellDecisions(t *testing.T) {
 			ShellInstallOhMyZsh: false,
 			ShellApplyZshrc:     true,
 			ShellApplyStarship:  false,
+			ShellApplyGhostty:   false,
 			GitConfigMode:       GitConfigModeTemplate,
 		},
 	})
@@ -717,6 +721,12 @@ func TestRunShellSetupRespectsShellDecisions(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(homeDir, ".config", "starship.toml")); !os.IsNotExist(err) {
 		t.Fatalf("expected no starship config when disabled, got err=%v", err)
 	}
+	if _, err := os.Stat(ghosttyConfigPath(homeDir)); !os.IsNotExist(err) {
+		t.Fatalf("expected no Ghostty config when disabled, got err=%v", err)
+	}
+	if _, err := os.Stat(filepath.Join(homeDir, ".hushlogin")); err != nil {
+		t.Fatalf("expected .hushlogin alongside zshrc template: %v", err)
+	}
 }
 
 func TestRunShellSetupSecondRunSkipsInstalledToolsAndMatchingFiles(t *testing.T) {
@@ -732,11 +742,19 @@ func TestRunShellSetupSecondRunSkipsInstalledToolsAndMatchingFiles(t *testing.T)
 	if err := os.WriteFile(filepath.Join(templatesDir, "starship.toml"), []byte("starship\n"), 0o644); err != nil {
 		t.Fatalf("write starship template: %v", err)
 	}
+	if err := os.WriteFile(filepath.Join(templatesDir, "ghostty.config"), []byte("ghostty\n"), 0o644); err != nil {
+		t.Fatalf("write Ghostty template: %v", err)
+	}
 	if err := os.WriteFile(filepath.Join(homeDir, ".zshrc"), []byte("old-zshrc\n"), 0o644); err != nil {
 		t.Fatalf("write existing zshrc: %v", err)
 	}
 	if err := os.MkdirAll(filepath.Join(homeDir, ".oh-my-zsh"), 0o755); err != nil {
 		t.Fatalf("create existing oh-my-zsh dir: %v", err)
+	}
+	for _, plugin := range requiredOhMyZshPlugins {
+		if err := os.MkdirAll(ohMyZshPluginPath(homeDir, plugin.Name), 0o755); err != nil {
+			t.Fatalf("create existing plugin %s: %v", plugin.Name, err)
+		}
 	}
 
 	runnerStub := &recordingRunner{}
@@ -750,6 +768,7 @@ func TestRunShellSetupSecondRunSkipsInstalledToolsAndMatchingFiles(t *testing.T)
 			ShellInstallOhMyZsh: true,
 			ShellApplyZshrc:     true,
 			ShellApplyStarship:  true,
+			ShellApplyGhostty:   true,
 			GitConfigMode:       GitConfigModeTemplate,
 		},
 	}
@@ -775,6 +794,14 @@ func TestRunShellSetupSecondRunSkipsInstalledToolsAndMatchingFiles(t *testing.T)
 	if len(runnerStub.commands) != 0 {
 		t.Fatalf("expected second run not to install oh-my-zsh, got %d commands", len(runnerStub.commands))
 	}
+	if _, err := os.Stat(filepath.Join(homeDir, ".hushlogin")); err != nil {
+		t.Fatalf("expected .hushlogin after shell setup: %v", err)
+	}
+	if content, err := os.ReadFile(ghosttyConfigPath(homeDir)); err != nil {
+		t.Fatalf("read Ghostty config: %v", err)
+	} else if string(content) != "ghostty\n" {
+		t.Fatalf("unexpected Ghostty config contents: %q", content)
+	}
 
 	check, err := precheckShellSetup(context.Background(), execCtx)
 	if err != nil {
@@ -782,6 +809,50 @@ func TestRunShellSetupSecondRunSkipsInstalledToolsAndMatchingFiles(t *testing.T)
 	}
 	if !check.Satisfied {
 		t.Fatal("expected shell setup precheck to be satisfied after first run")
+	}
+}
+
+func TestRunShellSetupInstallsMissingOhMyZshPlugins(t *testing.T) {
+	homeDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(homeDir, ".oh-my-zsh"), 0o755); err != nil {
+		t.Fatalf("create existing oh-my-zsh dir: %v", err)
+	}
+
+	execCtx := ExecutionContext{
+		Runner:  &recordingRunner{},
+		HomeDir: homeDir,
+		Decisions: DecisionSet{
+			NodeToolchain:       NodeToolchainVitePlus,
+			DockerRuntime:       DockerRuntimeColima,
+			ShellInstallOhMyZsh: true,
+			GitConfigMode:       GitConfigModeTemplate,
+		},
+	}
+
+	check, err := precheckShellSetup(context.Background(), execCtx)
+	if err != nil {
+		t.Fatalf("precheckShellSetup returned error: %v", err)
+	}
+	if check.Satisfied {
+		t.Fatal("expected missing shell plugins to leave precheck unsatisfied")
+	}
+
+	if err = runShellSetup(context.Background(), execCtx); err != nil {
+		t.Fatalf("runShellSetup returned error: %v", err)
+	}
+	runnerStub := execCtx.Runner.(*recordingRunner)
+	if len(runnerStub.commands) != len(requiredOhMyZshPlugins) {
+		t.Fatalf("expected %d plugin clone commands, got %d", len(requiredOhMyZshPlugins), len(runnerStub.commands))
+	}
+	for index, plugin := range requiredOhMyZshPlugins {
+		command := runnerStub.commands[index]
+		if command.Name != "/usr/bin/git" {
+			t.Fatalf("plugin %s command name = %q, want /usr/bin/git", plugin.Name, command.Name)
+		}
+		wantArgs := []string{"clone", "--depth", "1", plugin.URL, ohMyZshPluginPath(homeDir, plugin.Name)}
+		if !slices.Equal(command.Args, wantArgs) {
+			t.Fatalf("plugin %s command args = %v, want %v", plugin.Name, command.Args, wantArgs)
+		}
 	}
 }
 
@@ -1126,10 +1197,11 @@ func TestDryRunSimulationsDoNotWriteUserConfig(t *testing.T) {
 		t.Fatalf("create templates dir: %v", err)
 	}
 	for name, payload := range map[string]string{
-		"gitignore":     "*.tmp\n",
-		"gitconfig":     "[core]\n  autocrlf = input\n",
-		"zshrc":         "zshrc\n",
-		"starship.toml": "starship\n",
+		"gitignore":      "*.tmp\n",
+		"gitconfig":      "[core]\n  autocrlf = input\n",
+		"zshrc":          "zshrc\n",
+		"starship.toml":  "starship\n",
+		"ghostty.config": "ghostty\n",
 	} {
 		if err := os.WriteFile(filepath.Join(templatesDir, name), []byte(payload), 0o644); err != nil {
 			t.Fatalf("write template %s: %v", name, err)
@@ -1148,6 +1220,7 @@ func TestDryRunSimulationsDoNotWriteUserConfig(t *testing.T) {
 			ShellInstallOhMyZsh: true,
 			ShellApplyZshrc:     true,
 			ShellApplyStarship:  true,
+			ShellApplyGhostty:   true,
 			GitConfigMode:       GitConfigModeTemplate,
 			GitUserName:         "Ada",
 			GitUserEmail:        "ada@example.com",
@@ -1163,6 +1236,8 @@ func TestDryRunSimulationsDoNotWriteUserConfig(t *testing.T) {
 	for _, path := range []string{
 		filepath.Join(homeDir, ".zshrc"),
 		filepath.Join(homeDir, ".config", "starship.toml"),
+		ghosttyConfigPath(homeDir),
+		filepath.Join(homeDir, ".hushlogin"),
 		filepath.Join(homeDir, ".gitignore"),
 		filepath.Join(homeDir, ".gitconfig"),
 		filepath.Join(homeDir, ".oh-my-zsh"),

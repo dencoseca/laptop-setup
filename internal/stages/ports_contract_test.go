@@ -20,7 +20,7 @@ func TestLocalTemplateStoreContract(t *testing.T) {
 	}
 	if err := os.WriteFile(filepath.Join(templatesDir, "Brewfile"), []byte(strings.Join([]string{
 		`brew "jq"`,
-		`cask "warp"`,
+		`cask "ghostty"`,
 		"",
 	}, "\n")), 0o644); err != nil {
 		t.Fatalf("write Brewfile template: %v", err)
@@ -37,7 +37,7 @@ func TestLocalTemplateStoreContract(t *testing.T) {
 	if sourcePath != filepath.Join(templatesDir, "Brewfile") {
 		t.Fatalf("source path mismatch: got=%q", sourcePath)
 	}
-	if gotIDs := []string{entries[0].ID, entries[1].ID}; !slices.Equal(gotIDs, []string{"jq", "warp"}) {
+	if gotIDs := []string{entries[0].ID, entries[1].ID}; !slices.Equal(gotIDs, []string{"jq", "ghostty"}) {
 		t.Fatalf("entry ids mismatch: %v", gotIDs)
 	}
 
@@ -85,7 +85,7 @@ func TestEmbeddedTemplateStoreContract(t *testing.T) {
 			"Brewfile": {
 				Data: []byte(strings.Join([]string{
 					`brew "jq"`,
-					`cask "warp"`,
+					`cask "ghostty"`,
 					"",
 				}, "\n")),
 			},
@@ -103,7 +103,7 @@ func TestEmbeddedTemplateStoreContract(t *testing.T) {
 	if sourcePath != "test templates:Brewfile" {
 		t.Fatalf("source path mismatch: got=%q", sourcePath)
 	}
-	if gotIDs := []string{entries[0].ID, entries[1].ID}; !slices.Equal(gotIDs, []string{"jq", "warp"}) {
+	if gotIDs := []string{entries[0].ID, entries[1].ID}; !slices.Equal(gotIDs, []string{"jq", "ghostty"}) {
 		t.Fatalf("entry ids mismatch: %v", gotIDs)
 	}
 

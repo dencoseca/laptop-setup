@@ -4,7 +4,12 @@
 
 export ZSH="$HOME/.oh-my-zsh"
 zstyle ':omz:update' mode disabled
-plugins=(git)
+plugins=(
+  git
+  fzf
+  zsh-autosuggestions
+  zsh-syntax-highlighting
+)
 source "$ZSH/oh-my-zsh.sh"
 
 #---------#
@@ -13,9 +18,6 @@ source "$ZSH/oh-my-zsh.sh"
 
 # starship
 eval "$(starship init zsh)"
-
-# add new line for warp
-PROMPT="${PROMPT}"$'\n'
 
 # docker with colima
 export DOCKER_HOST="unix://$HOME/.colima/default/docker.sock"
@@ -90,48 +92,3 @@ alias npmls="npm list -g --depth=0"
 alias l="ls -lh"
 alias upbrew="brew update && brew upgrade && brew cleanup && brew doctor"
 alias upomz="omz update"
-
-sweet_sweet_details() {
-  get_formatted_uptime() {
-    echo "$((($(date +%s) - $(sysctl -n kern.boottime | awk '{print $4}' | sed 's/,//')))) seconds" | awk '{
-      d=int($1/86400);
-      h=int(($1%86400)/3600);
-      m=int(($1%3600)/60);
-      s=$1%60;
-      result="";
-      if(d>0) result = result d (d==1 ? " day" : " days");
-      if(h>0) result = (length(result)>0 ? result ", " : result) h (h==1 ? " hr" : " hrs");
-      if(m>0) result = (length(result)>0 ? result ", " : result) m (m==1 ? " min" : " mins");
-      if($1<60 || s>0 && length(result)==0) result = (length(result)>0 ? result ", " : result) s (s==1 ? " sec" : " secs");
-      print result
-    }'
-  }
-
-  get_formatted_memory_pressure() {
-    echo "$(memory_pressure | awk -v totalMemory="$(sysctl hw.memsize | awk '{ print $2/1024/1024/1024 }')" '
-      BEGIN {
-          pagesToGB = 16.0 / (1024 * 1024)
-      }
-      /Pages active:/ { active = $3 * pagesToGB }
-      /Pages wired down:/ { wired = $4 * pagesToGB }
-      END {
-          printf "%.1fGB / %.1fGB\n",
-          active + wired, totalMemory
-      }')"
-  }
-
-  local USER_INFO="$USER@$(hostname | cut -d. -f1)"
-  local OS_INFO="$(sw_vers | awk '{print $2}' | tr '\n' ' ' | sed 's/ $//')"
-  local UPTIME_INFO="$(get_formatted_uptime)"
-  local MEMORY_INFO="$(get_formatted_memory_pressure)"
-  local CPU_INFO="$(top -l 1 -n 0 | grep -E "CPU" | cut -d: -f2- | sed 's/^[[:space:]]*//')"
-
-  echo -e "\033[32m ██████╗██╗  ██╗ █████╗ ██████╗ ███████╗ █████╗ ██╗   ██╗██╗  ██╗   \033[31mUser\033[0m:    $USER_INFO
-\033[33m██╔════╝██║  ██║██╔══██╗██╔══██╗██╔════╝██╔══██╗██║   ██║╚██╗██╔╝   \033[31mUptime\033[0m:  $UPTIME_INFO
-\033[31m██║     ███████║███████║██████╔╝█████╗  ███████║██║   ██║ ╚███╔╝    \033[31mOS\033[0m:      $OS_INFO
-\033[35m██║     ██╔══██║██╔══██║██╔═══╝ ██╔══╝  ██╔══██║██║   ██║ ██╔██╗    \033[31mCPU\033[0m:     $CPU_INFO
-\033[34m╚██████╗██║  ██║██║  ██║██║     ███████╗██║  ██║╚██████╔╝██╔╝ ██╗   \033[31mMemory\033[0m:  $MEMORY_INFO
-\033[36m ╚═════╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝     ╚══════╝╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═╝"
-}
-
-sweet_sweet_details
