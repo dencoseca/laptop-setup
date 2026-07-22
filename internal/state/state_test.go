@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -115,6 +116,177 @@ func TestStoreContractSaveLoadUpdateAndPath(t *testing.T) {
 	}
 	if got := info.Mode().Perm(); got != 0o700 {
 		t.Fatalf("state directory permissions: got=%#o want=%#o", got, os.FileMode(0o700))
+	}
+}
+
+func TestStoreSaveRejectsInvalidRunStateBeforeCreatingFiles(t *testing.T) {
+	homeDir := t.TempDir()
+	t.Setenv("HOME", homeDir)
+
+	cases := []struct {
+		name   string
+		mutate func(*RunState)
+		want   string
+	}{
+		{
+			name: "invalid run id",
+			mutate: func(run *RunState) {
+				run.RunID = "../run"
+			},
+			want: "field run_id",
+		},
+		{
+			name: "invalid mode",
+			mutate: func(run *RunState) {
+				run.Mode = "turbo"
+			},
+			want: "field mode",
+		},
+		{
+			name: "empty plan",
+			mutate: func(run *RunState) {
+				run.ResolvedPlan = nil
+			},
+			want: "field resolved_plan",
+		},
+		{
+			name: "invalid plan stage id",
+			mutate: func(run *RunState) {
+				run.ResolvedPlan = []StageID{" "}
+			},
+			want: "field resolved_plan[0]",
+		},
+		{
+			name: "duplicate plan stage id",
+			mutate: func(run *RunState) {
+				run.ResolvedPlan = []StageID{"stage_one", "stage_one"}
+			},
+			want: "field resolved_plan[1]",
+		},
+		{
+			name: "invalid decision",
+			mutate: func(run *RunState) {
+				run.Decisions.NodeToolchain = "invalid"
+			},
+			want: "field decisions: dev.node_toolchain",
+		},
+		{
+			name: "invalid stage map id",
+			mutate: func(run *RunState) {
+				run.Stages = map[StageID]StageStatus{" ": {Status: StageStatusPending}}
+			},
+			want: "field stages",
+		},
+		{
+			name: "missing stage status",
+			mutate: func(run *RunState) {
+				run.Stages["stage_one"] = StageStatus{}
+			},
+			want: "field stages.stage_one.status",
+		},
+		{
+			name: "invalid stage status",
+			mutate: func(run *RunState) {
+				run.Stages["stage_one"] = StageStatus{Status: "unknown"}
+			},
+			want: "field stages.stage_one.status",
+		},
+		{
+			name: "negative stage attempts",
+			mutate: func(run *RunState) {
+				run.Stages["stage_one"] = StageStatus{Status: StageStatusFailed, Attempts: -1}
+			},
+			want: "field stages.stage_one.attempts",
+		},
+		{
+			name: "generated file outside run directory",
+			mutate: func(run *RunState) {
+				run.GeneratedFile = filepath.Join(homeDir, "outside", "generated")
+			},
+			want: "field generated_file",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			stateDir := filepath.Join(t.TempDir(), "missing")
+			store := NewStore(filepath.Join(stateDir, "state.json"))
+			run := validRunState()
+			tc.mutate(run)
+
+			err := store.Save(context.Background(), run)
+			if err == nil {
+				t.Fatal("expected Save to reject invalid state")
+			}
+			if !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("expected error to contain %q, got %v", tc.want, err)
+			}
+			if _, err := os.Stat(stateDir); !os.IsNotExist(err) {
+				t.Fatalf("invalid Save created state directory: err=%v", err)
+			}
+		})
+	}
+}
+
+func TestStoreSaveNormalizesCopyWithoutMutatingCaller(t *testing.T) {
+	store := NewStore(filepath.Join(t.TempDir(), "state.json"))
+	run := validRunState()
+	run.Decisions = stages.DecisionSet{}
+	wantCaller := cloneRunState(run)
+
+	if err := store.Save(context.Background(), run); err != nil {
+		t.Fatalf("Save returned error: %v", err)
+	}
+	if !reflect.DeepEqual(run, wantCaller) {
+		t.Fatalf("Save mutated caller:\n got: %+v\nwant: %+v", run, wantCaller)
+	}
+
+	loaded, err := store.Load(context.Background())
+	if err != nil {
+		t.Fatalf("Load returned error after successful Save: %v", err)
+	}
+	if loaded == nil {
+		t.Fatal("expected saved state")
+	}
+	if loaded.Decisions.IsZero() {
+		t.Fatal("expected persisted state to contain normalized decisions")
+	}
+	if !reflect.DeepEqual(loaded.Decisions.SelectedStageIDs, run.ResolvedPlan) {
+		t.Fatalf("normalized selected stage ids: got=%v want=%v", loaded.Decisions.SelectedStageIDs, run.ResolvedPlan)
+	}
+}
+
+func TestStoreInvalidSaveLeavesExistingStateUntouched(t *testing.T) {
+	store := NewStore(filepath.Join(t.TempDir(), "state.json"))
+	existing := []byte("existing state bytes\n")
+	if err := os.WriteFile(store.Path(), existing, 0o600); err != nil {
+		t.Fatalf("write existing state: %v", err)
+	}
+
+	run := validRunState()
+	run.Mode = "invalid"
+	if err := store.Save(context.Background(), run); err == nil {
+		t.Fatal("expected Save to reject invalid state")
+	}
+
+	got, err := os.ReadFile(store.Path())
+	if err != nil {
+		t.Fatalf("read existing state: %v", err)
+	}
+	if !reflect.DeepEqual(got, existing) {
+		t.Fatalf("existing state changed:\n got: %q\nwant: %q", got, existing)
+	}
+}
+
+func validRunState() *RunState {
+	return &RunState{
+		RunID:        "run-1",
+		Mode:         ModeNormal,
+		ResolvedPlan: []StageID{"stage_one"},
+		Decisions:    stages.DefaultDecisions().WithSelectedStageIDs([]StageID{"stage_one"}),
+		Stages: map[StageID]StageStatus{
+			"stage_one": {Status: StageStatusPending},
+		},
 	}
 }
 

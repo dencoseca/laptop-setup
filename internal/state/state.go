@@ -250,14 +250,22 @@ func (s *Store) Save(ctx context.Context, run *RunState) error {
 		return errors.New("run state is nil")
 	}
 
+	state := cloneRunState(run)
+	if err := NormalizeRunState(state); err != nil {
+		return fmt.Errorf("normalize state: %w", err)
+	}
+	if err := ValidateRunState(state); err != nil {
+		return fmt.Errorf("validate state: %w", err)
+	}
+
+	payload, err := json.MarshalIndent(state, "", "  ")
+	if err != nil {
+		return fmt.Errorf("encode state: %w", err)
+	}
+
 	stateDir := filepath.Dir(s.path)
 	if err := os.MkdirAll(stateDir, privateDirPerm); err != nil {
 		return fmt.Errorf("create state directory: %w", err)
-	}
-
-	payload, err := json.MarshalIndent(run, "", "  ")
-	if err != nil {
-		return fmt.Errorf("encode state: %w", err)
 	}
 
 	tempFile, err := os.CreateTemp(stateDir, "."+filepath.Base(s.path)+".*.tmp")
@@ -284,4 +292,22 @@ func (s *Store) Save(ctx context.Context, run *RunState) error {
 	}
 
 	return nil
+}
+
+func cloneRunState(run *RunState) *RunState {
+	clone := *run
+	clone.ResolvedPlan = append([]StageID(nil), run.ResolvedPlan...)
+	clone.SelectedIDs = append([]string(nil), run.SelectedIDs...)
+	clone.Decisions.SelectedStageIDs = append([]StageID(nil), run.Decisions.SelectedStageIDs...)
+	if run.Stages != nil {
+		clone.Stages = make(map[StageID]StageStatus, len(run.Stages))
+		for stageID, status := range run.Stages {
+			clone.Stages[stageID] = status
+		}
+	}
+	if run.EndAt != nil {
+		endAt := *run.EndAt
+		clone.EndAt = &endAt
+	}
+	return &clone
 }
