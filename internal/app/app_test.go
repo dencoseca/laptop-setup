@@ -76,6 +76,42 @@ func TestParseConfigRejectsRemovedYesFlag(t *testing.T) {
 	}
 }
 
+func TestRunTreatsHelpAsSuccess(t *testing.T) {
+	for _, helpFlag := range []string{"-h", "--help"} {
+		t.Run(helpFlag, func(t *testing.T) {
+			var stderr bytes.Buffer
+
+			err := Run(context.Background(), []string{helpFlag}, &bytes.Buffer{}, &stderr)
+			if err != nil {
+				t.Fatalf("Run returned error: %v", err)
+			}
+
+			output := stderr.String()
+			if got := strings.Count(output, "Usage of laptop-setup:"); got != 1 {
+				t.Fatalf("expected usage once, got %d occurrences in %q", got, output)
+			}
+			if strings.Contains(output, "flag: help requested") {
+				t.Fatalf("help output contains an error: %q", output)
+			}
+		})
+	}
+}
+
+func TestRunRejectsInvalidFlag(t *testing.T) {
+	var stderr bytes.Buffer
+
+	err := Run(context.Background(), []string{"--not-a-flag"}, &bytes.Buffer{}, &stderr)
+	if err == nil {
+		t.Fatal("expected invalid flag error")
+	}
+	if !strings.Contains(err.Error(), "flag provided but not defined") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(stderr.String(), "Usage of laptop-setup:") {
+		t.Fatalf("expected useful flag output, got %q", stderr.String())
+	}
+}
+
 func TestParseCSVDeduplicatesAndTrims(t *testing.T) {
 	got := parseCSV("a, b,a, ,c")
 	want := []string{"a", "b", "c"}
