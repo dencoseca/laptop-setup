@@ -636,6 +636,94 @@ func TestRunNodeToolchainInstallUsesViteChoice(t *testing.T) {
 	}
 }
 
+func TestPrecheckNodeToolchainDetectsVitePlusExecutable(t *testing.T) {
+	tests := []struct {
+		name          string
+		lookPathPaths map[string]string
+		lookPathErrs  map[string]error
+		wantSatisfied bool
+	}{
+		{
+			name:          "vp present and vite absent",
+			lookPathPaths: map[string]string{"vp": "/usr/local/bin/vp"},
+			lookPathErrs:  map[string]error{"vite": errors.New("not found")},
+			wantSatisfied: true,
+		},
+		{
+			name:          "vite present and vp absent",
+			lookPathPaths: map[string]string{"vite": "/usr/local/bin/vite"},
+			lookPathErrs:  map[string]error{"vp": errors.New("not found")},
+			wantSatisfied: false,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			runnerStub := &recordingRunner{
+				lookPathResults: test.lookPathPaths,
+				lookPathErrs:    test.lookPathErrs,
+			}
+			check, err := precheckNodeToolchain(context.Background(), ExecutionContext{
+				Runner:    runnerStub,
+				Decisions: DefaultDecisions(),
+			})
+			if err != nil {
+				t.Fatalf("precheckNodeToolchain returned error: %v", err)
+			}
+			if check.Satisfied != test.wantSatisfied {
+				t.Fatalf("precheck satisfied = %t, want %t", check.Satisfied, test.wantSatisfied)
+			}
+			if !slices.Equal(runnerStub.lookPathCalls, []string{"vp"}) {
+				t.Fatalf("precheck executable checks = %v, want [vp]", runnerStub.lookPathCalls)
+			}
+		})
+	}
+}
+
+func TestRunNodeToolchainInstallDetectsVitePlusExecutable(t *testing.T) {
+	tests := []struct {
+		name          string
+		lookPathPaths map[string]string
+		lookPathErrs  map[string]error
+		wantCommands  int
+	}{
+		{
+			name:          "vp present and vite absent skips installer",
+			lookPathPaths: map[string]string{"vp": "/usr/local/bin/vp"},
+			lookPathErrs:  map[string]error{"vite": errors.New("not found")},
+			wantCommands:  0,
+		},
+		{
+			name:          "vite present and vp absent runs installer",
+			lookPathPaths: map[string]string{"vite": "/usr/local/bin/vite"},
+			lookPathErrs:  map[string]error{"vp": errors.New("not found")},
+			wantCommands:  1,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			runnerStub := &recordingRunner{
+				lookPathResults: test.lookPathPaths,
+				lookPathErrs:    test.lookPathErrs,
+			}
+			err := runNodeToolchainInstall(context.Background(), ExecutionContext{
+				Runner:    runnerStub,
+				Decisions: DefaultDecisions(),
+			})
+			if err != nil {
+				t.Fatalf("runNodeToolchainInstall returned error: %v", err)
+			}
+			if len(runnerStub.commands) != test.wantCommands {
+				t.Fatalf("installer commands = %d, want %d", len(runnerStub.commands), test.wantCommands)
+			}
+			if !slices.Equal(runnerStub.lookPathCalls, []string{"vp"}) {
+				t.Fatalf("installer executable checks = %v, want [vp]", runnerStub.lookPathCalls)
+			}
+		})
+	}
+}
+
 func TestRunNodeToolchainInstallUsesNvmAndPnpmChoice(t *testing.T) {
 	runnerStub := &recordingRunner{lookPathErr: errors.New("not found")}
 	err := runNodeToolchainInstall(context.Background(), ExecutionContext{
