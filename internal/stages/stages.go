@@ -148,12 +148,12 @@ func precheckNodeToolchain(ctx context.Context, execCtx ExecutionContext) (Check
 			return CheckResult{Satisfied: true, Message: "nvm and pnpm already installed"}, nil
 		}
 	default:
-		viteInstalled, err := commandInstalled(ctx, execCtx, "vite")
+		vitePlusInstalled, err := commandInstalled(ctx, execCtx, "vp")
 		if err != nil {
 			return CheckResult{}, err
 		}
-		if viteInstalled {
-			return CheckResult{Satisfied: true, Message: "Vite toolchain already installed"}, nil
+		if vitePlusInstalled {
+			return CheckResult{Satisfied: true, Message: "Vite+ toolchain already installed"}, nil
 		}
 	}
 	return CheckResult{Satisfied: false}, nil
@@ -396,12 +396,12 @@ func runNodeToolchainInstall(ctx context.Context, execCtx ExecutionContext) erro
 			Args: []string{"-c", remoteInstallCommand("https://get.pnpm.io/install.sh", nil, "/bin/sh")},
 		})
 	default:
-		installed, err := commandInstalled(ctx, execCtx, "vite")
+		installed, err := commandInstalled(ctx, execCtx, "vp")
 		if err != nil {
 			return err
 		}
 		if installed {
-			return logStageMessage(execCtx, "Vite toolchain already installed; skipping installer")
+			return logStageMessage(execCtx, "Vite+ toolchain already installed; skipping installer")
 		}
 		return runCommand(ctx, execCtx, runner.Command{
 			Name: "/bin/bash",
