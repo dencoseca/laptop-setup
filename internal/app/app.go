@@ -37,6 +37,9 @@ func Run(ctx context.Context, args []string, stdout io.Writer, stderr io.Writer)
 
 func (a *App) Run(ctx context.Context, args []string, stdout io.Writer, stderr io.Writer) error {
 	cfg, err := parseConfigWithDefaultPath(args, stderr, a.deps.Paths.DefaultStatePath)
+	if errors.Is(err, flag.ErrHelp) {
+		return nil
+	}
 	if err != nil {
 		return err
 	}
