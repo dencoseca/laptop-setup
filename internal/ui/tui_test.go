@@ -104,8 +104,18 @@ func TestNewGitIdentityInputsLoadActiveIdentityThroughCommandRunner(t *testing.T
 		},
 	}
 	repoRoot := t.TempDir()
+	homeDir := t.TempDir()
 
-	nameInput, emailInput := newGitIdentityInputs(context.Background(), commandRunner, repoRoot)
+	nameInput, emailInput, err := newGitIdentityInputs(
+		context.Background(),
+		commandRunner,
+		stages.OSFileSystem{},
+		repoRoot,
+		homeDir,
+	)
+	if err != nil {
+		t.Fatalf("newGitIdentityInputs returned error: %v", err)
+	}
 
 	if got := nameInput.Value(); got != "Ada Lovelace" {
 		t.Fatalf("name default mismatch: %q", got)
@@ -123,13 +133,109 @@ func TestNewGitIdentityInputsLoadActiveIdentityThroughCommandRunner(t *testing.T
 }
 
 func TestNewGitIdentityInputsUseBlankDefaultsWhenIdentityIsUnset(t *testing.T) {
-	nameInput, emailInput := newGitIdentityInputs(context.Background(), &gitIdentityRunner{}, t.TempDir())
+	nameInput, emailInput, err := newGitIdentityInputs(
+		context.Background(),
+		&gitIdentityRunner{},
+		stages.OSFileSystem{},
+		t.TempDir(),
+		t.TempDir(),
+	)
+	if err != nil {
+		t.Fatalf("newGitIdentityInputs returned error: %v", err)
+	}
 
 	if got := nameInput.Value(); got != "" {
 		t.Fatalf("expected blank name default, got %q", got)
 	}
 	if got := emailInput.Value(); got != "" {
 		t.Fatalf("expected blank email default, got %q", got)
+	}
+}
+
+func TestNewGitIdentityInputsFallbackToExistingConfigWhenGitLookupFails(t *testing.T) {
+	fileSystem := stages.OSFileSystem{}
+	homeDir := t.TempDir()
+	content := "[user]\n  name = Restored User\n  email = restored@example.com\n"
+	if err := fileSystem.WriteFile(filepath.Join(homeDir, ".gitconfig"), []byte(content), 0o600); err != nil {
+		t.Fatalf("write existing gitconfig: %v", err)
+	}
+	commandRunner := &gitIdentityRunner{
+		runErrors: map[string]error{
+			"user.name": errors.New("git is unavailable"),
+		},
+	}
+
+	nameInput, emailInput, err := newGitIdentityInputs(
+		context.Background(),
+		commandRunner,
+		fileSystem,
+		t.TempDir(),
+		homeDir,
+	)
+	if err != nil {
+		t.Fatalf("newGitIdentityInputs returned error: %v", err)
+	}
+	if got := nameInput.Value(); got != "Restored User" {
+		t.Fatalf("fallback name mismatch: %q", got)
+	}
+	if got := emailInput.Value(); got != "restored@example.com" {
+		t.Fatalf("fallback email mismatch: %q", got)
+	}
+	if got := len(commandRunner.commands); got != 1 {
+		t.Fatalf("expected fallback after first operational error, got %d commands", got)
+	}
+}
+
+func TestNewGitIdentityInputsKeepBlankDefaultsWhenGitAndConfigAreAbsent(t *testing.T) {
+	commandRunner := &gitIdentityRunner{
+		runErrors: map[string]error{
+			"user.name": errors.New("git is unavailable"),
+		},
+	}
+
+	nameInput, emailInput, err := newGitIdentityInputs(
+		context.Background(),
+		commandRunner,
+		stages.OSFileSystem{},
+		t.TempDir(),
+		t.TempDir(),
+	)
+	if err != nil {
+		t.Fatalf("newGitIdentityInputs returned error: %v", err)
+	}
+	if got := nameInput.Value(); got != "" {
+		t.Fatalf("expected blank name without existing config, got %q", got)
+	}
+	if got := emailInput.Value(); got != "" {
+		t.Fatalf("expected blank email without existing config, got %q", got)
+	}
+}
+
+func TestNewGitIdentityInputsRejectUnsafeFallbackForIncludedConfig(t *testing.T) {
+	fileSystem := stages.OSFileSystem{}
+	homeDir := t.TempDir()
+	content := "[include]\n  path = ~/.gitconfig.identity\n"
+	if err := fileSystem.WriteFile(filepath.Join(homeDir, ".gitconfig"), []byte(content), 0o600); err != nil {
+		t.Fatalf("write existing gitconfig: %v", err)
+	}
+	commandRunner := &gitIdentityRunner{
+		runErrors: map[string]error{
+			"user.name": errors.New("git is unavailable"),
+		},
+	}
+
+	_, _, err := newGitIdentityInputs(
+		context.Background(),
+		commandRunner,
+		fileSystem,
+		t.TempDir(),
+		homeDir,
+	)
+	if err == nil {
+		t.Fatal("expected included config fallback to fail safely")
+	}
+	if !strings.Contains(err.Error(), "existing .gitconfig uses includes") {
+		t.Fatalf("unexpected fallback error: %v", err)
 	}
 }
 
@@ -141,7 +247,16 @@ func TestGitIdentityInputsPreserveDefaultsAndAcceptReplacements(t *testing.T) {
 				"user.email": "existing@example.com",
 			},
 		}
-		nameInput, emailInput := newGitIdentityInputs(context.Background(), commandRunner, t.TempDir())
+		nameInput, emailInput, err := newGitIdentityInputs(
+			context.Background(),
+			commandRunner,
+			stages.OSFileSystem{},
+			t.TempDir(),
+			t.TempDir(),
+		)
+		if err != nil {
+			t.Fatalf("newGitIdentityInputs returned error: %v", err)
+		}
 		return model{
 			screen:        screenGitName,
 			gitNameInput:  nameInput,
@@ -1675,8 +1790,9 @@ func (r *noOpRunner) LookPath(context.Context, string) (string, error) {
 }
 
 type gitIdentityRunner struct {
-	values   map[string]string
-	commands []runner.Command
+	values    map[string]string
+	runErrors map[string]error
+	commands  []runner.Command
 }
 
 func (r *gitIdentityRunner) Run(_ context.Context, command runner.Command) (runner.Result, error) {
@@ -1684,9 +1800,16 @@ func (r *gitIdentityRunner) Run(_ context.Context, command runner.Command) (runn
 	if len(command.Args) != 3 {
 		return runner.Result{}, fmt.Errorf("unexpected git config arguments: %v", command.Args)
 	}
+	if err, ok := r.runErrors[command.Args[2]]; ok {
+		return runner.Result{ExitCode: -1}, err
+	}
 	value, ok := r.values[command.Args[2]]
 	if !ok {
-		return runner.Result{ExitCode: 1}, errors.New("git config value is unset")
+		return runner.Result{ExitCode: 1}, &runner.CommandError{
+			Command:  command,
+			ExitCode: 1,
+			Err:      errors.New("git config value is unset"),
+		}
 	}
 	return runner.Result{Stdout: value}, nil
 }

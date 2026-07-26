@@ -241,6 +241,9 @@ func TestRunStartsInteractiveUIWithConfig(t *testing.T) {
 	if len(uiRunner.options.Config.Skip) != 1 || uiRunner.options.Config.Skip[0] != "first" {
 		t.Fatalf("unexpected skip config: %v", uiRunner.options.Config.Skip)
 	}
+	if uiRunner.options.FileSystem == nil {
+		t.Fatal("expected filesystem to be wired")
+	}
 	if uiRunner.options.ExecutionService == nil {
 		t.Fatal("expected execution service to be wired")
 	}

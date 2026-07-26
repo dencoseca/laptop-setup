@@ -5,7 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"time"
@@ -68,6 +70,7 @@ type Options struct {
 	HomeDir          string
 	Out              io.Writer
 	Commander        runner.CommandRunner
+	FileSystem       stages.FileSystem
 	Templates        stages.TemplateStore
 	ExecutionService ExecutionService
 }
@@ -416,6 +419,9 @@ func Run(ctx context.Context, options Options) error {
 	if options.Commander == nil {
 		options.Commander = runner.NewOSCommandRunner()
 	}
+	if options.FileSystem == nil {
+		options.FileSystem = stages.OSFileSystem{}
+	}
 	if options.ExecutionService == nil {
 		return errors.New("execution service is required")
 	}
@@ -432,7 +438,16 @@ func Run(ctx context.Context, options Options) error {
 	spin.Spinner = spinner.Dot
 	shortcutHelp := newShortcutHelp()
 	elapsed := stopwatch.NewWithInterval(time.Millisecond)
-	gitNameInput, gitEmailInput := newGitIdentityInputs(runCtx, options.Commander, options.RepoRoot)
+	gitNameInput, gitEmailInput, err := newGitIdentityInputs(
+		runCtx,
+		options.Commander,
+		options.FileSystem,
+		options.RepoRoot,
+		options.HomeDir,
+	)
+	if err != nil {
+		return err
+	}
 
 	m := model{
 		ctx:              runCtx,
@@ -943,8 +958,17 @@ func (m model) textInputWidth() int {
 	return minInt(72, maxInt(1, innerWidth-4))
 }
 
-func newGitIdentityInputs(ctx context.Context, commandRunner runner.CommandRunner, repoRoot string) (textinput.Model, textinput.Model) {
-	name, email := readGitIdentity(ctx, commandRunner, repoRoot)
+func newGitIdentityInputs(
+	ctx context.Context,
+	commandRunner runner.CommandRunner,
+	fileSystem stages.FileSystem,
+	repoRoot string,
+	homeDir string,
+) (textinput.Model, textinput.Model, error) {
+	name, email, err := readGitIdentity(ctx, commandRunner, fileSystem, repoRoot, homeDir)
+	if err != nil {
+		return textinput.Model{}, textinput.Model{}, err
+	}
 
 	nameInput := textinput.New()
 	nameInput.Placeholder = "Git user.name"
@@ -960,27 +984,105 @@ func newGitIdentityInputs(ctx context.Context, commandRunner runner.CommandRunne
 	emailInput.SetValue(email)
 	styleTextInput(&emailInput)
 
-	return nameInput, emailInput
+	return nameInput, emailInput, nil
 }
 
-func readGitIdentity(ctx context.Context, commandRunner runner.CommandRunner, repoRoot string) (string, string) {
+func readGitIdentity(
+	ctx context.Context,
+	commandRunner runner.CommandRunner,
+	fileSystem stages.FileSystem,
+	repoRoot string,
+	homeDir string,
+) (string, string, error) {
 	if commandRunner == nil {
-		return "", ""
+		return readGitIdentityFallback(fileSystem, homeDir, errors.New("Git command runner is unavailable"))
 	}
-	return readGitConfigValue(ctx, commandRunner, repoRoot, "user.name"),
-		readGitConfigValue(ctx, commandRunner, repoRoot, "user.email")
+
+	name, err := readGitConfigValue(ctx, commandRunner, repoRoot, "user.name")
+	if err != nil {
+		return readGitIdentityFallback(fileSystem, homeDir, err)
+	}
+	email, err := readGitConfigValue(ctx, commandRunner, repoRoot, "user.email")
+	if err != nil {
+		return readGitIdentityFallback(fileSystem, homeDir, err)
+	}
+	return name, email, nil
 }
 
-func readGitConfigValue(ctx context.Context, commandRunner runner.CommandRunner, repoRoot string, key string) string {
+func readGitConfigValue(ctx context.Context, commandRunner runner.CommandRunner, repoRoot string, key string) (string, error) {
 	result, err := commandRunner.Run(ctx, runner.Command{
 		Name: "git",
 		Args: []string{"config", "--get", key},
 		Dir:  repoRoot,
 	})
 	if err != nil {
-		return ""
+		var commandErr *runner.CommandError
+		if errors.As(err, &commandErr) && commandErr.ExitCode == 1 {
+			return "", nil
+		}
+		return "", fmt.Errorf("query Git %s: %w", key, err)
 	}
-	return strings.TrimSpace(result.Stdout)
+	return strings.TrimSpace(result.Stdout), nil
+}
+
+func readGitIdentityFallback(fileSystem stages.FileSystem, homeDir string, queryErr error) (string, string, error) {
+	if fileSystem == nil {
+		return "", "", fmt.Errorf("load existing Git identity after query failure: %w", queryErr)
+	}
+	payload, err := fileSystem.ReadFile(filepath.Join(homeDir, ".gitconfig"))
+	if errors.Is(err, fs.ErrNotExist) {
+		return "", "", nil
+	}
+	if err != nil {
+		return "", "", fmt.Errorf("load existing Git identity after query failure: %w", err)
+	}
+	content := string(payload)
+	if gitConfigHasIncludes(content) {
+		return "", "", fmt.Errorf("load existing Git identity after query failure: existing .gitconfig uses includes: %w", queryErr)
+	}
+	name, email := parseGitIdentity(content)
+	return name, email, nil
+}
+
+func gitConfigHasIncludes(content string) bool {
+	for _, rawLine := range strings.Split(content, "\n") {
+		line := strings.TrimSpace(rawLine)
+		if strings.HasPrefix(strings.ToLower(line), "[include") && strings.HasSuffix(line, "]") {
+			return true
+		}
+	}
+	return false
+}
+
+func parseGitIdentity(content string) (string, string) {
+	inUser := false
+	name := ""
+	email := ""
+	for _, rawLine := range strings.Split(content, "\n") {
+		line := strings.TrimSpace(rawLine)
+		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, ";") {
+			continue
+		}
+		if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") {
+			section := strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(line, "["), "]"))
+			inUser = strings.EqualFold(section, "user")
+			continue
+		}
+		if !inUser {
+			continue
+		}
+		key, value, found := strings.Cut(line, "=")
+		if !found {
+			continue
+		}
+		switch strings.TrimSpace(strings.ToLower(key)) {
+		case "name":
+			name = strings.TrimSpace(value)
+		case "email":
+			email = strings.TrimSpace(value)
+		}
+	}
+	return name, email
 }
 
 func optionsForStageIDs(catalog []stages.Stage, ids []string) []toggleOption {
