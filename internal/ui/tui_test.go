@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -1633,6 +1634,23 @@ func (s *recordingExecutionService) Execute(context.Context, ExecutionRun, Execu
 	return nil
 }
 
+type interactiveCommandExecutionService struct {
+	command runner.Command
+}
+
+func (s *interactiveCommandExecutionService) PrepareExecution(context.Context, ExecutionRequest) (ExecutionRun, error) {
+	return ExecutionRun{}, errors.New("unexpected PrepareExecution call")
+}
+
+func (s *interactiveCommandExecutionService) Execute(
+	ctx context.Context,
+	_ ExecutionRun,
+	hooks ExecutionHooks,
+) error {
+	_, err := hooks.OnInteractiveCommand(ctx, s.command)
+	return err
+}
+
 type discardWriteCloser struct {
 	io.Writer
 }
@@ -1858,6 +1876,7 @@ func TestInteractiveCommandRequestShowsAuthorizationScreen(t *testing.T) {
 	}
 
 	next, cmd := m.Update(interactiveCommandRequestMsg{Request: interactiveCommandRequest{
+		Context:  context.Background(),
 		Command:  runner.Command{Name: "brew", Args: []string{"bundle", "install"}, Interactive: true, Prompt: "Homebrew may ask for your password."},
 		Response: response,
 	}})
@@ -1892,6 +1911,7 @@ func TestInteractiveCommandFinishedRespondsToExecutionWorker(t *testing.T) {
 	response := make(chan interactiveCommandResult, 1)
 	updates := make(chan tea.Msg)
 	request := interactiveCommandRequest{
+		Context:  context.Background(),
 		Command:  runner.Command{Name: "brew", Args: []string{"bundle", "install"}, Interactive: true},
 		Response: response,
 	}
@@ -1925,6 +1945,114 @@ func TestInteractiveCommandFinishedRespondsToExecutionWorker(t *testing.T) {
 	default:
 		t.Fatal("expected interactive result to be sent to execution worker")
 	}
+}
+
+func TestInteractiveCommandCancellationTerminatesChildAndCompletesWorker(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	startedPath := filepath.Join(t.TempDir(), "child-started")
+	command := runner.Command{
+		Name: "sh",
+		Args: []string{
+			"-c",
+			"touch \"$1\"; exec sleep 60",
+			"laptop-setup-test",
+			startedPath,
+		},
+		Interactive: true,
+	}
+	service := &interactiveCommandExecutionService{command: command}
+	updates := make(chan tea.Msg, 4)
+	run := ExecutionRun{
+		HumanLog:  discardWriteCloser{Writer: io.Discard},
+		EventsLog: discardWriteCloser{Writer: io.Discard},
+	}
+
+	if msg := startExecutionWorker(ctx, updates, run, service)(); msg != nil {
+		t.Fatalf("expected worker start command to return nil, got %#v", msg)
+	}
+
+	var request interactiveCommandRequest
+	select {
+	case message := <-updates:
+		requestMessage, ok := message.(interactiveCommandRequestMsg)
+		if !ok {
+			t.Fatalf("expected interactive command request, got %#v", message)
+		}
+		request = requestMessage.Request
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for interactive command request")
+	}
+	if request.Context != ctx {
+		t.Fatal("expected interactive request to carry the execution context")
+	}
+
+	execCommand, err := newInteractiveExecCommand(request)
+	if err != nil {
+		t.Fatalf("build interactive command: %v", err)
+	}
+	childDone := make(chan interactiveCommandResult, 1)
+	go func() {
+		runErr := execCommand.Run()
+		result, resultErr := runner.ResultFromCommand(
+			request.Command,
+			execCommand.stdout.String(),
+			execCommand.stderr.String(),
+			runErr,
+		)
+		childDone <- interactiveCommandResult{Result: result, Err: resultErr}
+		close(childDone)
+	}()
+
+	waitForFile(t, startedPath, 2*time.Second)
+	cancelledAt := time.Now()
+	cancel()
+
+	var result interactiveCommandResult
+	select {
+	case result = <-childDone:
+	case <-time.After(2 * time.Second):
+		t.Fatal("interactive child did not terminate promptly after cancellation")
+	}
+	if result.Err == nil {
+		t.Fatal("expected cancelled interactive child to return an error")
+	}
+	if elapsed := time.Since(cancelledAt); elapsed >= 2*time.Second {
+		t.Fatalf("interactive child cancellation took too long: %s", elapsed)
+	}
+
+	select {
+	case request.Response <- result:
+	default:
+		t.Fatal("interactive response channel blocked after cancellation")
+	}
+
+	timeout := time.After(2 * time.Second)
+	for {
+		select {
+		case _, ok := <-updates:
+			if !ok {
+				return
+			}
+		case <-timeout:
+			t.Fatal("execution worker did not complete after cancellation")
+		}
+	}
+}
+
+func waitForFile(t *testing.T, path string, timeout time.Duration) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if _, err := os.Stat(path); err == nil {
+			return
+		} else if !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("stat child start marker: %v", err)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("timed out waiting for child start marker %q", path)
 }
 
 func TestEscapeReturnsFromQuitConfirmation(t *testing.T) {

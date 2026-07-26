@@ -301,6 +301,7 @@ type failureRequestMsg struct {
 }
 
 type interactiveCommandRequest struct {
+	Context  context.Context
 	Command  runner.Command
 	Response chan interactiveCommandResult
 }
