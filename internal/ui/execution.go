@@ -249,6 +249,7 @@ func startExecutionWorker(
 				OnInteractiveCommand: func(inner context.Context, command runner.Command) (runner.Result, error) {
 					response := make(chan interactiveCommandResult, 1)
 					request := interactiveCommandRequest{
+						Context:  inner,
 						Command:  command,
 						Response: response,
 					}
@@ -278,9 +279,7 @@ func startExecutionWorker(
 
 func runInteractiveCommand(request interactiveCommandRequest) tea.Cmd {
 	command := request.Command
-	cmd, buildErr := runner.NewExecCommand(context.Background(), command)
-	stdout := newLimitedOutputBuffer(maxInteractiveOutputCaptureBytes)
-	stderr := newLimitedOutputBuffer(maxInteractiveOutputCaptureBytes)
+	execCommand, buildErr := newInteractiveExecCommand(request)
 	if buildErr != nil {
 		return func() tea.Msg {
 			return interactiveCommandFinishedMsg{
@@ -289,18 +288,28 @@ func runInteractiveCommand(request interactiveCommandRequest) tea.Cmd {
 			}
 		}
 	}
-	execCommand := capturingExecCommand{
-		cmd:    cmd,
-		stdout: stdout,
-		stderr: stderr,
-	}
 	return tea.Exec(execCommand, func(err error) tea.Msg {
-		result, err := runner.ResultFromCommand(command, stdout.String(), stderr.String(), err)
+		result, err := runner.ResultFromCommand(command, execCommand.stdout.String(), execCommand.stderr.String(), err)
 		return interactiveCommandFinishedMsg{
 			Request: request,
 			Result:  interactiveCommandResult{Result: result, Err: err},
 		}
 	})
+}
+
+func newInteractiveExecCommand(request interactiveCommandRequest) (capturingExecCommand, error) {
+	if request.Context == nil {
+		return capturingExecCommand{}, errors.New("interactive command context is required")
+	}
+	cmd, err := runner.NewExecCommand(request.Context, request.Command)
+	if err != nil {
+		return capturingExecCommand{}, err
+	}
+	return capturingExecCommand{
+		cmd:    cmd,
+		stdout: newLimitedOutputBuffer(maxInteractiveOutputCaptureBytes),
+		stderr: newLimitedOutputBuffer(maxInteractiveOutputCaptureBytes),
+	}, nil
 }
 
 func waitForExecutionUpdate(updates <-chan tea.Msg) tea.Cmd {
