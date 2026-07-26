@@ -51,15 +51,16 @@ func (a *App) Run(ctx context.Context, args []string, stdout io.Writer, stderr i
 	}
 
 	store := a.deps.StateRepositories.Open(cfg.statePath)
-	current, err := store.Load(ctx)
-	if err != nil {
-		return err
-	}
-
-	if cfg.resume && current == nil {
-		return errors.New("no previous run state found for --resume")
-	}
+	var current *state.RunState
 	if cfg.resume {
+		current, err = store.Load(ctx)
+		if err != nil {
+			return err
+		}
+		if current == nil {
+			return errors.New("no previous run state found for --resume")
+		}
+
 		catalog := a.deps.Catalog()
 		if err := validateResumeRequest(current, catalog, cfg.dryRun); err != nil {
 			return err

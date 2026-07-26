@@ -246,6 +246,91 @@ func TestRunStartsInteractiveUIWithConfig(t *testing.T) {
 	}
 }
 
+func TestRunHandlesUnreadablePreviousStateByMode(t *testing.T) {
+	testCases := []struct {
+		name        string
+		payload     string
+		resumeError string
+	}{
+		{
+			name:        "malformed JSON",
+			payload:     `{"run_id":`,
+			resumeError: "decode state file: invalid JSON",
+		},
+		{
+			name:        "schema-invalid state",
+			payload:     `{}`,
+			resumeError: "validate state file: field run_id",
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			for _, resume := range []bool{false, true} {
+				mode := "fresh"
+				if resume {
+					mode = "resume"
+				}
+
+				t.Run(mode, func(t *testing.T) {
+					statePath := filepath.Join(t.TempDir(), "state.json")
+					if err := os.WriteFile(statePath, []byte(testCase.payload), 0o600); err != nil {
+						t.Fatalf("write previous state: %v", err)
+					}
+
+					uiRunner := &capturingUIRunner{}
+					app := New(Dependencies{
+						Paths: fakePathResolver{
+							workingDir:       t.TempDir(),
+							homeDir:          t.TempDir(),
+							defaultStatePath: statePath,
+							runsDir:          filepath.Join(t.TempDir(), "runs"),
+						},
+						TTY: staticTTYDetector(true),
+						UI:  uiRunner,
+					})
+
+					args := []string{"--state-file", statePath}
+					if resume {
+						args = append([]string{"--resume"}, args...)
+					}
+					err := app.Run(context.Background(), args, &bytes.Buffer{}, &bytes.Buffer{})
+
+					if resume {
+						if err == nil {
+							t.Fatal("expected unreadable state to reject resume")
+						}
+						if !strings.Contains(err.Error(), testCase.resumeError) {
+							t.Fatalf("unexpected resume error: %v", err)
+						}
+						if uiRunner.calls != 0 {
+							t.Fatalf("expected UI not to run, got %d calls", uiRunner.calls)
+						}
+						return
+					}
+
+					if err != nil {
+						t.Fatalf("fresh run returned error: %v", err)
+					}
+					if uiRunner.calls != 1 {
+						t.Fatalf("expected UI to run once, got %d calls", uiRunner.calls)
+					}
+					if uiRunner.options.Current != nil {
+						t.Fatalf("fresh run loaded previous state: %+v", uiRunner.options.Current)
+					}
+					payload, readErr := os.ReadFile(statePath)
+					if readErr != nil {
+						t.Fatalf("read previous state: %v", readErr)
+					}
+					if string(payload) != testCase.payload {
+						t.Fatalf("fresh startup changed previous state: got %q want %q", payload, testCase.payload)
+					}
+				})
+			}
+		})
+	}
+}
+
 func TestFilesystemRunLogFactoryCreatesPrivateArtifacts(t *testing.T) {
 	runID := state.RunID("run-1")
 	paths := fakePathResolver{runsDir: filepath.Join(t.TempDir(), "runs")}
