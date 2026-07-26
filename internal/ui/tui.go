@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
@@ -69,6 +70,7 @@ type Options struct {
 	HomeDir          string
 	Out              io.Writer
 	Commander        runner.CommandRunner
+	FileSystem       stages.FileSystem
 	Templates        stages.TemplateStore
 	ExecutionService ExecutionService
 }
@@ -200,7 +202,7 @@ var configurationScreenSpecs = []screenSpec{
 		previous:          screenShellOptions,
 		next:              screenGitEmail,
 		hint:              shortcutContinueBack,
-		textInputSubtitle: "Enter git user.name, or leave blank, then press Enter.",
+		textInputSubtitle: "Edit git user.name. Clear the field to remove it, then press Enter.",
 	},
 	{
 		screen:            screenGitEmail,
@@ -208,7 +210,7 @@ var configurationScreenSpecs = []screenSpec{
 		previous:          screenGitName,
 		next:              screenManual,
 		hint:              shortcutContinueBack,
-		textInputSubtitle: "Enter git user.email, or leave blank, then press Enter.",
+		textInputSubtitle: "Edit git user.email. Clear the field to remove it, then press Enter.",
 	},
 	{
 		screen:     screenManual,
@@ -417,6 +419,9 @@ func Run(ctx context.Context, options Options) error {
 	if options.Commander == nil {
 		options.Commander = runner.NewOSCommandRunner()
 	}
+	if options.FileSystem == nil {
+		options.FileSystem = stages.OSFileSystem{}
+	}
 	if options.ExecutionService == nil {
 		return errors.New("execution service is required")
 	}
@@ -433,17 +438,16 @@ func Run(ctx context.Context, options Options) error {
 	spin.Spinner = spinner.Dot
 	shortcutHelp := newShortcutHelp()
 	elapsed := stopwatch.NewWithInterval(time.Millisecond)
-	gitNameInput := textinput.New()
-	gitNameInput.Placeholder = "Git user.name"
-	gitNameInput.CharLimit = 128
-	gitNameInput.Prompt = "> "
-	styleTextInput(&gitNameInput)
-
-	gitEmailInput := textinput.New()
-	gitEmailInput.Placeholder = "Git user.email"
-	gitEmailInput.CharLimit = 128
-	gitEmailInput.Prompt = "> "
-	styleTextInput(&gitEmailInput)
+	gitNameInput, gitEmailInput, err := newGitIdentityInputs(
+		runCtx,
+		options.Commander,
+		options.FileSystem,
+		options.RepoRoot,
+		options.HomeDir,
+	)
+	if err != nil {
+		return err
+	}
 
 	m := model{
 		ctx:              runCtx,
@@ -954,15 +958,100 @@ func (m model) textInputWidth() int {
 	return minInt(72, maxInt(1, innerWidth-4))
 }
 
-func readGitIdentity(homeDir string) (string, string) {
-	if strings.TrimSpace(homeDir) == "" {
-		return "", ""
-	}
-	payload, err := os.ReadFile(filepath.Join(homeDir, ".gitconfig"))
+func newGitIdentityInputs(
+	ctx context.Context,
+	commandRunner runner.CommandRunner,
+	fileSystem stages.FileSystem,
+	repoRoot string,
+	homeDir string,
+) (textinput.Model, textinput.Model, error) {
+	name, email, err := readGitIdentity(ctx, commandRunner, fileSystem, repoRoot, homeDir)
 	if err != nil {
-		return "", ""
+		return textinput.Model{}, textinput.Model{}, err
 	}
-	return parseGitIdentity(string(payload))
+
+	nameInput := textinput.New()
+	nameInput.Placeholder = "Git user.name"
+	nameInput.CharLimit = 128
+	nameInput.Prompt = "> "
+	nameInput.SetValue(name)
+	styleTextInput(&nameInput)
+
+	emailInput := textinput.New()
+	emailInput.Placeholder = "Git user.email"
+	emailInput.CharLimit = 128
+	emailInput.Prompt = "> "
+	emailInput.SetValue(email)
+	styleTextInput(&emailInput)
+
+	return nameInput, emailInput, nil
+}
+
+func readGitIdentity(
+	ctx context.Context,
+	commandRunner runner.CommandRunner,
+	fileSystem stages.FileSystem,
+	repoRoot string,
+	homeDir string,
+) (string, string, error) {
+	if commandRunner == nil {
+		return readGitIdentityFallback(fileSystem, homeDir, errors.New("Git command runner is unavailable"))
+	}
+
+	name, err := readGitConfigValue(ctx, commandRunner, repoRoot, "user.name")
+	if err != nil {
+		return readGitIdentityFallback(fileSystem, homeDir, err)
+	}
+	email, err := readGitConfigValue(ctx, commandRunner, repoRoot, "user.email")
+	if err != nil {
+		return readGitIdentityFallback(fileSystem, homeDir, err)
+	}
+	return name, email, nil
+}
+
+func readGitConfigValue(ctx context.Context, commandRunner runner.CommandRunner, repoRoot string, key string) (string, error) {
+	result, err := commandRunner.Run(ctx, runner.Command{
+		Name: "git",
+		Args: []string{"config", "--get", key},
+		Dir:  repoRoot,
+	})
+	if err != nil {
+		var commandErr *runner.CommandError
+		if errors.As(err, &commandErr) && commandErr.ExitCode == 1 {
+			return "", nil
+		}
+		return "", fmt.Errorf("query Git %s: %w", key, err)
+	}
+	return strings.TrimSpace(result.Stdout), nil
+}
+
+func readGitIdentityFallback(fileSystem stages.FileSystem, homeDir string, queryErr error) (string, string, error) {
+	if fileSystem == nil {
+		return "", "", fmt.Errorf("load existing Git identity after query failure: %w", queryErr)
+	}
+	payload, err := fileSystem.ReadFile(filepath.Join(homeDir, ".gitconfig"))
+	if errors.Is(err, fs.ErrNotExist) {
+		return "", "", nil
+	}
+	if err != nil {
+		return "", "", fmt.Errorf("load existing Git identity after query failure: %w", err)
+	}
+	content := string(payload)
+	if gitConfigHasIncludes(content) {
+		return "", "", fmt.Errorf("load existing Git identity after query failure: existing .gitconfig uses includes: %w", queryErr)
+	}
+	name, email := parseGitIdentity(content)
+	return name, email, nil
+}
+
+func gitConfigHasIncludes(content string) bool {
+	for _, rawLine := range strings.Split(content, "\n") {
+		line := strings.TrimSpace(rawLine)
+		if strings.HasPrefix(strings.ToLower(line), "[include") && strings.HasSuffix(line, "]") {
+			return true
+		}
+	}
+	return false
 }
 
 func parseGitIdentity(content string) (string, string) {
