@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -34,9 +35,6 @@ func (s tuiExecutionService) PrepareExecution(ctx context.Context, request ui.Ex
 		}
 		runState = request.Current
 		dryRun = runState.Mode.IsDryRun()
-		if err := execution.ValidateRunStateForCatalog(runState, s.catalog, dryRun); err != nil {
-			return ui.ExecutionRun{}, err
-		}
 	} else {
 		dryRun = request.DryRun
 		now := time.Now()
@@ -62,14 +60,20 @@ func (s tuiExecutionService) PrepareExecution(ctx context.Context, request ui.Ex
 	if err := runState.Decisions.Validate(); err != nil {
 		return ui.ExecutionRun{}, fmt.Errorf("validate decisions: %w", err)
 	}
-
-	if err := s.store.Save(ctx, runState); err != nil {
+	if err := execution.ValidateRunStateForCatalog(runState, s.catalog, dryRun); err != nil {
 		return ui.ExecutionRun{}, err
 	}
 
 	logs, err := s.deps.RunLogs.Open(runState.RunID)
 	if err != nil {
 		return ui.ExecutionRun{}, err
+	}
+	if err = s.store.Save(ctx, runState); err != nil {
+		saveErr := fmt.Errorf("save run state: %w (unused log artifacts retained in %q)", err, logs.RunDir)
+		if closeErr := closeRunLogs(logs); closeErr != nil {
+			return ui.ExecutionRun{}, errors.Join(saveErr, closeErr)
+		}
+		return ui.ExecutionRun{}, saveErr
 	}
 
 	return ui.ExecutionRun{
@@ -81,6 +85,21 @@ func (s tuiExecutionService) PrepareExecution(ctx context.Context, request ui.Ex
 		HumanLog:     logs.HumanLog,
 		EventsLog:    logs.EventLog,
 	}, nil
+}
+
+func closeRunLogs(logs RunLogs) error {
+	var closeErrs []error
+	if logs.HumanLog != nil {
+		if err := logs.HumanLog.Close(); err != nil {
+			closeErrs = append(closeErrs, fmt.Errorf("close run log: %w", err))
+		}
+	}
+	if logs.EventLog != nil {
+		if err := logs.EventLog.Close(); err != nil {
+			closeErrs = append(closeErrs, fmt.Errorf("close event log: %w", err))
+		}
+	}
+	return errors.Join(closeErrs...)
 }
 
 func (s tuiExecutionService) Execute(ctx context.Context, run ui.ExecutionRun, hooks ui.ExecutionHooks) error {
