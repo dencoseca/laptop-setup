@@ -62,6 +62,40 @@ func TestEmbeddedTerminalSetupMatchesGhosttyStack(t *testing.T) {
 	}
 }
 
+func TestEmbeddedZshrcGuardsOptionalDependencies(t *testing.T) {
+	zshrc := mustReadTemplate(t, TemplateFS(), "zshrc")
+
+	tests := []struct {
+		name  string
+		block string
+	}{
+		{
+			name: "missing Oh My Zsh",
+			block: strings.Join([]string{
+				`if [[ -r "$ZSH/oh-my-zsh.sh" ]]; then`,
+				`  source "$ZSH/oh-my-zsh.sh"`,
+				"fi",
+			}, "\n"),
+		},
+		{
+			name: "missing Starship",
+			block: strings.Join([]string{
+				"if command -v starship >/dev/null 2>&1; then",
+				`  eval "$(starship init zsh)"`,
+				"fi",
+			}, "\n"),
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if !strings.Contains(zshrc, test.block) {
+				t.Fatalf("expected zshrc to contain dependency guard:\n%s", test.block)
+			}
+		})
+	}
+}
+
 func mustReadTemplate(t *testing.T, templateFS fs.FS, name string) string {
 	t.Helper()
 	payload, err := fs.ReadFile(templateFS, name)
