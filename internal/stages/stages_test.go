@@ -817,6 +817,86 @@ func TestRunShellSetupRespectsShellDecisions(t *testing.T) {
 	}
 }
 
+func TestShellSetupAppliesGuardedZshrcWithoutOptionalDependencies(t *testing.T) {
+	repoRoot := t.TempDir()
+	homeDir := t.TempDir()
+	templatesDir := filepath.Join(repoRoot, "templates")
+	if err := os.MkdirAll(templatesDir, 0o755); err != nil {
+		t.Fatalf("create templates dir: %v", err)
+	}
+	guardedZshrc := strings.Join([]string{
+		`export ZSH="$HOME/.oh-my-zsh"`,
+		`if [[ -r "$ZSH/oh-my-zsh.sh" ]]; then`,
+		`  source "$ZSH/oh-my-zsh.sh"`,
+		"fi",
+		"if command -v starship >/dev/null 2>&1; then",
+		`  eval "$(starship init zsh)"`,
+		"fi",
+		"",
+	}, "\n")
+	if err := os.WriteFile(filepath.Join(templatesDir, "zshrc"), []byte(guardedZshrc), 0o644); err != nil {
+		t.Fatalf("write guarded zshrc template: %v", err)
+	}
+
+	logger := &recordingEventLogger{}
+	runnerStub := &recordingRunner{lookPathErr: errors.New("not found")}
+	execCtx := ExecutionContext{
+		Runner:          runnerStub,
+		Logger:          logger,
+		RepoRoot:        repoRoot,
+		HomeDir:         homeDir,
+		SelectedBrewIDs: []string{"jq"},
+		Decisions: DecisionSet{
+			NodeToolchain:       NodeToolchainVitePlus,
+			DockerRuntime:       DockerRuntimeColima,
+			ShellInstallOhMyZsh: false,
+			ShellApplyZshrc:     true,
+			ShellApplyStarship:  false,
+			ShellApplyGhostty:   false,
+			GitConfigMode:       GitConfigModeTemplate,
+		},
+	}
+
+	check, err := precheckShellSetup(context.Background(), execCtx)
+	if err != nil {
+		t.Fatalf("precheckShellSetup before run returned error: %v", err)
+	}
+	if check.Satisfied {
+		t.Fatal("expected missing zshrc to leave precheck unsatisfied")
+	}
+	if err = simulateShellSetup(context.Background(), execCtx); err != nil {
+		t.Fatalf("simulateShellSetup returned error: %v", err)
+	}
+	simulatedZshrcWrite := false
+	for _, event := range logger.events {
+		if event.EventType == runner.EventTypeSimulation && event.Message == "Would write templates/zshrc to ~/.zshrc" {
+			simulatedZshrcWrite = true
+			break
+		}
+	}
+	if !simulatedZshrcWrite {
+		t.Fatal("expected dry-run to include the guarded zshrc write")
+	}
+	if err = runShellSetup(context.Background(), execCtx); err != nil {
+		t.Fatalf("runShellSetup returned error: %v", err)
+	}
+	if len(runnerStub.commands) != 0 || len(runnerStub.lookPathCalls) != 0 {
+		t.Fatalf("expected guarded template not to require dependency commands, commands=%v lookups=%v", runnerStub.commands, runnerStub.lookPathCalls)
+	}
+	if content, err := os.ReadFile(filepath.Join(homeDir, ".zshrc")); err != nil {
+		t.Fatalf("read resulting zshrc: %v", err)
+	} else if string(content) != guardedZshrc {
+		t.Fatalf("unexpected zshrc contents: %q", content)
+	}
+	check, err = precheckShellSetup(context.Background(), execCtx)
+	if err != nil {
+		t.Fatalf("precheckShellSetup after run returned error: %v", err)
+	}
+	if !check.Satisfied {
+		t.Fatal("expected guarded zshrc to satisfy precheck after run")
+	}
+}
+
 func TestGhosttyConfigPathUsesHomeConfigDirectory(t *testing.T) {
 	homeDir := filepath.Join("Users", "alice")
 	want := filepath.Join(homeDir, ".config", "ghostty", "config.ghostty")
