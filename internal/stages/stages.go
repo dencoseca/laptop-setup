@@ -21,6 +21,22 @@ var requiredOhMyZshPlugins = []ohMyZshPlugin{
 	{Name: "zsh-syntax-highlighting", URL: "https://github.com/zsh-users/zsh-syntax-highlighting"},
 }
 
+const nvmPnpmShellBlock = `# >>> laptop-setup: nvm + pnpm >>>
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+
+export PNPM_HOME="$HOME/Library/pnpm"
+case ":$PATH:" in
+  *":$PNPM_HOME/bin:"*) ;;
+  *) export PATH="$PNPM_HOME/bin:$PATH" ;;
+esac
+case ":$PATH:" in
+  *":$PNPM_HOME:"*) ;;
+  *) export PATH="$PNPM_HOME:$PATH" ;;
+esac
+# <<< laptop-setup: nvm + pnpm <<<
+`
+
 func precheckNotSatisfied(context.Context, ExecutionContext) (CheckResult, error) {
 	return CheckResult{Satisfied: false}, nil
 }
@@ -140,12 +156,16 @@ func precheckNodeToolchain(ctx context.Context, execCtx ExecutionContext) (Check
 		if err != nil {
 			return CheckResult{}, err
 		}
-		pnpmInstalled, err := commandOrFileInstalled(ctx, execCtx, "pnpm", filepath.Join(execCtx.HomeDir, ".local", "share", "pnpm", "pnpm"))
+		nodeInstalled, err := nvmDefaultNodeInstalled(execCtx)
 		if err != nil {
 			return CheckResult{}, err
 		}
-		if nvmInstalled && pnpmInstalled {
-			return CheckResult{Satisfied: true, Message: "nvm and pnpm already installed"}, nil
+		pnpmInstalled, err := pnpmInstalled(ctx, execCtx)
+		if err != nil {
+			return CheckResult{}, err
+		}
+		if nvmInstalled && nodeInstalled && pnpmInstalled {
+			return CheckResult{Satisfied: true, Message: "nvm, Node, and pnpm already installed"}, nil
 		}
 	default:
 		vitePlusInstalled, err := commandInstalled(ctx, execCtx, "vp")
@@ -192,7 +212,11 @@ func precheckShellSetup(_ context.Context, execCtx ExecutionContext) (CheckResul
 		}
 	}
 	if ShellApplyZshrcTemplate(execCtx.Decisions) {
-		same, err := destinationMatchesTemplate(execCtx, "zshrc", filepath.Join(execCtx.HomeDir, ".zshrc"))
+		expected, err := zshrcContent(execCtx)
+		if err != nil {
+			return CheckResult{}, err
+		}
+		same, err := destinationMatchesContent(execCtx.fileSystem(), filepath.Join(execCtx.HomeDir, ".zshrc"), expected)
 		if err != nil {
 			return CheckResult{}, err
 		}
@@ -384,7 +408,31 @@ func runNodeToolchainInstall(ctx context.Context, execCtx ExecutionContext) erro
 			}
 		}
 
-		installed, err = commandOrFileInstalled(ctx, execCtx, "pnpm", filepath.Join(execCtx.HomeDir, ".local", "share", "pnpm", "pnpm"))
+		installed, err = nvmDefaultNodeInstalled(execCtx)
+		if err != nil {
+			return err
+		}
+		if installed {
+			if err = logStageMessage(execCtx, "default NVM Node version already installed; skipping install"); err != nil {
+				return err
+			}
+		} else {
+			if err = runCommand(ctx, execCtx, runner.Command{
+				Name: "/bin/bash",
+				Args: []string{"-c", strings.Join([]string{
+					"set -e",
+					`export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"`,
+					`[ -s "$NVM_DIR/nvm.sh" ]`,
+					`\. "$NVM_DIR/nvm.sh"`,
+					"nvm install --lts",
+					`nvm alias default 'lts/*'`,
+				}, "\n")},
+			}); err != nil {
+				return err
+			}
+		}
+
+		installed, err = pnpmInstalled(ctx, execCtx)
 		if err != nil {
 			return err
 		}
@@ -414,6 +462,9 @@ func simulateNodeToolchainInstall(_ context.Context, execCtx ExecutionContext) e
 	switch NodeToolchainFromDecisions(execCtx.Decisions) {
 	case NodeToolchainNvmPnpm:
 		if err := logSimulation(execCtx, "Would download and run nvm installer from raw.githubusercontent.com/nvm-sh"); err != nil {
+			return err
+		}
+		if err := logSimulation(execCtx, "Would install the latest LTS Node version and set it as the NVM default"); err != nil {
 			return err
 		}
 		return logSimulation(execCtx, "Would download and run pnpm installer from https://get.pnpm.io/install.sh")
@@ -487,10 +538,14 @@ func runShellSetup(ctx context.Context, execCtx ExecutionContext) error {
 
 	zshrcPath := filepath.Join(execCtx.HomeDir, ".zshrc")
 	if applyZshrc {
-		if err := copyFromTemplates(execCtx, "zshrc", zshrcPath); err != nil {
+		content, err := zshrcContent(execCtx)
+		if err != nil {
 			return err
 		}
-		if err := ensureHushLogin(execCtx); err != nil {
+		if _, err = writeFileSafely(execCtx.fileSystem(), zshrcPath, content, privateFilePerm); err != nil {
+			return fmt.Errorf("write zshrc: %w", err)
+		}
+		if err = ensureHushLogin(execCtx); err != nil {
 			return err
 		}
 	} else if err := logStageMessage(execCtx, "Skipping ~/.zshrc template write by decision"); err != nil {
@@ -533,7 +588,11 @@ func simulateShellSetup(_ context.Context, execCtx ExecutionContext) error {
 		if err := logSimulation(execCtx, "Would back up existing ~/.zshrc with a timestamped backup when content differs"); err != nil {
 			return err
 		}
-		if err := logSimulation(execCtx, "Would write templates/zshrc to ~/.zshrc"); err != nil {
+		message := "Would write templates/zshrc to ~/.zshrc"
+		if NodeToolchainFromDecisions(execCtx.Decisions) == NodeToolchainNvmPnpm {
+			message += " with managed NVM and pnpm initialization"
+		}
+		if err := logSimulation(execCtx, message); err != nil {
 			return err
 		}
 		if err := logSimulation(execCtx, "Would create ~/.hushlogin when missing"); err != nil {
@@ -704,6 +763,29 @@ func nvmInstalled(execCtx ExecutionContext) (bool, error) {
 	return directoryExists(execCtx.fileSystem(), filepath.Join(execCtx.HomeDir, ".nvm"))
 }
 
+func nvmDefaultNodeInstalled(execCtx ExecutionContext) (bool, error) {
+	return regularFileExists(execCtx.fileSystem(), filepath.Join(execCtx.HomeDir, ".nvm", "alias", "default"))
+}
+
+func pnpmInstalled(ctx context.Context, execCtx ExecutionContext) (bool, error) {
+	installed, err := commandInstalled(ctx, execCtx, "pnpm")
+	if err != nil || installed {
+		return installed, err
+	}
+	for _, path := range []string{
+		filepath.Join(execCtx.HomeDir, "Library", "pnpm", "pnpm"),
+		filepath.Join(execCtx.HomeDir, "Library", "pnpm", "bin", "pnpm"),
+		filepath.Join(execCtx.HomeDir, ".local", "share", "pnpm", "pnpm"),
+		filepath.Join(execCtx.HomeDir, ".pnpm", "pnpm"),
+	} {
+		installed, err = regularFileExists(execCtx.fileSystem(), path)
+		if err != nil || installed {
+			return installed, err
+		}
+	}
+	return false, nil
+}
+
 func ohMyZshInstalled(execCtx ExecutionContext) (bool, error) {
 	return directoryExists(execCtx.fileSystem(), filepath.Join(execCtx.HomeDir, ".oh-my-zsh"))
 }
@@ -769,6 +851,18 @@ func destinationMatchesTemplate(execCtx ExecutionContext, sourceName, destinatio
 		return false, err
 	}
 	return destinationMatchesContent(execCtx.fileSystem(), destination, payload)
+}
+
+func zshrcContent(execCtx ExecutionContext) ([]byte, error) {
+	content, _, err := execCtx.templateStore().Read("zshrc")
+	if err != nil {
+		return nil, err
+	}
+	rendered := strings.TrimRight(string(content), "\n") + "\n"
+	if NodeToolchainFromDecisions(execCtx.Decisions) == NodeToolchainNvmPnpm {
+		rendered += "\n" + nvmPnpmShellBlock
+	}
+	return []byte(rendered), nil
 }
 
 func destinationMatchesContent(fsys FileSystem, destination string, expected []byte) (bool, error) {

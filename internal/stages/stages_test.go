@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -741,14 +742,36 @@ func TestRunNodeToolchainInstallUsesNvmAndPnpmChoice(t *testing.T) {
 		t.Fatalf("runNodeToolchainInstall returned error: %v", err)
 	}
 
-	if len(runnerStub.commands) != 2 {
-		t.Fatalf("expected 2 commands, got %d", len(runnerStub.commands))
+	if len(runnerStub.commands) != 3 {
+		t.Fatalf("expected 3 commands, got %d", len(runnerStub.commands))
 	}
 	if got := runnerStub.commands[0].String(); !strings.Contains(got, "nvm-sh/nvm") {
 		t.Fatalf("expected nvm command first, got %q", got)
 	}
-	if got := runnerStub.commands[1].String(); !strings.Contains(got, "get.pnpm.io") {
-		t.Fatalf("expected pnpm command second, got %q", got)
+	if got := runnerStub.commands[1].String(); !strings.Contains(got, "nvm install --lts") || !strings.Contains(got, "nvm alias default") {
+		t.Fatalf("expected default Node install command second, got %q", got)
+	}
+	if got := runnerStub.commands[2].String(); !strings.Contains(got, "get.pnpm.io") {
+		t.Fatalf("expected pnpm command third, got %q", got)
+	}
+}
+
+func TestDefaultCatalogRunsNodeToolchainBeforeShellSetup(t *testing.T) {
+	nodeIndex := -1
+	shellIndex := -1
+	for index, stage := range DefaultCatalog() {
+		switch stage.ID {
+		case StageNodeToolchain:
+			nodeIndex = index
+		case StageShellSetup:
+			shellIndex = index
+		}
+	}
+	if nodeIndex == -1 || shellIndex == -1 {
+		t.Fatalf("catalog is missing required stages: node=%d shell=%d", nodeIndex, shellIndex)
+	}
+	if nodeIndex >= shellIndex {
+		t.Fatalf("Node Toolchain must run before Shell Setup: node=%d shell=%d", nodeIndex, shellIndex)
 	}
 }
 
@@ -897,6 +920,112 @@ func TestShellSetupAppliesGuardedZshrcWithoutOptionalDependencies(t *testing.T) 
 	}
 }
 
+func TestRunShellSetupRendersActiveNvmPnpmConfigurationIdempotently(t *testing.T) {
+	repoRoot := t.TempDir()
+	homeDir := t.TempDir()
+	templatesDir := filepath.Join(repoRoot, "templates")
+	if err := os.MkdirAll(templatesDir, 0o755); err != nil {
+		t.Fatalf("create templates dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(templatesDir, "zshrc"), []byte("export TEMPLATE_LOADED=1\n"), 0o644); err != nil {
+		t.Fatalf("write zshrc template: %v", err)
+	}
+
+	existingZshrc := strings.Join([]string{
+		"# existing profile",
+		`export NVM_DIR="$HOME/.nvm"`,
+		`[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"`,
+		`export PNPM_HOME="$HOME/Library/pnpm"`,
+		`export PATH="$PNPM_HOME:$PATH"`,
+		"",
+	}, "\n")
+	if err := os.WriteFile(filepath.Join(homeDir, ".zshrc"), []byte(existingZshrc), 0o644); err != nil {
+		t.Fatalf("write existing zshrc: %v", err)
+	}
+
+	nodeBinDir := filepath.Join(homeDir, ".nvm", "versions", "node", "v22.0.0", "bin")
+	if err := os.MkdirAll(nodeBinDir, 0o755); err != nil {
+		t.Fatalf("create fake Node bin directory: %v", err)
+	}
+	nvmScript := `nvm() { :; }
+export PATH="$NVM_DIR/versions/node/v22.0.0/bin:$PATH"
+`
+	if err := os.WriteFile(filepath.Join(homeDir, ".nvm", "nvm.sh"), []byte(nvmScript), 0o644); err != nil {
+		t.Fatalf("write fake nvm script: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(nodeBinDir, "node"), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatalf("write fake node executable: %v", err)
+	}
+	pnpmHome := filepath.Join(homeDir, "Library", "pnpm")
+	if err := os.MkdirAll(pnpmHome, 0o755); err != nil {
+		t.Fatalf("create fake pnpm home: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(pnpmHome, "pnpm"), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatalf("write fake pnpm executable: %v", err)
+	}
+
+	execCtx := ExecutionContext{
+		RepoRoot: repoRoot,
+		HomeDir:  homeDir,
+		Decisions: DecisionSet{
+			NodeToolchain:     NodeToolchainNvmPnpm,
+			DockerRuntime:     DockerRuntimeColima,
+			ShellApplyZshrc:   true,
+			GitConfigMode:     GitConfigModeTemplate,
+			ShellApplyGhostty: false,
+		},
+	}
+
+	if err := runShellSetup(context.Background(), execCtx); err != nil {
+		t.Fatalf("first runShellSetup returned error: %v", err)
+	}
+	if err := runShellSetup(context.Background(), execCtx); err != nil {
+		t.Fatalf("second runShellSetup returned error: %v", err)
+	}
+
+	content, err := os.ReadFile(filepath.Join(homeDir, ".zshrc"))
+	if err != nil {
+		t.Fatalf("read resulting zshrc: %v", err)
+	}
+	if count := strings.Count(string(content), "# >>> laptop-setup: nvm + pnpm >>>"); count != 1 {
+		t.Fatalf("managed NVM+pnpm block count = %d, want 1\n%s", count, content)
+	}
+	backups := mustGlob(t, filepath.Join(homeDir, ".zshrc.backup.*"))
+	if len(backups) != 1 {
+		t.Fatalf("expected one backup across repeated runs, got %v", backups)
+	}
+	backup, err := os.ReadFile(backups[0])
+	if err != nil {
+		t.Fatalf("read zshrc backup: %v", err)
+	}
+	if string(backup) != existingZshrc {
+		t.Fatalf("backup did not preserve existing zshrc:\n%s", backup)
+	}
+
+	check, err := precheckShellSetup(context.Background(), execCtx)
+	if err != nil {
+		t.Fatalf("precheckShellSetup returned error: %v", err)
+	}
+	if !check.Satisfied {
+		t.Fatal("expected rendered shell setup to satisfy precheck")
+	}
+
+	zshPath, err := exec.LookPath("zsh")
+	if err != nil {
+		t.Skip("zsh is unavailable; managed block content and precheck assertions completed")
+	}
+	command := exec.Command(zshPath, "-d", "-i", "-c", "command -v nvm >/dev/null && command -v node >/dev/null && command -v pnpm >/dev/null")
+	command.Env = append(os.Environ(),
+		"HOME="+homeDir,
+		"ZDOTDIR="+homeDir,
+		"PATH=/usr/bin:/bin",
+		"TERM=dumb",
+	)
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("new zsh did not activate nvm, Node, and pnpm: %v\n%s", err, output)
+	}
+}
+
 func TestGhosttyConfigPathUsesHomeConfigDirectory(t *testing.T) {
 	homeDir := filepath.Join("Users", "alice")
 	want := filepath.Join(homeDir, ".config", "ghostty", "config.ghostty")
@@ -1034,8 +1163,11 @@ func TestRunShellSetupInstallsMissingOhMyZshPlugins(t *testing.T) {
 
 func TestRunNodeToolchainInstallSkipsInstalledNvmAndPnpm(t *testing.T) {
 	homeDir := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(homeDir, ".nvm"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(homeDir, ".nvm", "alias"), 0o755); err != nil {
 		t.Fatalf("create existing nvm dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(homeDir, ".nvm", "alias", "default"), []byte("lts/*\n"), 0o644); err != nil {
+		t.Fatalf("write existing default Node alias: %v", err)
 	}
 
 	runnerStub := &recordingRunner{}
