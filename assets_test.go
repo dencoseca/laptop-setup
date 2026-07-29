@@ -44,8 +44,8 @@ func TestEmbeddedTerminalSetupMatchesGhosttyStack(t *testing.T) {
 	}
 
 	starship := mustReadTemplate(t, templateFS, "starship.toml")
-	if !strings.Contains(starship, `format = '$symbol'`) || !strings.Contains(starship, `"\u200b"`) {
-		t.Fatal("expected Starship template to keep the command on the next line at column zero")
+	if strings.Contains(starship, "[character]") {
+		t.Fatal("expected Starship template to use the default character configuration")
 	}
 
 	ghostty := mustReadTemplate(t, templateFS, "ghostty.config")
