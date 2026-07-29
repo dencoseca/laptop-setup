@@ -3,8 +3,3 @@ disabled = true
 
 [gcloud]
 disabled = true
-
-[character]
-format = '$symbol'
-success_symbol = "\u200b"
-error_symbol = "\u200b"
