@@ -15,12 +15,13 @@ import (
 )
 
 type config struct {
-	resume    bool
-	dryRun    bool
-	from      string
-	only      []string
-	skip      []string
-	statePath string
+	resume       bool
+	discardState bool
+	dryRun       bool
+	from         string
+	only         []string
+	skip         []string
+	statePath    string
 }
 
 type App struct {
@@ -35,7 +36,7 @@ func Run(ctx context.Context, args []string, stdout io.Writer, stderr io.Writer)
 	return New(DefaultDependencies()).Run(ctx, args, stdout, stderr)
 }
 
-func (a *App) Run(ctx context.Context, args []string, stdout io.Writer, stderr io.Writer) error {
+func (a *App) Run(ctx context.Context, args []string, stdout io.Writer, stderr io.Writer) (runErr error) {
 	cfg, err := parseConfigWithDefaultPath(args, stderr, a.deps.Paths.DefaultStatePath)
 	if errors.Is(err, flag.ErrHelp) {
 		return nil
@@ -45,10 +46,26 @@ func (a *App) Run(ctx context.Context, args []string, stdout io.Writer, stderr i
 	}
 
 	if cfg.resume {
+		if cfg.discardState {
+			return errors.New("--resume cannot be combined with --discard-state")
+		}
 		if len(cfg.only) > 0 || len(cfg.skip) > 0 || strings.TrimSpace(cfg.from) != "" {
 			return errors.New("--resume cannot be combined with --from, --only, or --skip")
 		}
 	}
+
+	stateLock, err := a.deps.StateLocks.Acquire(cfg.statePath)
+	if err != nil {
+		if errors.Is(err, state.ErrPathLocked) {
+			return fmt.Errorf("another laptop-setup process is using state file %q; wait for it to finish or choose a different --state-file", cfg.statePath)
+		}
+		return fmt.Errorf("acquire state lock: %w", err)
+	}
+	defer func() {
+		if err := stateLock.Close(); err != nil {
+			runErr = errors.Join(runErr, fmt.Errorf("release state lock: %w", err))
+		}
+	}()
 
 	store := a.deps.StateRepositories.Open(cfg.statePath)
 	var current *state.RunState
@@ -65,6 +82,24 @@ func (a *App) Run(ctx context.Context, args []string, stdout io.Writer, stderr i
 		if err := validateResumeRequest(current, catalog, cfg.dryRun); err != nil {
 			return err
 		}
+	} else {
+		current, err = store.Load(ctx)
+		if err != nil {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			// A fresh run remains the recovery path for unreadable state. The
+			// existing file is not replaced unless the user begins execution.
+			current = nil
+		}
+		if current != nil && current.EndAt == nil && !cfg.discardState {
+			return fmt.Errorf(
+				"unfinished run %q found in state file %q; use --resume to continue it or --discard-state to start a new run",
+				current.RunID,
+				cfg.statePath,
+			)
+		}
+		current = nil
 	}
 
 	promptEnabled, err := a.deps.TTY.CanPrompt()
@@ -138,6 +173,7 @@ func parseConfigWithDefaultPath(args []string, stderr io.Writer, defaultStatePat
 
 	var cfg config
 	fs.BoolVar(&cfg.resume, "resume", false, "Resume from existing run state")
+	fs.BoolVar(&cfg.discardState, "discard-state", false, "Explicitly replace unfinished run state when starting a new run")
 	fs.BoolVar(&cfg.dryRun, "dry-run", false, "Simulate execution without machine changes")
 	fs.StringVar(&cfg.from, "from", "", "Start execution from stage id")
 	var onlyRaw string

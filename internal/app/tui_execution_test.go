@@ -115,6 +115,44 @@ func TestPrepareExecutionLogOpenFailurePreservesPriorState(t *testing.T) {
 	}
 }
 
+func TestPrepareExecutionReplacesPriorStateOnlyAfterLogsOpen(t *testing.T) {
+	ctx := context.Background()
+	statePath := filepath.Join(t.TempDir(), "state.json")
+	store := state.NewStore(statePath)
+	prior := testRunState("prior-run")
+	if err := store.Save(ctx, prior); err != nil {
+		t.Fatalf("seed prior state: %v", err)
+	}
+
+	humanLog := &trackingWriteCloser{}
+	eventLog := &trackingWriteCloser{}
+	logFactory := &stubRunLogFactory{logs: RunLogs{
+		RunDir:   "/runs/replacement",
+		HumanLog: humanLog,
+		EventLog: eventLog,
+	}}
+	service := testTUIExecutionService(store, logFactory)
+	run, err := service.PrepareExecution(ctx, testFreshExecutionRequest())
+	if err != nil {
+		t.Fatalf("PrepareExecution returned error: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = run.HumanLog.Close()
+		_ = run.EventsLog.Close()
+	})
+
+	current, err := store.Load(ctx)
+	if err != nil {
+		t.Fatalf("load replacement state: %v", err)
+	}
+	if current.RunID == prior.RunID {
+		t.Fatalf("fresh execution retained prior run id %q", current.RunID)
+	}
+	if current.RunID != run.RunState.RunID {
+		t.Fatalf("persisted run id %q does not match prepared run %q", current.RunID, run.RunState.RunID)
+	}
+}
+
 func TestPrepareExecutionStateSaveFailureClosesBothLogsAndRetainsArtifacts(t *testing.T) {
 	saveErr := errors.New("save state")
 	humanCloseErr := errors.New("close human log")
