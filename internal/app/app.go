@@ -67,7 +67,7 @@ func (a *App) Run(ctx context.Context, args []string, stdout io.Writer, stderr i
 		}
 	}()
 
-	store := a.deps.StateRepositories.Open(cfg.statePath)
+	store := a.deps.StateRepositories.Open(stateLock.StatePath())
 	var current *state.RunState
 	if cfg.resume {
 		current, err = store.Load(ctx)

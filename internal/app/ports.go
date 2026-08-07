@@ -27,8 +27,13 @@ type StateRepositoryFactory interface {
 	Open(path string) StateRepository
 }
 
+type StatePathLock interface {
+	io.Closer
+	StatePath() string
+}
+
 type StatePathLocker interface {
-	Acquire(path string) (io.Closer, error)
+	Acquire(path string) (StatePathLock, error)
 }
 
 type PathResolver interface {
@@ -91,7 +96,7 @@ func (stateStoreFactory) Open(path string) StateRepository {
 
 type statePathLocker struct{}
 
-func (statePathLocker) Acquire(path string) (io.Closer, error) {
+func (statePathLocker) Acquire(path string) (StatePathLock, error) {
 	return state.AcquirePathLock(path)
 }
 

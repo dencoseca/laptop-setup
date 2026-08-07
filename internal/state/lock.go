@@ -16,16 +16,17 @@ var ErrPathLocked = errors.New("state path is locked")
 // The lock file is intentionally persistent: process ownership is represented
 // by the kernel lock, so a file left by a terminated process is safe to reuse.
 type PathLock struct {
-	file *os.File
+	file      *os.File
+	statePath string
 }
 
 // AcquirePathLock acquires a non-blocking interprocess lock for statePath.
 func AcquirePathLock(statePath string) (*PathLock, error) {
-	resolvedStatePath, err := absoluteStatePath(statePath)
+	absolutePath, err := absoluteStatePath(statePath)
 	if err != nil {
 		return nil, err
 	}
-	stateDir := filepath.Dir(resolvedStatePath)
+	stateDir := filepath.Dir(absolutePath)
 	if err = os.MkdirAll(stateDir, privateDirPerm); err != nil {
 		return nil, fmt.Errorf("create state lock directory: %w", err)
 	}
@@ -33,7 +34,11 @@ func AcquirePathLock(statePath string) (*PathLock, error) {
 	if err != nil {
 		return nil, fmt.Errorf("resolve state lock directory: %w", err)
 	}
-	lockPath := filepath.Join(realStateDir, filepath.Base(resolvedStatePath)) + ".lock"
+	resolvedStatePath := filepath.Join(realStateDir, filepath.Base(absolutePath))
+	if err = validateUniqueStatePath(resolvedStatePath); err != nil {
+		return nil, err
+	}
+	lockPath := resolvedStatePath + ".lock"
 
 	fd, err := unix.Open(
 		lockPath,
@@ -73,8 +78,19 @@ func AcquirePathLock(statePath string) (*PathLock, error) {
 		}
 		return closeWithError(fmt.Errorf("lock state path %q: %w", statePath, err))
 	}
+	if err = validateUniqueStatePath(resolvedStatePath); err != nil {
+		return closeWithError(err)
+	}
 
-	return &PathLock{file: lockFile}, nil
+	return &PathLock{file: lockFile, statePath: resolvedStatePath}, nil
+}
+
+// StatePath returns the canonical state path protected by this lock.
+func (lock *PathLock) StatePath() string {
+	if lock == nil {
+		return ""
+	}
+	return lock.statePath
 }
 
 func (lock *PathLock) Close() error {
@@ -104,4 +120,26 @@ func absoluteStatePath(statePath string) (string, error) {
 		return "", fmt.Errorf("resolve state path: %w", err)
 	}
 	return filepath.Clean(absolutePath), nil
+}
+
+func validateUniqueStatePath(statePath string) error {
+	var info unix.Stat_t
+	if err := unix.Lstat(statePath, &info); err != nil {
+		if errors.Is(err, unix.ENOENT) {
+			return nil
+		}
+		return fmt.Errorf("inspect state path %q: %w", statePath, err)
+	}
+
+	switch info.Mode & unix.S_IFMT {
+	case unix.S_IFLNK:
+		return fmt.Errorf("state path %q is a symbolic link; use its target path directly", statePath)
+	case unix.S_IFREG:
+	default:
+		return fmt.Errorf("state path %q is not a regular file", statePath)
+	}
+	if info.Nlink != 1 {
+		return fmt.Errorf("state path %q has %d hard links; use a unique state file", statePath, info.Nlink)
+	}
+	return nil
 }

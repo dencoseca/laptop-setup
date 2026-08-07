@@ -41,7 +41,9 @@ Only one process can use a state file at a time. A fresh run refuses to replace
 valid unfinished state unless `--discard-state` is supplied; use `--resume` to
 continue it instead. Completed state is replaced automatically when execution
 of a new run begins. The adjacent persistent `.lock` file is only a coordination
-inode—kernel ownership, not its presence, indicates an active process.
+inode—kernel ownership, not its presence, indicates an active process. The state
+file itself must be a regular file with one hard link; use the target path rather
+than a symbolic link.
 
 The default terminal setup installs Ghostty and configures it alongside
 oh-my-zsh, Starship, fuzzy history search, inline suggestions, syntax

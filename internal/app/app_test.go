@@ -279,6 +279,36 @@ func TestRunStartsInteractiveUIWithConfig(t *testing.T) {
 	}
 }
 
+func TestRunOpensRepositoryAtCanonicalLockedPath(t *testing.T) {
+	dir := t.TempDir()
+	realDir := filepath.Join(dir, "real")
+	if err := os.Mkdir(realDir, 0o700); err != nil {
+		t.Fatalf("create real state directory: %v", err)
+	}
+	linkedDir := filepath.Join(dir, "linked")
+	if err := os.Symlink(realDir, linkedDir); err != nil {
+		t.Fatalf("create state directory symlink: %v", err)
+	}
+	statePath := filepath.Join(linkedDir, "state.json")
+	uiRunner := &capturingUIRunner{}
+	app := newStatePolicyTestApp(statePath, uiRunner)
+
+	if err := app.Run(context.Background(), []string{"--state-file", statePath}, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+		t.Fatalf("App.Run returned error: %v", err)
+	}
+	store, ok := uiRunner.options.Store.(interface{ Path() string })
+	if !ok {
+		t.Fatalf("UI store does not expose its path: %T", uiRunner.options.Store)
+	}
+	canonicalDir, err := filepath.EvalSymlinks(realDir)
+	if err != nil {
+		t.Fatalf("resolve real state directory: %v", err)
+	}
+	if got, want := store.Path(), filepath.Join(canonicalDir, "state.json"); got != want {
+		t.Fatalf("repository path: got=%q want=%q", got, want)
+	}
+}
+
 func TestRunLocksStatePathForEntireUILifetime(t *testing.T) {
 	dir := t.TempDir()
 	statePath := filepath.Join(dir, "state.json")

@@ -2,13 +2,16 @@ package state
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 )
 
 const (
@@ -18,39 +21,7 @@ const (
 
 func TestAcquirePathLockExcludesAnotherProcess(t *testing.T) {
 	statePath := filepath.Join(t.TempDir(), "state.json")
-	command := exec.Command(os.Args[0], "-test.run=^TestPathLockHelperProcess$")
-	command.Env = append(
-		os.Environ(),
-		pathLockHelperEnv+"=1",
-		pathLockHelperPathEnv+"="+statePath,
-	)
-	stdin, err := command.StdinPipe()
-	if err != nil {
-		t.Fatalf("open helper stdin: %v", err)
-	}
-	stdout, err := command.StdoutPipe()
-	if err != nil {
-		t.Fatalf("open helper stdout: %v", err)
-	}
-	if err = command.Start(); err != nil {
-		t.Fatalf("start helper process: %v", err)
-	}
-	waited := false
-	t.Cleanup(func() {
-		_ = stdin.Close()
-		if !waited {
-			_ = command.Process.Kill()
-			_ = command.Wait()
-		}
-	})
-
-	scanner := bufio.NewScanner(stdout)
-	if !scanner.Scan() || scanner.Text() != "ready" {
-		_ = stdin.Close()
-		waitErr := command.Wait()
-		waited = true
-		t.Fatalf("helper did not acquire lock: output=%q scanErr=%v waitErr=%v", scanner.Text(), scanner.Err(), waitErr)
-	}
+	helper := startPathLockHelper(t, statePath)
 
 	contendedLock, err := AcquirePathLock(statePath)
 	if contendedLock != nil {
@@ -61,13 +32,7 @@ func TestAcquirePathLockExcludesAnotherProcess(t *testing.T) {
 		t.Fatalf("expected ErrPathLocked, got %v", err)
 	}
 
-	if err = stdin.Close(); err != nil {
-		t.Fatalf("release helper process: %v", err)
-	}
-	if err = command.Wait(); err != nil {
-		t.Fatalf("wait for helper process: %v", err)
-	}
-	waited = true
+	helper.release(t)
 
 	recoveredLock, err := AcquirePathLock(statePath)
 	if err != nil {
@@ -75,6 +40,50 @@ func TestAcquirePathLockExcludesAnotherProcess(t *testing.T) {
 	}
 	if err = recoveredLock.Close(); err != nil {
 		t.Fatalf("release recovered lock: %v", err)
+	}
+}
+
+func TestAcquirePathLockRejectsFinalSymlinkAliasAcrossProcesses(t *testing.T) {
+	dir := t.TempDir()
+	statePath := filepath.Join(dir, "state.json")
+	if err := os.WriteFile(statePath, []byte("{}"), privateFilePerm); err != nil {
+		t.Fatalf("seed state file: %v", err)
+	}
+	aliasPath := filepath.Join(dir, "alias.json")
+	if err := os.Symlink(filepath.Base(statePath), aliasPath); err != nil {
+		t.Fatalf("create state file symlink: %v", err)
+	}
+	helper := startPathLockHelper(t, statePath)
+
+	aliasLock, err := AcquirePathLock(aliasPath)
+	if aliasLock != nil {
+		_ = aliasLock.Close()
+		t.Fatal("symlinked state path unexpectedly acquired a separate lock")
+	}
+	if err == nil || !strings.Contains(err.Error(), "is a symbolic link") {
+		t.Fatalf("expected actionable symbolic-link rejection, got %v", err)
+	}
+
+	helper.release(t)
+}
+
+func TestAcquirePathLockRejectsHardLinkedStateFile(t *testing.T) {
+	dir := t.TempDir()
+	statePath := filepath.Join(dir, "state.json")
+	if err := os.WriteFile(statePath, []byte("{}"), privateFilePerm); err != nil {
+		t.Fatalf("seed state file: %v", err)
+	}
+	if err := os.Link(statePath, filepath.Join(dir, "alias.json")); err != nil {
+		t.Fatalf("create state file hard link: %v", err)
+	}
+
+	lock, err := AcquirePathLock(statePath)
+	if lock != nil {
+		_ = lock.Close()
+		t.Fatal("hard-linked state path unexpectedly acquired a lock")
+	}
+	if err == nil || !strings.Contains(err.Error(), "has 2 hard links") {
+		t.Fatalf("expected actionable hard-link rejection, got %v", err)
 	}
 }
 
@@ -95,6 +104,78 @@ func TestPathLockHelperProcess(t *testing.T) {
 		t.Fatalf("announce helper readiness: %v", err)
 	}
 	_, _ = io.Copy(io.Discard, os.Stdin)
+}
+
+type pathLockHelper struct {
+	command *exec.Cmd
+	stdin   io.WriteCloser
+	cancel  context.CancelFunc
+	waited  bool
+}
+
+func startPathLockHelper(t *testing.T, statePath string) *pathLockHelper {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	command := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestPathLockHelperProcess$")
+	command.Env = append(
+		os.Environ(),
+		pathLockHelperEnv+"=1",
+		pathLockHelperPathEnv+"="+statePath,
+	)
+	stdin, err := command.StdinPipe()
+	if err != nil {
+		cancel()
+		t.Fatalf("open helper stdin: %v", err)
+	}
+	stdout, err := command.StdoutPipe()
+	if err != nil {
+		_ = stdin.Close()
+		cancel()
+		t.Fatalf("open helper stdout: %v", err)
+	}
+	if err = command.Start(); err != nil {
+		_ = stdin.Close()
+		cancel()
+		t.Fatalf("start helper process: %v", err)
+	}
+
+	scanner := bufio.NewScanner(stdout)
+	if !scanner.Scan() || scanner.Text() != "ready" {
+		_ = stdin.Close()
+		waitErr := command.Wait()
+		cancel()
+		t.Fatalf("helper did not acquire lock: output=%q scanErr=%v waitErr=%v", scanner.Text(), scanner.Err(), waitErr)
+	}
+
+	helper := &pathLockHelper{command: command, stdin: stdin, cancel: cancel}
+	t.Cleanup(helper.cleanup)
+	return helper
+}
+
+func (helper *pathLockHelper) release(t *testing.T) {
+	t.Helper()
+	if helper.waited {
+		return
+	}
+	if err := helper.stdin.Close(); err != nil {
+		t.Fatalf("release helper process: %v", err)
+	}
+	err := helper.command.Wait()
+	helper.waited = true
+	helper.cancel()
+	if err != nil {
+		t.Fatalf("wait for helper process: %v", err)
+	}
+}
+
+func (helper *pathLockHelper) cleanup() {
+	_ = helper.stdin.Close()
+	if !helper.waited {
+		_ = helper.command.Process.Kill()
+		_ = helper.command.Wait()
+		helper.waited = true
+	}
+	helper.cancel()
 }
 
 func TestAcquirePathLockRecoversPersistentUnlockedFile(t *testing.T) {
@@ -174,6 +255,13 @@ func TestAcquirePathLockNormalizesSymlinkedParentDirectories(t *testing.T) {
 		t.Fatalf("acquire real state path: %v", err)
 	}
 	defer func() { _ = lock.Close() }()
+	canonicalDir, err := filepath.EvalSymlinks(realDir)
+	if err != nil {
+		t.Fatalf("resolve real state directory: %v", err)
+	}
+	if got, want := lock.StatePath(), filepath.Join(canonicalDir, "state.json"); got != want {
+		t.Fatalf("canonical state path: got=%q want=%q", got, want)
+	}
 
 	duplicate, err := AcquirePathLock(filepath.Join(linkedDir, "state.json"))
 	if duplicate != nil {
