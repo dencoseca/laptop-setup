@@ -29,12 +29,22 @@ Common flags:
 | Flag | Valid Values |
 |------|--------------|
 | `--resume` | resume previous run |
+| `--discard-state` | explicitly replace an unfinished run when starting a new one |
 | `--from <stage-id>` | start execution from a stage |
 | `--only <stage-id>[,<stage-id>...]` | run only specific stages |
 | `--skip <stage-id>[,<stage-id>...]` | skip specific stages |
 | `--dry-run` | simulate without system mutation |
 
 Package/app selection is configured interactively in the TUI.
+
+Only one process can use a state file at a time. A fresh run refuses to replace
+valid unfinished state unless `--discard-state` is supplied; use `--resume` to
+continue it instead. Completed state is replaced automatically when execution
+of a new run begins. The adjacent persistent `.lock` file is only a coordination
+inode—kernel ownership, not its presence, indicates an active process. The state
+file itself must be a regular file with one hard link; use the target path rather
+than a symbolic link.
+
 The default terminal setup installs Ghostty and configures it alongside
 oh-my-zsh, Starship, fuzzy history search, inline suggestions, syntax
 highlighting, and quiet login shells.

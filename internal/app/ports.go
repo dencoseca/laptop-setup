@@ -27,6 +27,15 @@ type StateRepositoryFactory interface {
 	Open(path string) StateRepository
 }
 
+type StatePathLock interface {
+	io.Closer
+	StatePath() string
+}
+
+type StatePathLocker interface {
+	Acquire(path string) (StatePathLock, error)
+}
+
 type PathResolver interface {
 	WorkingDir() (string, error)
 	HomeDir() (string, error)
@@ -67,6 +76,7 @@ type Dependencies struct {
 	CommandRunner     func() runner.CommandRunner
 	InteractiveRunner func() runner.InteractiveRunner
 	StateRepositories StateRepositoryFactory
+	StateLocks        StatePathLocker
 	Paths             PathResolver
 	RunLogs           RunLogFactory
 	TemplateStores    TemplateStoreFactory
@@ -82,6 +92,12 @@ type stateStoreFactory struct{}
 
 func (stateStoreFactory) Open(path string) StateRepository {
 	return state.NewStore(path)
+}
+
+type statePathLocker struct{}
+
+func (statePathLocker) Acquire(path string) (StatePathLock, error) {
+	return state.AcquirePathLock(path)
 }
 
 type osPathResolver struct{}
@@ -184,6 +200,7 @@ func DefaultDependencies() Dependencies {
 		CommandRunner:     func() runner.CommandRunner { return commandRunner },
 		InteractiveRunner: func() runner.InteractiveRunner { return interactiveRunner },
 		StateRepositories: stateStoreFactory{},
+		StateLocks:        statePathLocker{},
 		Paths:             paths,
 		RunLogs:           filesystemRunLogFactory{Paths: paths},
 		TemplateStores:    embeddedTemplateStoreFactory{},
@@ -209,6 +226,9 @@ func (deps Dependencies) withDefaults() Dependencies {
 	}
 	if deps.StateRepositories == nil {
 		deps.StateRepositories = defaults.StateRepositories
+	}
+	if deps.StateLocks == nil {
+		deps.StateLocks = defaults.StateLocks
 	}
 	if deps.Paths == nil {
 		deps.Paths = defaults.Paths
