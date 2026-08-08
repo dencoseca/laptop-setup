@@ -14,6 +14,8 @@ import (
 
 var ErrAborted = errors.New("execution aborted")
 
+const cancellationFinalizationTimeout = 5 * time.Second
+
 type FailureAction string
 
 const (
@@ -211,6 +213,10 @@ func Execute(ctx context.Context, options Options) error {
 				runState.Stages[stageID] = progress
 				runState.LastFailure = ""
 				if err := options.Store.Save(ctx, runState); err != nil {
+					if ctx.Err() != nil {
+						_, finalizationErr := processFailure(ctx, options, logger, stage, progress, ctx.Err())
+						return errors.Join(err, finalizationErr)
+					}
 					return err
 				}
 				emitStageStatus(options.Hooks, stageID, progress)
@@ -240,6 +246,9 @@ func Execute(ctx context.Context, options Options) error {
 			} else {
 				runErr = stage.Run(ctx, execCtx)
 			}
+			if runErr == nil {
+				runErr = ctx.Err()
+			}
 			if runErr != nil {
 				action, err := processFailure(ctx, options, logger, stage, progress, runErr)
 				if err != nil {
@@ -261,6 +270,10 @@ func Execute(ctx context.Context, options Options) error {
 			runState.Stages[stageID] = progress
 			runState.LastFailure = ""
 			if err := options.Store.Save(ctx, runState); err != nil {
+				if ctx.Err() != nil {
+					_, finalizationErr := processFailure(ctx, options, logger, stage, progress, ctx.Err())
+					return errors.Join(err, finalizationErr)
+				}
 				return err
 			}
 			emitStageStatus(options.Hooks, stageID, progress)
@@ -366,7 +379,7 @@ func processFailure(
 	progress.LastError = stageErr.Error()
 	options.RunState.Stages[stageID] = progress
 	options.RunState.LastFailure = stageErr.Error()
-	if err := options.Store.Save(ctx, options.RunState); err != nil {
+	if err := saveFailureState(ctx, options.Store, options.RunState); err != nil {
 		return ActionAbort, err
 	}
 	emitStageStatus(options.Hooks, stageID, progress)
@@ -381,6 +394,10 @@ func processFailure(
 		Message:   stageErr.Error(),
 	}); err != nil {
 		return ActionAbort, err
+	}
+
+	if ctx.Err() != nil {
+		return ActionAbort, fmt.Errorf("%w: stage %s: %w", ErrAborted, stageID, stageErr)
 	}
 
 	if options.Hooks.OnFailure == nil {
@@ -436,10 +453,24 @@ func processFailure(
 		}
 		return ActionSkip, nil
 	case ActionAbort:
-		return ActionAbort, fmt.Errorf("%w: stage %s: %v", ErrAborted, stageID, stageErr)
+		return ActionAbort, fmt.Errorf("%w: stage %s: %w", ErrAborted, stageID, stageErr)
 	default:
 		return ActionAbort, fmt.Errorf("unknown failure action %q", action)
 	}
+}
+
+func saveFailureState(ctx context.Context, store StateRepository, runState *state.RunState) error {
+	err := store.Save(ctx, runState)
+	if err == nil || ctx.Err() == nil {
+		return err
+	}
+
+	persistenceCtx, cancel := context.WithTimeout(
+		context.WithoutCancel(ctx),
+		cancellationFinalizationTimeout,
+	)
+	defer cancel()
+	return store.Save(persistenceCtx, runState)
 }
 
 func emitStageStatus(hooks Hooks, stageID state.StageID, status state.StageStatus) {

@@ -6,8 +6,15 @@ import (
 	"errors"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
+	"strconv"
+	"strings"
+	"syscall"
 	"testing"
+	"time"
+
+	"golang.org/x/sys/unix"
 )
 
 func TestOSCommandRunnerReturnsTypedCommandError(t *testing.T) {
@@ -133,4 +140,146 @@ func TestNewExecCommandContractExecutesWithDirAndEnv(t *testing.T) {
 	if stdout.String() != workDir+"|ok" {
 		t.Fatalf("stdout mismatch: got=%q want=%q", stdout.String(), workDir+"|ok")
 	}
+}
+
+func TestOSCommandRunnerCancellationAllowsGracefulProcessGroupShutdown(t *testing.T) {
+	workingDir := t.TempDir()
+	startedPath := filepath.Join(workingDir, "started")
+	terminatedPath := filepath.Join(workingDir, "terminated")
+	testBinary, err := os.Executable()
+	if err != nil {
+		t.Fatalf("resolve test binary: %v", err)
+	}
+	command := Command{
+		Name: testBinary,
+		Args: []string{"-test.run", "^TestRunnerGracefulShutdownHelper$"},
+		Env: []string{
+			"RUNNER_GRACEFUL_HELPER=1",
+			"RUNNER_STARTED_PATH=" + startedPath,
+			"RUNNER_TERMINATED_PATH=" + terminatedPath,
+		},
+	}
+	runner := &OSCommandRunner{terminationGracePeriod: 500 * time.Millisecond}
+	ctx, cancel := context.WithCancel(context.Background())
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := runner.Run(ctx, command)
+		done <- err
+	}()
+
+	waitForTestFile(t, startedPath, 2*time.Second)
+	cancel()
+
+	select {
+	case err := <-done:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("expected cancellation error, got %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("graceful command did not stop within the cancellation bound")
+	}
+	waitForTestFile(t, terminatedPath, time.Second)
+}
+
+func TestRunnerGracefulShutdownHelper(t *testing.T) {
+	if os.Getenv("RUNNER_GRACEFUL_HELPER") != "1" {
+		return
+	}
+
+	signals := make(chan os.Signal, 1)
+	signal.Notify(signals, syscall.SIGTERM)
+	defer signal.Stop(signals)
+	if err := os.WriteFile(os.Getenv("RUNNER_STARTED_PATH"), []byte("started"), 0o600); err != nil {
+		t.Fatalf("write started marker: %v", err)
+	}
+	<-signals
+	if err := os.WriteFile(os.Getenv("RUNNER_TERMINATED_PATH"), []byte("terminated"), 0o600); err != nil {
+		t.Fatalf("write terminated marker: %v", err)
+	}
+	os.Exit(0)
+}
+
+func TestOSCommandRunnerCancellationForceKillsCompleteProcessGroup(t *testing.T) {
+	workingDir := t.TempDir()
+	leaderPIDPath := filepath.Join(workingDir, "leader.pid")
+	grandchildPIDPath := filepath.Join(workingDir, "grandchild.pid")
+	command := Command{
+		Name: "/bin/sh",
+		Args: []string{
+			"-c",
+			`trap '' TERM; printf '%s' "$$" > "$1"; /bin/sh -c 'trap "" TERM; printf "%s" "$$" > "$1"; while :; do sleep 1; done' child "$2" & wait`,
+			"laptop-setup-test",
+			leaderPIDPath,
+			grandchildPIDPath,
+		},
+	}
+	runner := &OSCommandRunner{terminationGracePeriod: 100 * time.Millisecond}
+	ctx, cancel := context.WithCancel(context.Background())
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := runner.Run(ctx, command)
+		done <- err
+	}()
+
+	leaderPID := waitForTestPID(t, leaderPIDPath, 2*time.Second)
+	grandchildPID := waitForTestPID(t, grandchildPIDPath, 2*time.Second)
+	cancel()
+
+	select {
+	case err := <-done:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("expected cancellation error, got %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("process group did not stop within the cancellation bound")
+	}
+
+	waitForProcessExit(t, leaderPID, 2*time.Second)
+	waitForProcessExit(t, grandchildPID, 2*time.Second)
+}
+
+func waitForTestFile(t *testing.T, path string, timeout time.Duration) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if _, err := os.Stat(path); err == nil {
+			return
+		} else if !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("stat test file %q: %v", path, err)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("timed out waiting for test file %q", path)
+}
+
+func waitForTestPID(t *testing.T, path string, timeout time.Duration) int {
+	t.Helper()
+	waitForTestFile(t, path, timeout)
+	payload, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read pid file %q: %v", path, err)
+	}
+	pid, err := strconv.Atoi(strings.TrimSpace(string(payload)))
+	if err != nil {
+		t.Fatalf("parse pid file %q: %v", path, err)
+	}
+	return pid
+}
+
+func waitForProcessExit(t *testing.T, pid int, timeout time.Duration) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		err := unix.Kill(pid, 0)
+		if errors.Is(err, unix.ESRCH) {
+			return
+		}
+		if err != nil && !errors.Is(err, unix.EPERM) {
+			t.Fatalf("inspect process %d: %v", pid, err)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("process %d remained alive after cancellation", pid)
 }

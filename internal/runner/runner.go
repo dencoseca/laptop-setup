@@ -9,7 +9,10 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 )
+
+const defaultTerminationGracePeriod = 2 * time.Second
 
 type Command struct {
 	Name        string
@@ -66,7 +69,9 @@ func (e *CommandError) Unwrap() error {
 
 // ExecCommand adapts a Command to terminal executors such as Bubble Tea's tea.Exec.
 type ExecCommand struct {
-	cmd *exec.Cmd
+	ctx                    context.Context
+	cmd                    *exec.Cmd
+	terminationGracePeriod time.Duration
 }
 
 // NewExecCommand builds an executable command with the runner package's shared
@@ -76,11 +81,15 @@ func NewExecCommand(ctx context.Context, command Command) (*ExecCommand, error) 
 	if err != nil {
 		return nil, err
 	}
-	return &ExecCommand{cmd: cmd}, nil
+	return &ExecCommand{
+		ctx:                    ctx,
+		cmd:                    cmd,
+		terminationGracePeriod: defaultTerminationGracePeriod,
+	}, nil
 }
 
 func (c *ExecCommand) Run() error {
-	return c.cmd.Run()
+	return runOwnedCommand(c.ctx, c.cmd, c.terminationGracePeriod)
 }
 
 func (c *ExecCommand) SetStdin(reader io.Reader) {
@@ -138,10 +147,12 @@ func (f InteractiveRunnerFunc) RunInteractive(ctx context.Context, command Comma
 	return f(ctx, command)
 }
 
-type OSCommandRunner struct{}
+type OSCommandRunner struct {
+	terminationGracePeriod time.Duration
+}
 
 func NewOSCommandRunner() *OSCommandRunner {
-	return &OSCommandRunner{}
+	return &OSCommandRunner{terminationGracePeriod: defaultTerminationGracePeriod}
 }
 
 func (r *OSCommandRunner) Run(ctx context.Context, command Command) (Result, error) {
@@ -155,8 +166,15 @@ func (r *OSCommandRunner) Run(ctx context.Context, command Command) (Result, err
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
-	err = cmd.Run()
+	err = runOwnedCommand(ctx, cmd, r.gracePeriod())
 	return ResultFromCommand(command, stdout.String(), stderr.String(), err)
+}
+
+func (r *OSCommandRunner) gracePeriod() time.Duration {
+	if r == nil || r.terminationGracePeriod < 0 {
+		return defaultTerminationGracePeriod
+	}
+	return r.terminationGracePeriod
 }
 
 func (r *OSCommandRunner) LookPath(ctx context.Context, name string) (string, error) {
@@ -189,7 +207,7 @@ func (r *OSInteractiveRunner) RunInteractive(ctx context.Context, command Comman
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
-	err = cmd.Run()
+	err = runOwnedCommand(ctx, cmd, defaultTerminationGracePeriod)
 	return ResultFromCommand(command, "", "", err)
 }
 
@@ -198,12 +216,61 @@ func newExecCommand(ctx context.Context, command Command) (*exec.Cmd, error) {
 		return nil, errors.New("command name is required")
 	}
 
-	cmd := exec.CommandContext(ctx, command.Name, command.Args...)
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
+	cmd := exec.Command(command.Name, command.Args...)
 	cmd.Dir = command.Dir
 	if len(command.Env) > 0 {
 		cmd.Env = append(cmd.Environ(), command.Env...)
 	}
 	return cmd, nil
+}
+
+func runOwnedCommand(ctx context.Context, cmd *exec.Cmd, gracePeriod time.Duration) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if gracePeriod < 0 {
+		gracePeriod = 0
+	}
+
+	configureOwnedProcess(cmd)
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+
+	watcher, err := newProcessExitWatcher(cmd.Process.Pid)
+	if err != nil {
+		killErr := signalOwnedProcessGroup(cmd.Process.Pid, forceKillSignal)
+		waitErr := cmd.Wait()
+		return errors.Join(fmt.Errorf("watch command process: %w", err), killErr, waitErr)
+	}
+	defer watcher.Close()
+
+	exited := make(chan error, 1)
+	go func() {
+		exited <- watcher.Wait()
+	}()
+
+	select {
+	case watchErr := <-exited:
+		if watchErr != nil {
+			killErr := signalOwnedProcessGroup(cmd.Process.Pid, forceKillSignal)
+			waitErr := cmd.Wait()
+			return errors.Join(fmt.Errorf("watch command process: %w", watchErr), killErr, waitErr)
+		}
+		return cmd.Wait()
+	case <-ctx.Done():
+		// The platform watcher observes exit without reaping the group leader.
+		// Keeping that PID reserved until the grace period and force-kill finish
+		// prevents the process-group ID from being reused for unrelated work.
+		terminationErr := terminateOwnedProcessGroup(cmd.Process.Pid, gracePeriod)
+		watchErr := <-exited
+		waitErr := cmd.Wait()
+		return errors.Join(ctx.Err(), terminationErr, watchErr, waitErr)
+	}
 }
 
 func commandExitCode(err error) int {

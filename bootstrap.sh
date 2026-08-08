@@ -8,6 +8,7 @@ TMP_DIR=""
 DOWNLOADED_BINARY=""
 SHOW_HELP=0
 BOOTSTRAP_ERROR=""
+CHILD_PID=""
 
 print_usage() {
   cat <<'EOF'
@@ -47,6 +48,44 @@ cleanup() {
   if [ -n "$TMP_DIR" ] && [ -d "$TMP_DIR" ]; then
     rm -rf "$TMP_DIR"
   fi
+}
+
+signal_exit_code() {
+  case "$1" in
+    INT)
+      printf '130'
+      ;;
+    TERM)
+      printf '143'
+      ;;
+    *)
+      printf '1'
+      ;;
+  esac
+}
+
+forward_signal() {
+  signal_name=$1
+  trap - INT TERM
+
+  if [ -n "$CHILD_PID" ]; then
+    kill -s "$signal_name" "$CHILD_PID" 2>/dev/null || true
+    child_status=0
+    wait "$CHILD_PID" || child_status=$?
+    CHILD_PID=""
+    exit "$child_status"
+  fi
+
+  exit "$(signal_exit_code "$signal_name")"
+}
+
+run_downloaded_binary() {
+  "$DOWNLOADED_BINARY" "$@" &
+  CHILD_PID=$!
+  child_status=0
+  wait "$CHILD_PID" || child_status=$?
+  CHILD_PID=""
+  return "$child_status"
 }
 
 parse_args() {
@@ -187,7 +226,9 @@ download_binary() {
   return 0
 }
 
-trap cleanup EXIT INT TERM
+trap cleanup EXIT
+trap 'forward_signal INT' INT
+trap 'forward_signal TERM' TERM
 
 parse_args "$@"
 if [ "$SHOW_HELP" -eq 1 ]; then
@@ -201,8 +242,8 @@ fi
 
 if download_binary; then
   log "Starting laptop-setup."
-  "$DOWNLOADED_BINARY" "$@"
-  exit $?
+  run_downloaded_binary "$@" || exit $?
+  exit 0
 fi
 
 if [ -n "$BOOTSTRAP_ERROR" ]; then

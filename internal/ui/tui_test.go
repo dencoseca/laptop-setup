@@ -1868,11 +1868,38 @@ func (s *interactiveCommandExecutionService) Execute(
 	return err
 }
 
+type cancellableExecutionService struct {
+	started chan struct{}
+}
+
+func (s *cancellableExecutionService) PrepareExecution(context.Context, ExecutionRequest) (ExecutionRun, error) {
+	return ExecutionRun{}, errors.New("unexpected PrepareExecution call")
+}
+
+func (s *cancellableExecutionService) Execute(ctx context.Context, _ ExecutionRun, _ ExecutionHooks) error {
+	close(s.started)
+	<-ctx.Done()
+	return ctx.Err()
+}
+
 type discardWriteCloser struct {
 	io.Writer
 }
 
 func (discardWriteCloser) Close() error {
+	return nil
+}
+
+type closeTrackingWriteCloser struct {
+	closed chan struct{}
+}
+
+func (closeTrackingWriteCloser) Write(payload []byte) (int, error) {
+	return len(payload), nil
+}
+
+func (c closeTrackingWriteCloser) Close() error {
+	close(c.closed)
 	return nil
 }
 
@@ -2185,8 +2212,9 @@ func TestInteractiveCommandCancellationTerminatesChildAndCompletesWorker(t *test
 		HumanLog:  discardWriteCloser{Writer: io.Discard},
 		EventsLog: discardWriteCloser{Writer: io.Discard},
 	}
+	worker := newExecutionWorker()
 
-	if msg := startExecutionWorker(ctx, updates, run, service)(); msg != nil {
+	if msg := startExecutionWorker(ctx, updates, run, service, worker)(); msg != nil {
 		t.Fatalf("expected worker start command to return nil, got %#v", msg)
 	}
 
@@ -2229,13 +2257,13 @@ func TestInteractiveCommandCancellationTerminatesChildAndCompletesWorker(t *test
 	var result interactiveCommandResult
 	select {
 	case result = <-childDone:
-	case <-time.After(2 * time.Second):
+	case <-time.After(4 * time.Second):
 		t.Fatal("interactive child did not terminate promptly after cancellation")
 	}
 	if result.Err == nil {
 		t.Fatal("expected cancelled interactive child to return an error")
 	}
-	if elapsed := time.Since(cancelledAt); elapsed >= 2*time.Second {
+	if elapsed := time.Since(cancelledAt); elapsed >= 4*time.Second {
 		t.Fatalf("interactive child cancellation took too long: %s", elapsed)
 	}
 
@@ -2245,16 +2273,72 @@ func TestInteractiveCommandCancellationTerminatesChildAndCompletesWorker(t *test
 		t.Fatal("interactive response channel blocked after cancellation")
 	}
 
-	timeout := time.After(2 * time.Second)
+	timeout := time.After(4 * time.Second)
 	for {
 		select {
 		case _, ok := <-updates:
 			if !ok {
+				if err := worker.Wait(); err == nil {
+					t.Fatal("expected cancelled execution worker to retain its terminal error")
+				}
 				return
 			}
 		case <-timeout:
 			t.Fatal("execution worker did not complete after cancellation")
 		}
+	}
+}
+
+func TestExecutionWorkerCompletesOnlyAfterServiceAndLogsShutDown(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	started := make(chan struct{})
+	service := &cancellableExecutionService{started: started}
+	humanClosed := make(chan struct{})
+	eventsClosed := make(chan struct{})
+	run := ExecutionRun{
+		HumanLog:  closeTrackingWriteCloser{closed: humanClosed},
+		EventsLog: closeTrackingWriteCloser{closed: eventsClosed},
+	}
+	updates := make(chan tea.Msg, 1)
+	worker := newExecutionWorker()
+
+	if msg := startExecutionWorker(ctx, updates, run, service, worker)(); msg != nil {
+		t.Fatalf("expected worker start command to return nil, got %#v", msg)
+	}
+	select {
+	case <-started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for execution service to start")
+	}
+
+	waitReturned := make(chan error, 1)
+	go func() {
+		waitReturned <- worker.Wait()
+	}()
+	select {
+	case err := <-waitReturned:
+		t.Fatalf("worker wait returned before cancellation and cleanup: %v", err)
+	default:
+	}
+
+	cancel()
+	select {
+	case err := <-waitReturned:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("expected cancellation error, got %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("worker did not finish after cancellation")
+	}
+	select {
+	case <-humanClosed:
+	default:
+		t.Fatal("human log was not closed before worker completion")
+	}
+	select {
+	case <-eventsClosed:
+	default:
+		t.Fatal("events log was not closed before worker completion")
 	}
 }
 
@@ -2591,6 +2675,9 @@ func TestReviewEnterConfirmsPlanAndStartsExecution(t *testing.T) {
 		select {
 		case _, ok := <-updated.updates:
 			if !ok {
+				if err := updated.executionTracker.Wait(); err != nil {
+					t.Fatalf("wait for execution shutdown: %v", err)
+				}
 				return
 			}
 		case <-timeout:

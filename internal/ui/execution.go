@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -44,6 +45,63 @@ type ExecutionHooks struct {
 type ExecutionService interface {
 	PrepareExecution(context.Context, ExecutionRequest) (ExecutionRun, error)
 	Execute(context.Context, ExecutionRun, ExecutionHooks) error
+}
+
+type executionWorker struct {
+	done chan struct{}
+	once sync.Once
+	mu   sync.Mutex
+	err  error
+}
+
+func newExecutionWorker() *executionWorker {
+	return &executionWorker{done: make(chan struct{})}
+}
+
+func (w *executionWorker) finish(err error) {
+	if w == nil {
+		return
+	}
+	w.once.Do(func() {
+		w.mu.Lock()
+		w.err = err
+		w.mu.Unlock()
+		close(w.done)
+	})
+}
+
+func (w *executionWorker) Wait() error {
+	if w == nil {
+		return nil
+	}
+	<-w.done
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.err
+}
+
+type executionTracker struct {
+	mu     sync.Mutex
+	worker *executionWorker
+}
+
+func (t *executionTracker) Set(worker *executionWorker) {
+	if t == nil {
+		return
+	}
+	t.mu.Lock()
+	t.worker = worker
+	t.mu.Unlock()
+}
+
+func (t *executionTracker) Wait() error {
+	if t == nil {
+		return nil
+	}
+	t.mu.Lock()
+	worker := t.worker
+	t.mu.Unlock()
+	return worker.Wait()
 }
 
 const maxInteractiveOutputCaptureBytes = 1 << 20
@@ -152,8 +210,13 @@ func (m *model) startExecutionFromReview() (tea.Model, tea.Cmd) {
 	m.logTailOffset = 0
 	m.logTailCarry = ""
 	m.updates = make(chan tea.Msg, 32)
+	if m.executionTracker == nil {
+		m.executionTracker = &executionTracker{}
+	}
+	worker := newExecutionWorker()
+	m.executionTracker.Set(worker)
 	return *m, tea.Batch(
-		startExecutionWorker(m.ctx, m.updates, run, m.executionService),
+		startExecutionWorker(m.ctx, m.updates, run, m.executionService, worker),
 		waitForExecutionUpdate(m.updates),
 		scheduleLogTailTick(),
 		m.spinner.Tick,
@@ -209,12 +272,11 @@ func startExecutionWorker(
 	updates chan<- tea.Msg,
 	run ExecutionRun,
 	service ExecutionService,
+	worker *executionWorker,
 ) tea.Cmd {
 	return func() tea.Msg {
 		go func() {
 			defer close(updates)
-			defer run.HumanLog.Close()
-			defer run.EventsLog.Close()
 
 			err := service.Execute(ctx, run, ExecutionHooks{
 				OnStageStatus: func(stageID state.StageID, status state.StageStatus) {
@@ -267,6 +329,8 @@ func startExecutionWorker(
 					}
 				},
 			})
+			err = errors.Join(err, closeExecutionRunLogs(run))
+			worker.finish(err)
 
 			select {
 			case updates <- executionDoneMsg{Err: err}:
@@ -275,6 +339,18 @@ func startExecutionWorker(
 		}()
 		return nil
 	}
+}
+
+func closeExecutionRunLogs(run ExecutionRun) error {
+	var humanLogErr error
+	if run.HumanLog != nil {
+		humanLogErr = run.HumanLog.Close()
+	}
+	var eventsLogErr error
+	if run.EventsLog != nil {
+		eventsLogErr = run.EventsLog.Close()
+	}
+	return errors.Join(humanLogErr, eventsLogErr)
 }
 
 func runInteractiveCommand(request interactiveCommandRequest) tea.Cmd {

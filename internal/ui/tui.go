@@ -334,6 +334,7 @@ type model struct {
 	runner           runner.CommandRunner
 	templates        stages.TemplateStore
 	executionService ExecutionService
+	executionTracker *executionTracker
 
 	repoRoot string
 	homeDir  string
@@ -428,6 +429,7 @@ func Run(ctx context.Context, options Options) error {
 
 	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
+	tracker := &executionTracker{}
 
 	stageMap := make(map[string]stages.Stage, len(options.Catalog))
 	for _, stage := range options.Catalog {
@@ -460,6 +462,7 @@ func Run(ctx context.Context, options Options) error {
 		runner:           options.Commander,
 		templates:        options.Templates,
 		executionService: options.ExecutionService,
+		executionTracker: tracker,
 		repoRoot:         options.RepoRoot,
 		homeDir:          options.HomeDir,
 		screen:           screenWelcome,
@@ -500,8 +503,13 @@ func Run(ctx context.Context, options Options) error {
 	}
 	program := tea.NewProgram(m, tea.WithOutput(output), tea.WithContext(runCtx), tea.WithAltScreen())
 	finalModel, err := program.Run()
+	cancel()
+	workerErr := tracker.Wait()
+	if ctx.Err() != nil {
+		return errors.Join(ctx.Err(), err, workerErr)
+	}
 	if err != nil {
-		return err
+		return errors.Join(err, workerErr)
 	}
 
 	finished, ok := finalModel.(model)
@@ -511,7 +519,7 @@ func Run(ctx context.Context, options Options) error {
 	if finished.runErr != nil {
 		return finished.runErr
 	}
-	return nil
+	return workerErr
 }
 
 func (m model) Init() tea.Cmd {

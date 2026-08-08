@@ -271,6 +271,95 @@ func TestExecuteAbortOnFailure(t *testing.T) {
 	}
 }
 
+func TestExecuteCancellationPersistsFailedResumableState(t *testing.T) {
+	store := state.NewStore(filepath.Join(t.TempDir(), "state.json"))
+	runState := &state.RunState{
+		RunID:        state.NewRunID(time.Now()),
+		StartAt:      time.Now().UTC(),
+		Mode:         "normal",
+		ResolvedPlan: []state.StageID{"cancelled"},
+		Stages:       map[state.StageID]state.StageStatus{},
+	}
+	if err := store.Save(context.Background(), runState); err != nil {
+		t.Fatalf("save initial state: %v", err)
+	}
+
+	started := make(chan struct{})
+	catalog := []stages.Stage{{
+		ID:      "cancelled",
+		Title:   "Cancelled",
+		CanSkip: true,
+		Precheck: func(context.Context, stages.ExecutionContext) (stages.CheckResult, error) {
+			return stages.CheckResult{}, nil
+		},
+		Run: func(ctx context.Context, _ stages.ExecutionContext) error {
+			close(started)
+			<-ctx.Done()
+			return ctx.Err()
+		},
+		Simulate: func(context.Context, stages.ExecutionContext) error { return nil },
+	}}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	hookCalled := false
+	done := make(chan error, 1)
+	go func() {
+		done <- Execute(ctx, Options{
+			Store:         store,
+			RunState:      runState,
+			Catalog:       catalog,
+			RepoRoot:      t.TempDir(),
+			HomeDir:       t.TempDir(),
+			RunDir:        t.TempDir(),
+			CommandRunner: runner.NewOSCommandRunner(),
+			Logger:        runner.NewEventLogger(&bytes.Buffer{}, &bytes.Buffer{}),
+			Hooks: Hooks{
+				OnFailure: func(context.Context, Failure) (FailureAction, error) {
+					hookCalled = true
+					return ActionRetry, nil
+				},
+			},
+		})
+	}()
+
+	select {
+	case <-started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for stage to start")
+	}
+	cancel()
+
+	select {
+	case err := <-done:
+		if !errors.Is(err, ErrAborted) || !errors.Is(err, context.Canceled) {
+			t.Fatalf("expected aborted cancellation error, got %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("execution did not finalize after cancellation")
+	}
+	if hookCalled {
+		t.Fatal("cancellation must not prompt for retry or skip")
+	}
+
+	persisted, err := store.Load(context.Background())
+	if err != nil {
+		t.Fatalf("load finalized state: %v", err)
+	}
+	status := persisted.Stages["cancelled"]
+	if status.Status != stages.StatusFailed {
+		t.Fatalf("expected failed resumable stage, got %q", status.Status)
+	}
+	if !strings.Contains(status.LastError, context.Canceled.Error()) {
+		t.Fatalf("expected cancellation reason in stage state, got %q", status.LastError)
+	}
+	if !strings.Contains(persisted.LastFailure, context.Canceled.Error()) {
+		t.Fatalf("expected cancellation reason in run state, got %q", persisted.LastFailure)
+	}
+	if persisted.EndAt != nil {
+		t.Fatal("cancelled run must remain unfinished so --resume can continue it")
+	}
+}
+
 func TestExecuteDryRunUsesSimulate(t *testing.T) {
 	store := state.NewStore(filepath.Join(t.TempDir(), "state.json"))
 	runState := &state.RunState{
