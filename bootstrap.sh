@@ -80,8 +80,10 @@ forward_signal() {
 }
 
 run_downloaded_binary() {
-  "$DOWNLOADED_BINARY" "$@" <&0 &
+  exec 3<&0
+  "$DOWNLOADED_BINARY" "$@" <&3 3<&- &
   CHILD_PID=$!
+  exec 3<&-
   child_status=0
   wait "$CHILD_PID" || child_status=$?
   CHILD_PID=""

@@ -15,14 +15,28 @@ import (
 )
 
 func TestBootstrapForwardsSignalsWaitsForChildAndCleansUp(t *testing.T) {
-	tests := []struct {
+	type testCase struct {
 		name       string
+		shell      string
 		signal     syscall.Signal
 		wantMarker string
 		wantExit   int
-	}{
+	}
+	signals := []testCase{
 		{name: "interrupt", signal: syscall.SIGINT, wantMarker: "INT", wantExit: 130},
 		{name: "terminate", signal: syscall.SIGTERM, wantMarker: "TERM", wantExit: 143},
+	}
+	shells := []testCase{{name: "system-sh", shell: "/bin/sh"}}
+	if dash, err := exec.LookPath("dash"); err == nil && dash != "/bin/sh" {
+		shells = append(shells, testCase{name: "dash", shell: dash})
+	}
+	var tests []testCase
+	for _, shell := range shells {
+		for _, signal := range signals {
+			signal.name = shell.name + "/" + signal.name
+			signal.shell = shell.shell
+			tests = append(tests, signal)
+		}
 	}
 
 	for _, test := range tests {
@@ -78,7 +92,7 @@ exec "$TEST_BINARY" -test.run '^TestBootstrapSignalHelperProcess$'
 `)
 
 			stdinPath := filepath.Join(rootDir, "stdin")
-			cmd := exec.Command("/bin/sh", "bootstrap.sh", "--resume")
+			cmd := exec.Command(test.shell, "bootstrap.sh", "--resume")
 			cmd.Dir = "."
 			cmd.Stdin = strings.NewReader("preserved bootstrap stdin")
 			cmd.Env = append(os.Environ(),
