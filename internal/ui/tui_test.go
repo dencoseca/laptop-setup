@@ -2214,9 +2214,7 @@ func TestInteractiveCommandCancellationTerminatesChildAndCompletesWorker(t *test
 	}
 	worker := newExecutionWorker()
 
-	if msg := startExecutionWorker(ctx, updates, run, service, worker)(); msg != nil {
-		t.Fatalf("expected worker start command to return nil, got %#v", msg)
-	}
+	startExecutionWorker(ctx, updates, run, service, worker)
 
 	var request interactiveCommandRequest
 	select {
@@ -2302,9 +2300,7 @@ func TestExecutionWorkerCompletesOnlyAfterServiceAndLogsShutDown(t *testing.T) {
 	updates := make(chan tea.Msg, 1)
 	worker := newExecutionWorker()
 
-	if msg := startExecutionWorker(ctx, updates, run, service, worker)(); msg != nil {
-		t.Fatalf("expected worker start command to return nil, got %#v", msg)
-	}
+	startExecutionWorker(ctx, updates, run, service, worker)
 	select {
 	case <-started:
 	case <-time.After(2 * time.Second):
@@ -2666,8 +2662,17 @@ func TestReviewEnterConfirmsPlanAndStartsExecution(t *testing.T) {
 	if len(batch) == 0 {
 		t.Fatal("expected non-empty startup command batch")
 	}
-	if msg := batch[0](); msg != nil {
-		t.Fatalf("expected worker start command to return nil, got %#v", msg)
+	workerDone := make(chan error, 1)
+	go func() {
+		workerDone <- updated.executionTracker.Wait()
+	}()
+	select {
+	case err := <-workerDone:
+		if err != nil {
+			t.Fatalf("wait for execution shutdown: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("execution worker did not start until the returned commands ran")
 	}
 
 	timeout := time.After(2 * time.Second)
@@ -2675,9 +2680,6 @@ func TestReviewEnterConfirmsPlanAndStartsExecution(t *testing.T) {
 		select {
 		case _, ok := <-updated.updates:
 			if !ok {
-				if err := updated.executionTracker.Wait(); err != nil {
-					t.Fatalf("wait for execution shutdown: %v", err)
-				}
 				return
 			}
 		case <-timeout:

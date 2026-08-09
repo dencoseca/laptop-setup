@@ -215,8 +215,8 @@ func (m *model) startExecutionFromReview() (tea.Model, tea.Cmd) {
 	}
 	worker := newExecutionWorker()
 	m.executionTracker.Set(worker)
+	startExecutionWorker(m.ctx, m.updates, run, m.executionService, worker)
 	return *m, tea.Batch(
-		startExecutionWorker(m.ctx, m.updates, run, m.executionService, worker),
 		waitForExecutionUpdate(m.updates),
 		scheduleLogTailTick(),
 		m.spinner.Tick,
@@ -273,72 +273,69 @@ func startExecutionWorker(
 	run ExecutionRun,
 	service ExecutionService,
 	worker *executionWorker,
-) tea.Cmd {
-	return func() tea.Msg {
-		go func() {
-			defer close(updates)
+) {
+	go func() {
+		defer close(updates)
 
-			err := service.Execute(ctx, run, ExecutionHooks{
-				OnStageStatus: func(stageID state.StageID, status state.StageStatus) {
-					select {
-					case updates <- stageStatusMsg{StageID: stageID.String(), Status: status}:
-					case <-ctx.Done():
-					}
-				},
-				OnFailure: func(inner context.Context, failure execution.Failure) (execution.FailureAction, error) {
-					response := make(chan execution.FailureAction, 1)
-					request := failureRequest{
-						StageID:  failure.Stage.ID.String(),
-						Title:    failure.Stage.Title,
-						Attempt:  failure.Attempt,
-						CanSkip:  failure.Stage.CanSkip,
-						Message:  failure.Err.Error(),
-						Response: response,
-					}
-					select {
-					case updates <- failureRequestMsg{Request: request}:
-					case <-inner.Done():
-						return execution.ActionAbort, inner.Err()
-					}
+		err := service.Execute(ctx, run, ExecutionHooks{
+			OnStageStatus: func(stageID state.StageID, status state.StageStatus) {
+				select {
+				case updates <- stageStatusMsg{StageID: stageID.String(), Status: status}:
+				case <-ctx.Done():
+				}
+			},
+			OnFailure: func(inner context.Context, failure execution.Failure) (execution.FailureAction, error) {
+				response := make(chan execution.FailureAction, 1)
+				request := failureRequest{
+					StageID:  failure.Stage.ID.String(),
+					Title:    failure.Stage.Title,
+					Attempt:  failure.Attempt,
+					CanSkip:  failure.Stage.CanSkip,
+					Message:  failure.Err.Error(),
+					Response: response,
+				}
+				select {
+				case updates <- failureRequestMsg{Request: request}:
+				case <-inner.Done():
+					return execution.ActionAbort, inner.Err()
+				}
 
-					select {
-					case action := <-response:
-						return action, nil
-					case <-inner.Done():
-						return execution.ActionAbort, inner.Err()
-					}
-				},
-				OnInteractiveCommand: func(inner context.Context, command runner.Command) (runner.Result, error) {
-					response := make(chan interactiveCommandResult, 1)
-					request := interactiveCommandRequest{
-						Context:  inner,
-						Command:  command,
-						Response: response,
-					}
-					select {
-					case updates <- interactiveCommandRequestMsg{Request: request}:
-					case <-inner.Done():
-						return runner.Result{ExitCode: -1}, inner.Err()
-					}
+				select {
+				case action := <-response:
+					return action, nil
+				case <-inner.Done():
+					return execution.ActionAbort, inner.Err()
+				}
+			},
+			OnInteractiveCommand: func(inner context.Context, command runner.Command) (runner.Result, error) {
+				response := make(chan interactiveCommandResult, 1)
+				request := interactiveCommandRequest{
+					Context:  inner,
+					Command:  command,
+					Response: response,
+				}
+				select {
+				case updates <- interactiveCommandRequestMsg{Request: request}:
+				case <-inner.Done():
+					return runner.Result{ExitCode: -1}, inner.Err()
+				}
 
-					select {
-					case result := <-response:
-						return result.Result, result.Err
-					case <-inner.Done():
-						return runner.Result{ExitCode: -1}, inner.Err()
-					}
-				},
-			})
-			err = errors.Join(err, closeExecutionRunLogs(run))
-			worker.finish(err)
+				select {
+				case result := <-response:
+					return result.Result, result.Err
+				case <-inner.Done():
+					return runner.Result{ExitCode: -1}, inner.Err()
+				}
+			},
+		})
+		err = errors.Join(err, closeExecutionRunLogs(run))
+		worker.finish(err)
 
-			select {
-			case updates <- executionDoneMsg{Err: err}:
-			case <-ctx.Done():
-			}
-		}()
-		return nil
-	}
+		select {
+		case updates <- executionDoneMsg{Err: err}:
+		case <-ctx.Done():
+		}
+	}()
 }
 
 func closeExecutionRunLogs(run ExecutionRun) error {

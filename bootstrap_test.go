@@ -2,6 +2,7 @@ package laptopsetup
 
 import (
 	"errors"
+	"io"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -76,8 +77,10 @@ printf 'test-digest  %s\n' "$3"
 exec "$TEST_BINARY" -test.run '^TestBootstrapSignalHelperProcess$'
 `)
 
+			stdinPath := filepath.Join(rootDir, "stdin")
 			cmd := exec.Command("/bin/sh", "bootstrap.sh", "--resume")
 			cmd.Dir = "."
+			cmd.Stdin = strings.NewReader("preserved bootstrap stdin")
 			cmd.Env = append(os.Environ(),
 				"PATH="+fakeBin+":/usr/bin:/bin",
 				"TMPDIR="+bootstrapTmp,
@@ -86,12 +89,20 @@ exec "$TEST_BINARY" -test.run '^TestBootstrapSignalHelperProcess$'
 				"BOOTSTRAP_SIGNAL_HELPER=1",
 				"SIGNAL_FILE="+signalPath,
 				"CHILD_PID_FILE="+childPIDPath,
+				"STDIN_FILE="+stdinPath,
 			)
 			if err := cmd.Start(); err != nil {
 				t.Fatalf("start bootstrap: %v", err)
 			}
 
 			childPID := waitForBootstrapPID(t, childPIDPath, 3*time.Second)
+			stdinPayload, err := os.ReadFile(stdinPath)
+			if err != nil {
+				t.Fatalf("read preserved child stdin: %v", err)
+			}
+			if string(stdinPayload) != "preserved bootstrap stdin" {
+				t.Fatalf("downloaded child stdin mismatch: got=%q", stdinPayload)
+			}
 			if err := cmd.Process.Signal(test.signal); err != nil {
 				t.Fatalf("signal bootstrap: %v", err)
 			}
@@ -134,6 +145,13 @@ func TestBootstrapSignalHelperProcess(t *testing.T) {
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM)
 	defer signal.Stop(signals)
+	stdinPayload, err := io.ReadAll(os.Stdin)
+	if err != nil {
+		t.Fatalf("read helper stdin: %v", err)
+	}
+	if err := os.WriteFile(os.Getenv("STDIN_FILE"), stdinPayload, 0o600); err != nil {
+		t.Fatalf("write helper stdin marker: %v", err)
+	}
 	if err := os.WriteFile(os.Getenv("CHILD_PID_FILE"), []byte(strconv.Itoa(os.Getpid())), 0o600); err != nil {
 		t.Fatalf("write helper pid: %v", err)
 	}

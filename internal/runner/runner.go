@@ -248,6 +248,13 @@ func runOwnedCommand(ctx context.Context, cmd *exec.Cmd, gracePeriod time.Durati
 		return errors.Join(fmt.Errorf("watch command process: %w", err), killErr, waitErr)
 	}
 	defer watcher.Close()
+	processTree, err := newOwnedProcessTree(cmd.Process.Pid)
+	if err != nil {
+		killErr := signalOwnedProcessGroup(cmd.Process.Pid, forceKillSignal)
+		waitErr := cmd.Wait()
+		return errors.Join(fmt.Errorf("track command process tree: %w", err), killErr, waitErr)
+	}
+	defer processTree.Close()
 
 	exited := make(chan error, 1)
 	go func() {
@@ -256,21 +263,36 @@ func runOwnedCommand(ctx context.Context, cmd *exec.Cmd, gracePeriod time.Durati
 
 	select {
 	case watchErr := <-exited:
-		if watchErr != nil {
-			killErr := signalOwnedProcessGroup(cmd.Process.Pid, forceKillSignal)
-			waitErr := cmd.Wait()
-			return errors.Join(fmt.Errorf("watch command process: %w", watchErr), killErr, waitErr)
-		}
-		return cmd.Wait()
+		return finishOwnedCommandAfterLeaderExit(ctx, cmd, processTree, gracePeriod, watchErr)
 	case <-ctx.Done():
 		// The platform watcher observes exit without reaping the group leader.
 		// Keeping that PID reserved until the grace period and force-kill finish
 		// prevents the process-group ID from being reused for unrelated work.
-		terminationErr := terminateOwnedProcessGroup(cmd.Process.Pid, gracePeriod)
+		terminationErr := processTree.terminate(gracePeriod)
 		watchErr := <-exited
 		waitErr := cmd.Wait()
 		return errors.Join(ctx.Err(), terminationErr, watchErr, waitErr)
 	}
+}
+
+func finishOwnedCommandAfterLeaderExit(
+	ctx context.Context,
+	cmd *exec.Cmd,
+	processTree *ownedProcessTree,
+	gracePeriod time.Duration,
+	watchErr error,
+) error {
+	if watchErr != nil {
+		terminationErr := processTree.terminate(0)
+		waitErr := cmd.Wait()
+		return errors.Join(fmt.Errorf("watch command process: %w", watchErr), terminationErr, waitErr)
+	}
+	if ctxErr := ctx.Err(); ctxErr != nil {
+		terminationErr := processTree.terminate(gracePeriod)
+		waitErr := cmd.Wait()
+		return errors.Join(ctxErr, terminationErr, waitErr)
+	}
+	return cmd.Wait()
 }
 
 func commandExitCode(err error) int {
