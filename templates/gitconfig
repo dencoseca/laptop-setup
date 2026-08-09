@@ -1,7 +1,0 @@
-[init]
-  defaultBranch = main
-[core]
-  excludesfile = ~/.gitignore
-  autocrlf = input
-[rerere]
-  enabled = true

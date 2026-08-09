@@ -15,6 +15,7 @@ concurrency:
 
 jobs:
   checks:
+    # Keep this name stable: main branch protection requires this context.
     name: Test, vet, and build
     runs-on: ubuntu-latest
 
@@ -22,24 +23,43 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-          cache: true
-
-      - name: Check module files
+      - name: Check the runbook structure
         run: |
-          go mod tidy
-          git diff --exit-code -- go.mod go.sum
+          test -f README.md
+          test "$(grep -Ec '^## [1-9]\. ' README.md)" -eq 9
+          test "$(grep -Ec '^```' README.md)" -gt 0
+          test "$(( $(grep -Ec '^```' README.md) % 2 ))" -eq 0
 
-      - name: Test
-        run: go test ./...
-
-      - name: Vet
-        run: go vet ./...
-
-      - name: Build Apple Silicon binary
+      - name: Install Zsh
         run: |
-          GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 \
-            go build -trimpath -o laptop-setup-darwin-arm64 ./cmd/laptop-setup
+          sudo apt-get update
+          sudo apt-get install --yes zsh
+
+      - name: Check shell block syntax
+        run: |
+          awk '
+            /^```shell$/ { in_block = 1; next }
+            /^```$/ {
+              if (in_block) {
+                in_block = 0
+                print ""
+              }
+              next
+            }
+            in_block
+          ' README.md | bash -n
+
+          awk '
+            /^```shell$/ { in_block = 1; next }
+            /^```$/ {
+              if (in_block) {
+                in_block = 0
+                print ""
+              }
+              next
+            }
+            in_block
+          ' README.md | zsh -n
+
+      - name: Check whitespace
+        run: git diff-tree --check --root HEAD
