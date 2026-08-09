@@ -267,7 +267,7 @@ Add personal aliases and functions in Oh My Zsh's custom directory:
 ```shell
 mkdir -p "$HOME/.oh-my-zsh/custom"
 
-cat > "$HOME/.oh-my-zsh/custom/personal.zsh" <<'EOF'
+cat > "$HOME/.oh-my-zsh/custom/alias.zsh" <<'EOF'
 ag() {
   alias | grep -i -- "$1"
 }
