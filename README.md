@@ -113,8 +113,10 @@ Command-line packages:
 
 ```shell
 brew install \
+  btop \
   jq \
   bat \
+  nano \
   ripgrep \
   tree \
   watch \
@@ -172,42 +174,22 @@ vp help
 [Colima](https://github.com/abiosoft/colima) provides the Docker runtime. It
 does not need a forced Docker context or `DOCKER_HOST` value. Homebrew's
 Buildx and Compose formulae do need their plugin directory registered with
-Docker, however.
-
-Preserve any existing Docker settings, then add the Homebrew plugin directory.
-On a fresh configuration, Docker credentials will use the macOS Keychain:
+Docker, however. Create a fresh Docker configuration that registers that
+directory and uses the macOS Keychain for credentials:
 
 ```shell
-(
-  set -eu
-  umask 077
+mkdir -p "$HOME/.docker"
 
-  docker_dir="$HOME/.docker"
-  docker_config="$docker_dir/config.json"
-  mkdir -p "$docker_dir"
+cat > "$HOME/.docker/config.json" <<'EOF'
+{
+  "cliPluginsExtraDirs": [
+    "/opt/homebrew/lib/docker/cli-plugins"
+  ],
+  "credsStore": "osxkeychain"
+}
+EOF
 
-  if [ -f "$docker_config" ]; then
-    docker_backup="$docker_config.backup.$(date +%Y%m%d-%H%M%S)"
-    cp "$docker_config" "$docker_backup"
-    chmod 600 "$docker_backup"
-  else
-    printf '{}\n' > "$docker_config"
-  fi
-
-  docker_config_next="$(mktemp "$docker_dir/config.json.XXXXXX")"
-  trap 'rm -f "$docker_config_next"' EXIT HUP INT TERM
-
-  jq '
-    .cliPluginsExtraDirs = (
-      ((.cliPluginsExtraDirs // []) + ["/opt/homebrew/lib/docker/cli-plugins"])
-      | unique
-    )
-    | .credsStore //= "osxkeychain"
-  ' "$docker_config" > "$docker_config_next"
-
-  chmod 600 "$docker_config_next"
-  mv "$docker_config_next" "$docker_config"
-)
+chmod 600 "$HOME/.docker/config.json"
 ```
 
 Start Colima and verify the runtime and plugins:
@@ -249,8 +231,8 @@ Install the two external plugins used by the configuration below:
 ```
 
 Back up the current Zsh configuration and replace it with a small, readable
-one. Put machine-specific aliases and functions in `~/.zshrc.local` rather
-than growing the main configuration indefinitely.
+one. Oh My Zsh automatically loads personal `.zsh` files from its custom
+directory, keeping aliases and functions out of the main configuration.
 
 ```shell
 if [ -f "$HOME/.zshrc" ]; then
@@ -275,14 +257,35 @@ fi
 if command -v starship >/dev/null 2>&1; then
   eval "$(starship init zsh)"
 fi
-
-if [[ -r "$HOME/.zshrc.local" ]]; then
-  source "$HOME/.zshrc.local"
-fi
 EOF
 
-touch "$HOME/.zshrc.local"
 touch "$HOME/.hushlogin"
+```
+
+Add personal aliases and functions in Oh My Zsh's custom directory:
+
+```shell
+mkdir -p "$HOME/.oh-my-zsh/custom"
+
+cat > "$HOME/.oh-my-zsh/custom/personal.zsh" <<'EOF'
+ag() {
+  alias | grep -i -- "$1"
+}
+
+alias repos='cd "$HOME/Developer/repos"'
+alias dl='cd "$HOME/Downloads"'
+alias dt='cd "$HOME/Desktop"'
+alias npmls='npm list -g --depth=0'
+alias l='ls -lh'
+alias nq='networkQuality'
+alias trc='tree -d -L 3 "$HOME/Developer/repos"'
+alias oif='open -a Finder .'
+alias src='source "$HOME/.zshrc"'
+alias zshc='nano "$HOME/.zshrc"'
+alias zshb='cp "$HOME/.zshrc" "$HOME/.zshrc.bak"'
+alias upbrew='brew update && brew upgrade && brew cleanup && brew doctor'
+alias upomz='omz update'
+EOF
 ```
 
 Configure Starship:
@@ -383,30 +386,27 @@ source "$HOME/.zshrc"
 
 ## 8. Git configuration
 
-These commands update individual Git settings without replacing the entire
-`~/.gitconfig`. Replace the name and email values first.
+Write the global Git configuration for the new laptop. Replace the name and
+email values first:
 
 ```shell
-git config --global user.name "Your Name"
-git config --global user.email "you@example.com"
-git config --global init.defaultBranch main
-git config --global core.autocrlf input
-git config --global rerere.enabled true
-```
-
-Back up and write the global ignore file:
-
-```shell
-if [ -f "$HOME/.gitignore" ]; then
-  cp "$HOME/.gitignore" "$HOME/.gitignore.backup.$(date +%Y%m%d-%H%M%S)"
-fi
+cat > "$HOME/.gitconfig" <<'EOF'
+[user]
+  name = Your Name
+  email = you@example.com
+[init]
+  defaultBranch = main
+[core]
+  excludesfile = ~/.gitignore
+  autocrlf = input
+[rerere]
+  enabled = true
+EOF
 
 cat > "$HOME/.gitignore" <<'EOF'
 .DS_Store
 .idea
 EOF
-
-git config --global core.excludesfile "$HOME/.gitignore"
 ```
 
 Review the resulting configuration:
