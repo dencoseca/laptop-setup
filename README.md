@@ -21,24 +21,11 @@ running them.
 
 ## 1. Xcode Command Line Tools
 
-Git and several later installation steps need Apple's Command Line Tools.
-Check whether they are already installed:
-
-```shell
-xcode-select -p
-```
-
-If that reports an error, open Apple's installer and complete the dialog:
+Git and several later installation steps need Apple's Command Line Tools. Open
+Apple's installer and complete the dialog:
 
 ```shell
 xcode-select --install
-```
-
-Then verify the installation:
-
-```shell
-xcode-select -p
-git --version
 ```
 
 ## 2. macOS preferences
@@ -78,14 +65,6 @@ killall Dock 2>/dev/null || true
 killall Finder 2>/dev/null || true
 ```
 
-Inspect any saved value with `defaults read`, for example:
-
-```shell
-defaults read -g KeyRepeat
-defaults read com.apple.dock autohide
-defaults read com.apple.finder ShowPathbar
-```
-
 ## 3. Homebrew
 
 Install Homebrew using its [official installation command](https://docs.brew.sh/Installation):
@@ -94,15 +73,11 @@ Install Homebrew using its [official installation command](https://docs.brew.sh/
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 ```
 
-Add the Apple Silicon Homebrew environment to Zsh without duplicating it on a
-later run:
+Add the Apple Silicon Homebrew environment to Zsh:
 
 ```shell
-touch "$HOME/.zprofile"
-grep -Fqx 'eval "$(/opt/homebrew/bin/brew shellenv)"' "$HOME/.zprofile" || \
-  printf '%s\n' 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> "$HOME/.zprofile"
+printf '%s\n' 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> "$HOME/.zprofile"
 eval "$(/opt/homebrew/bin/brew shellenv)"
-brew --version
 ```
 
 ## 4. Packages and applications
@@ -139,19 +114,12 @@ brew install --cask \
   appcleaner \
   brave-browser \
   jetbrains-toolbox \
-  logi-options-plus \
+  logi-options+ \
   meetingbar \
   mos \
   rectangle \
   ghostty \
   signal
-```
-
-Review what Homebrew installed:
-
-```shell
-brew list --formula
-brew list --cask
 ```
 
 ## 5. Node tooling
@@ -161,12 +129,6 @@ managers:
 
 ```shell
 curl -fsSL https://vite.plus | bash
-```
-
-Open a new terminal, then verify it:
-
-```shell
-vp help
 ```
 
 ## 6. Docker
@@ -192,23 +154,6 @@ EOF
 chmod 600 "$HOME/.docker/config.json"
 ```
 
-Start Colima and verify the runtime and plugins:
-
-```shell
-colima start
-docker run --rm hello-world
-docker buildx version
-docker compose version
-```
-
-Useful lifecycle commands:
-
-```shell
-colima status
-colima stop
-colima start
-```
-
 ## 7. Shell configuration
 
 Install [Oh My Zsh](https://github.com/ohmyzsh/ohmyzsh) without changing the
@@ -221,24 +166,18 @@ sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/too
 Install the two external plugins used by the configuration below:
 
 ```shell
-[ -d "$HOME/.oh-my-zsh/custom/plugins/zsh-autosuggestions" ] || \
-  git clone --depth 1 https://github.com/zsh-users/zsh-autosuggestions \
+git clone --depth 1 https://github.com/zsh-users/zsh-autosuggestions \
   "$HOME/.oh-my-zsh/custom/plugins/zsh-autosuggestions"
 
-[ -d "$HOME/.oh-my-zsh/custom/plugins/zsh-syntax-highlighting" ] || \
-  git clone --depth 1 https://github.com/zsh-users/zsh-syntax-highlighting \
+git clone --depth 1 https://github.com/zsh-users/zsh-syntax-highlighting \
   "$HOME/.oh-my-zsh/custom/plugins/zsh-syntax-highlighting"
 ```
 
-Back up the current Zsh configuration and replace it with a small, readable
-one. Oh My Zsh automatically loads personal `.zsh` files from its custom
-directory, keeping aliases and functions out of the main configuration.
+Create a small, readable Zsh configuration. Oh My Zsh automatically loads
+personal `.zsh` files from its custom directory, keeping aliases and functions
+out of the main configuration.
 
 ```shell
-if [ -f "$HOME/.zshrc" ]; then
-  cp "$HOME/.zshrc" "$HOME/.zshrc.backup.$(date +%Y%m%d-%H%M%S)"
-fi
-
 cat > "$HOME/.zshrc" <<'EOF'
 export ZSH="$HOME/.oh-my-zsh"
 zstyle ':omz:update' mode disabled
@@ -250,13 +189,8 @@ plugins=(
   zsh-syntax-highlighting
 )
 
-if [[ -r "$ZSH/oh-my-zsh.sh" ]]; then
-  source "$ZSH/oh-my-zsh.sh"
-fi
-
-if command -v starship >/dev/null 2>&1; then
-  eval "$(starship init zsh)"
-fi
+source "$ZSH/oh-my-zsh.sh"
+eval "$(starship init zsh)"
 EOF
 
 touch "$HOME/.hushlogin"
@@ -265,6 +199,7 @@ touch "$HOME/.hushlogin"
 Add personal aliases and functions in Oh My Zsh's custom directory:
 
 ```shell
+mkdir -p "$HOME/Developer/repos"
 mkdir -p "$HOME/.oh-my-zsh/custom"
 
 cat > "$HOME/.oh-my-zsh/custom/alias.zsh" <<'EOF'
@@ -293,11 +228,6 @@ Configure Starship:
 ```shell
 mkdir -p "$HOME/.config"
 
-if [ -f "$HOME/.config/starship.toml" ]; then
-  cp "$HOME/.config/starship.toml" \
-    "$HOME/.config/starship.toml.backup.$(date +%Y%m%d-%H%M%S)"
-fi
-
 cat > "$HOME/.config/starship.toml" <<'EOF'
 [aws]
 disabled = true
@@ -307,16 +237,10 @@ disabled = true
 EOF
 ```
 
-Configure Ghostty. This block backs up an existing configuration before
-replacing it:
+Configure Ghostty:
 
 ```shell
 mkdir -p "$HOME/.config/ghostty"
-
-if [ -f "$HOME/.config/ghostty/config.ghostty" ]; then
-  cp "$HOME/.config/ghostty/config.ghostty" \
-    "$HOME/.config/ghostty/config.ghostty.backup.$(date +%Y%m%d-%H%M%S)"
-fi
 
 cat > "$HOME/.config/ghostty/config.ghostty" <<'EOF'
 font-family = JetBrains Mono
@@ -377,10 +301,9 @@ scrollback-limit = 104857600
 EOF
 ```
 
-Check the Zsh syntax, then load the new configuration:
+Load the new Zsh configuration:
 
 ```shell
-zsh -n "$HOME/.zshrc"
 source "$HOME/.zshrc"
 ```
 
@@ -409,12 +332,6 @@ cat > "$HOME/.gitignore" <<'EOF'
 EOF
 ```
 
-Review the resulting configuration:
-
-```shell
-git config --global --list
-```
-
 ## 9. Manual App Store installs
 
 Install whichever of these you still use:
@@ -425,5 +342,4 @@ Install whichever of these you still use:
 - [ ] Things
 - [ ] NordVPN
 
-When everything is working, restart the Mac once and revisit any section whose
-verification command did not produce the expected result.
+When everything is installed, restart the Mac once.
