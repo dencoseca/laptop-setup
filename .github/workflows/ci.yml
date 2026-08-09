@@ -30,6 +30,11 @@ jobs:
           test "$(grep -Ec '^```' README.md)" -gt 0
           test "$(( $(grep -Ec '^```' README.md) % 2 ))" -eq 0
 
+      - name: Install Zsh
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes zsh
+
       - name: Check shell block syntax
         run: |
           awk '
