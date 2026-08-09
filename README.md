@@ -73,7 +73,9 @@ Install Homebrew using its [official installation command](https://docs.brew.sh/
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
 ```
 
-Add the Apple Silicon Homebrew environment to Zsh:
+Add the Apple Silicon Homebrew environment to login sessions. `.zprofile` is
+the right place for environment and `PATH` changes that should be inherited by
+the whole session, including interactive shells started from it:
 
 ```shell
 printf '%s\n' 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> "$HOME/.zprofile"
@@ -131,6 +133,28 @@ managers:
 curl -fsSL https://vite.plus | bash
 ```
 
+The installer adds its environment hook to Zsh startup files. Vite+ provides
+the general Node toolchain, so keep that hook in `.zprofile` with the other
+login-session environment instead of leaving it in `.zshenv` or `.zshrc`:
+
+```shell
+for file in "$HOME/.zshenv" "$HOME/.zshrc"; do
+  [ -f "$file" ] || continue
+  sed -i '' \
+    -e '/^# Vite+ bin (https:\/\/viteplus.dev)$/d' \
+    -e '\|^\. "$HOME/.vite-plus/env"$|d' \
+    "$file"
+done
+
+printf '%s\n' \
+  '' \
+  '# Vite+ bin (https://viteplus.dev)' \
+  '. "$HOME/.vite-plus/env"' \
+  >> "$HOME/.zprofile"
+
+. "$HOME/.vite-plus/env"
+```
+
 ## 6. Docker
 
 [Colima](https://github.com/abiosoft/colima) provides the Docker runtime. It
@@ -173,11 +197,21 @@ git clone --depth 1 https://github.com/zsh-users/zsh-syntax-highlighting \
   "$HOME/.oh-my-zsh/custom/plugins/zsh-syntax-highlighting"
 ```
 
-Create a small, readable Zsh configuration. Oh My Zsh automatically loads
-personal `.zsh` files from its custom directory, keeping aliases and functions
-out of the main configuration.
+Keep the shell configuration split by responsibility:
+
+- `~/.zprofile` sets login-session environment and `PATH` values, such as the
+  Homebrew environment configured earlier.
+- `~/.zshrc` is the single interactive Zsh configuration. It owns Oh My Zsh,
+  Starship, aliases, and functions.
+- Tool-specific launch settings stay with the tool that consumes them instead
+  of expanding the global shell environment for one application.
+
+Create the repositories directory used by the curated examples, then write the
+interactive configuration:
 
 ```shell
+mkdir -p "$HOME/Developer/repos"
+
 cat > "$HOME/.zshrc" <<'EOF'
 export ZSH="$HOME/.oh-my-zsh"
 zstyle ':omz:update' mode disabled
@@ -190,19 +224,7 @@ plugins=(
 )
 
 source "$ZSH/oh-my-zsh.sh"
-eval "$(starship init zsh)"
-EOF
 
-touch "$HOME/.hushlogin"
-```
-
-Add personal aliases and functions in Oh My Zsh's custom directory:
-
-```shell
-mkdir -p "$HOME/Developer/repos"
-mkdir -p "$HOME/.oh-my-zsh/custom"
-
-cat > "$HOME/.oh-my-zsh/custom/alias.zsh" <<'EOF'
 ag() {
   alias | grep -i -- "$1"
 }
@@ -220,7 +242,11 @@ alias zshc='nano "$HOME/.zshrc"'
 alias zshb='cp "$HOME/.zshrc" "$HOME/.zshrc.bak"'
 alias upbrew='brew update && brew upgrade && brew cleanup && brew doctor'
 alias upomz='omz update'
+
+eval "$(starship init zsh)"
 EOF
+
+touch "$HOME/.hushlogin"
 ```
 
 Configure Starship:
@@ -307,7 +333,35 @@ Load the new Zsh configuration:
 source "$HOME/.zshrc"
 ```
 
-## 8. Git configuration
+## 8. Optional Codex MCP servers
+
+When a local [MCP server](https://developers.openai.com/codex/mcp) is used only
+by Codex, configure its launch command in Codex rather than adding the server's
+directory to the global `PATH`. Edit the existing file so that any other Codex
+settings are preserved:
+
+```shell
+mkdir -p "$HOME/.codex"
+nano "$HOME/.codex/config.toml"
+```
+
+Add a table like this, replacing the name and command with the server's actual
+values:
+
+```toml
+[mcp_servers.example]
+command = "/absolute/path/to/example-mcp-server"
+```
+
+The `command` value should be the absolute path to the executable, not a home
+directory shortcut such as `~` and not a bare command that depends on shell
+startup files. This lets Codex start the server consistently even when Codex is
+launched outside a terminal. Add an `args` array to the same table if that
+server requires arguments. After saving the file, restart Codex and check its
+MCP server list. If the Codex CLI is installed, `codex mcp list` performs the
+same check from a terminal.
+
+## 9. Git configuration
 
 Write the global Git configuration for the new laptop. Replace the name and
 email values first:
@@ -332,7 +386,7 @@ cat > "$HOME/.gitignore" <<'EOF'
 EOF
 ```
 
-## 9. Manual App Store installs
+## 10. Manual App Store installs
 
 Install whichever of these you still use:
 
