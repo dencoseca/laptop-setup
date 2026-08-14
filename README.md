@@ -36,8 +36,8 @@ appear everywhere.
 
 ```shell
 # Keyboard
-defaults write -g InitialKeyRepeat -int 20
-defaults write -g KeyRepeat -int 1
+defaults write -g InitialKeyRepeat -int 15
+defaults write -g KeyRepeat -int 2
 defaults write -g AppleWindowTabbingMode -string always
 
 # Dock
@@ -93,7 +93,6 @@ brew install \
   btop \
   jq \
   bat \
-  nano \
   ripgrep \
   tree \
   watch \
