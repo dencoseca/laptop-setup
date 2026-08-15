@@ -132,27 +132,8 @@ managers:
 curl -fsSL https://vite.plus | bash
 ```
 
-The installer adds its environment hook to Zsh startup files. Vite+ provides
-the general Node toolchain, so keep that hook in `.zprofile` with the other
-login-session environment instead of leaving it in `.zshenv` or `.zshrc`:
-
-```shell
-for file in "$HOME/.zshenv" "$HOME/.zshrc"; do
-  [ -f "$file" ] || continue
-  sed -i '' \
-    -e '/^# Vite+ bin (https:\/\/viteplus.dev)$/d' \
-    -e '\|^\. "$HOME/.vite-plus/env"$|d' \
-    "$file"
-done
-
-printf '%s\n' \
-  '' \
-  '# Vite+ bin (https://viteplus.dev)' \
-  '. "$HOME/.vite-plus/env"' \
-  >> "$HOME/.zprofile"
-
-. "$HOME/.vite-plus/env"
-```
+The installer configures Zsh automatically. Its environment will be available
+in new terminal sessions, so no manual startup-file changes are needed.
 
 ## 6. Docker
 
