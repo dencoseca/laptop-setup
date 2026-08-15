@@ -132,9 +132,6 @@ managers:
 curl -fsSL https://vite.plus | bash
 ```
 
-The installer configures Zsh automatically. Its environment will be available
-in new terminal sessions, so no manual startup-file changes are needed.
-
 ## 6. Docker
 
 [Colima](https://github.com/abiosoft/colima) provides the Docker runtime. It
