@@ -284,6 +284,7 @@ window-padding-y = 8
 window-padding-balance = false
 window-padding-color = background
 window-width = 120
+window-height = 40
 
 macos-titlebar-style = tabs
 macos-window-buttons = visible
