@@ -98,6 +98,7 @@ brew install \
   watch \
   starship \
   fzf \
+  zoxide \
   git \
   docker \
   docker-buildx \
@@ -196,6 +197,7 @@ zstyle ':omz:update' mode disabled
 plugins=(
   git
   fzf
+  zoxide
   zsh-autosuggestions
   zsh-syntax-highlighting
 )
@@ -225,6 +227,10 @@ EOF
 
 touch "$HOME/.hushlogin"
 ```
+
+Oh My Zsh's bundled `zoxide` plugin initializes the `z` and `zi` commands.
+Use `z` to jump to a frequently used directory, or `zi` to choose one
+interactively with `fzf`, which was installed in the package step above.
 
 Configure Starship:
 
