@@ -67,15 +67,11 @@ defaults write com.apple.finder _FXSortFoldersFirstOnDesktop -bool true
 defaults write com.apple.finder NewWindowTarget -string PfHm
 defaults write com.apple.finder NewWindowTargetPath -string "file://${HOME}/"
 
-# Trackpad and menu bar
+# Trackpad
 defaults write com.apple.AppleMultitouchTrackpad FirstClickThreshold -int 0
-defaults write com.apple.controlcenter "NSStatusItem Visible Siri" -bool false
-defaults write com.apple.controlcenter "NSStatusItem Visible Spotligiht" -bool false
 
 killall Dock 2>/dev/null || true
 killall Finder 2>/dev/null || true
-killall ControlCenter 2>/dev/null || true
-killall SystemUIServer 2>/dev/null || true
 ```
 
 ## 3. Homebrew
