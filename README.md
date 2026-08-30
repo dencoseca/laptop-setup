@@ -57,7 +57,6 @@ defaults write com.apple.dock show-recents -bool false
 defaults write com.apple.dock show-process-indicators -bool false
 defaults write com.apple.dock magnification -bool true
 defaults write com.apple.dock largesize -int 70
-defaults write com.apple.dock windowtabbing -string always
 
 # Finder
 defaults write com.apple.finder ShowPathbar -bool true
@@ -70,7 +69,6 @@ defaults write com.apple.finder NewWindowTargetPath -string "file://${HOME}/"
 
 # Trackpad and menu bar
 defaults write com.apple.AppleMultitouchTrackpad FirstClickThreshold -int 0
-defaults write com.apple.Siri StatusMenuVisible -bool false
 defaults write com.apple.controlcenter "NSStatusItem Visible Siri" -bool false
 defaults write com.apple.controlcenter "NSStatusItem Visible Spotligiht" -bool false
 
