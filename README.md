@@ -127,16 +127,7 @@ brew install --cask \
   signal
 ```
 
-## 5. Node tooling
-
-Install [Vite+](https://viteplus.dev/) to manage Node and project package
-managers:
-
-```shell
-curl -fsSL https://vite.plus | bash
-```
-
-## 6. Docker
+## 5. Docker
 
 [Colima](https://github.com/abiosoft/colima) provides the Docker runtime. It
 does not need a forced Docker context or `DOCKER_HOST` value. Homebrew's
@@ -159,7 +150,7 @@ EOF
 chmod 600 "$HOME/.docker/config.json"
 ```
 
-## 7. Shell configuration
+## 6. Shell configuration
 
 Install [Oh My Zsh](https://github.com/ohmyzsh/ohmyzsh) without changing the
 login shell or launching Zsh during installation:
@@ -320,35 +311,17 @@ Load the new Zsh configuration:
 source "$HOME/.zshrc"
 ```
 
-## 8. Optional Codex MCP servers
+## 7. Node tooling
 
-When a local [MCP server](https://developers.openai.com/codex/mcp) is used only
-by Codex, configure its launch command in Codex rather than adding the server's
-directory to the global `PATH`. Edit the existing file so that any other Codex
-settings are preserved:
+Install [Vite+](https://viteplus.dev/) to manage Node and project package
+managers. This comes after the shell configuration because the installer adds
+its environment to the existing `~/.zshrc`, which the previous step replaces:
 
 ```shell
-mkdir -p "$HOME/.codex"
-nano "$HOME/.codex/config.toml"
+curl -fsSL https://vite.plus | bash
 ```
 
-Add a table like this, replacing the name and command with the server's actual
-values:
-
-```toml
-[mcp_servers.example]
-command = "/absolute/path/to/example-mcp-server"
-```
-
-The `command` value should be the absolute path to the executable, not a home
-directory shortcut such as `~` and not a bare command that depends on shell
-startup files. This lets Codex start the server consistently even when Codex is
-launched outside a terminal. Add an `args` array to the same table if that
-server requires arguments. After saving the file, restart Codex and check its
-MCP server list. If the Codex CLI is installed, `codex mcp list` performs the
-same check from a terminal.
-
-## 9. Git configuration
+## 8. Git configuration
 
 Write the global Git configuration for the new laptop. Replace the name and
 email values first:
@@ -373,7 +346,7 @@ cat > "$HOME/.gitignore" <<'EOF'
 EOF
 ```
 
-## 10. Manual App Store installs
+## 9. Manual App Store installs
 
 Install whichever of these you still use:
 
