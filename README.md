@@ -118,13 +118,15 @@ brew install --cask \
   alfred \
   appcleaner \
   brave-browser \
+  handy \
   jetbrains-toolbox \
   logi-options+ \
   meetingbar \
   mos \
   rectangle \
   ghostty \
-  signal
+  signal \
+  t3-code
 ```
 
 ## 5. Docker
